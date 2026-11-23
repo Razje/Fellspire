@@ -53,14 +53,14 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 
 | Path | What |
 |---|---|
-| `src/config.ts` | Tuning knobs: room size, ground strip, per-character size and `footY`, which pack folders feed which animation |
+| `src/config.ts` | Tuning knobs: room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
 | `src/scenes/MenuScene.ts` | Title screen, menu, options, credits |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
 | `src/scenes/RoomScene.ts` | A room: waves, exit, HUD, hit resolution, projectiles, pickups |
 | `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower) |
-| `src/blightwood.ts` | The fight scenery: tiling painted layers, props, torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
+| `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/hud.ts` | Fight HUD: unit frame with portrait and health bar, room plaque, wave ribbon, death panel |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/settings.ts` | Options remembered in the browser |
@@ -88,6 +88,13 @@ UI: gold bevelled lettering, red buttons with gold trim. Fonts are Cinzel and Ci
 Decorative, bundled from npm.
 
 ## Things that bite
+
+- **Depth is drawing order.** Everything on the floor sets its depth to its feet's
+  y (characters y + 10, props y), so whoever stands lower on screen is drawn in
+  front. Floor-level effects (light pools 0.5, shadows 1, attack markers 2) sit
+  just above the floor (-50). The HUD is 20000 and up, foreground framing 15000.
+- Anything pinned to the screen needs `setScrollFactor(0)`, masks included: the
+  camera moves both ways now, and a mask left in the room slides off its target.
 
 - **Phaser sometimes delivers one key event twice** (same `timeStamp`), so a
   `keydown` listener that moves a selection must ignore an event it has already

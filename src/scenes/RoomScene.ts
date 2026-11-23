@@ -76,13 +76,14 @@ export class RoomScene extends Phaser.Scene {
   create() {
     const { viewW, viewH, roomW, groundTop, groundBottom } = WORLD;
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, roomW, viewH);
+    cam.setBounds(0, 0, roomW, WORLD.roomH);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.world = buildBlightwood(this);
 
-    this.player = new Player(this, 180, (groundTop + groundBottom) / 2);
+    this.player = new Player(this, 150, 470);
     if (this.startHp !== undefined) this.player.hp = this.startHp;
-    cam.startFollow(this.player.sprite, true, 0.12, 0.12);
+    // follow the body, not the feet, and lag a touch so movement reads
+    cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
     cam.fadeIn(350);
 
     this.hud = new Hud(this, this.room, this.waves.length);
@@ -113,7 +114,7 @@ export class RoomScene extends Phaser.Scene {
     this.updateWaves(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
     const cam = this.cameras.main;
-    this.world.update(cam, this.player.x - cam.scrollX);
+    this.world.update(cam);
     this.hud.update(this.player.hp, this.player.maxHp, this.wave, this.gateOpen, dt);
   }
 
@@ -147,7 +148,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   spawnBone(x: number, y: number, vx: number, dmg: number, reach: number) {
-    const sprite = this.add.image(x, y - 50, 'ph_bone').setDepth(y + 11).setScale(1.3);
+    const sprite = this.add.image(x, y - 30, 'ph_bone').setDepth(y + 11);
     const shadow = this.add.ellipse(x, y, 20, 6, 0x000000, 0.3).setDepth(1);
     this.projectiles.push({ sprite, shadow, x, y, vx, dmg, left: reach, dead: false });
   }
@@ -157,9 +158,9 @@ export class RoomScene extends Phaser.Scene {
     for (const b of this.projectiles) {
       b.x += b.vx * dt;
       b.left -= Math.abs(b.vx) * dt;
-      b.sprite.setPosition(b.x, b.y - 50).setRotation(b.sprite.rotation + dt * 14);
+      b.sprite.setPosition(b.x, b.y - 30).setDepth(b.y + 11).setRotation(b.sprite.rotation + dt * 14);
       b.shadow.setPosition(b.x, b.y);
-      if (Math.abs(p.x - b.x) < 24 && Math.abs(p.y - b.y) < 18) {
+      if (Math.abs(p.x - b.x) < 18 && Math.abs(p.y - b.y) < 13) {
         const dealt = p.takeHit(b.dmg, b.x - Math.sign(b.vx) * 40, 140, false);
         if (dealt >= 0) {
           b.dead = true;
@@ -175,6 +176,23 @@ export class RoomScene extends Phaser.Scene {
     this.projectiles = this.projectiles.filter((b) => !b.dead);
   }
 
+  // Two bodies on the floor overlap when they are within an ellipse of each
+  // other (wide, shallow: the floor is seen at an angle). Push b out of a;
+  // share is how much of the push b takes (the player never gets pushed).
+  private pushApart(a: Fighter, b: Fighter, rx: number, ry: number, share: number) {
+    const nx = (b.x - a.x) / rx, ny = (b.y - a.y) / ry;
+    const d = Math.hypot(nx, ny);
+    if (d >= 1) return;
+    const ux = d < 1e-4 ? (Math.random() < 0.5 ? -1 : 1) : nx / d, uy = d < 1e-4 ? 0 : ny / d;
+    const amt = 1 - d;
+    b.x += ux * rx * amt * share; b.y += uy * ry * amt * share;
+    if (share < 1) { a.x -= ux * rx * amt * (1 - share); a.y -= uy * ry * amt * (1 - share); }
+  }
+
+  pushOut(f: { x: number; y: number }) {
+    this.world?.pushOut(f);
+  }
+
   // Keeps enemies from stacking on one spot or standing inside the player.
   private separate() {
     const list = this.enemies.filter((e) => !e.isDead());
@@ -182,19 +200,10 @@ export class RoomScene extends Phaser.Scene {
       const a = list[i];
       for (let j = i + 1; j < list.length; j++) {
         const b = list[j];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        if (Math.abs(dx) < 40 && Math.abs(dy) < 18) {
-          const push = (40 - Math.abs(dx)) / 2;
-          const s = dx === 0 ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(dx);
-          a.x -= s * push * 0.5;
-          b.x += s * push * 0.5;
-        }
+        this.pushApart(a, b, 26, 11, 0.5);
       }
       const p = this.player;
-      if (!p.isDead() && p.state !== 'dodge') {
-        const dx = a.x - p.x;
-        if (Math.abs(dx) < 34 && Math.abs(a.y - p.y) < 16) a.x = p.x + (dx === 0 ? 1 : Math.sign(dx)) * 34;
-      }
+      if (!p.isDead() && p.state !== 'dodge') this.pushApart(p, a, 24, 10, 1);
       a.clamp();
     }
   }
@@ -202,7 +211,7 @@ export class RoomScene extends Phaser.Scene {
   onEnemyDied(e: Enemy) {
     this.kills++;
     if (Math.random() < 0.25) {
-      const sprite = this.add.image(e.x, e.y - 14, 'ph_orb').setDepth(e.y + 5);
+      const sprite = this.add.image(e.x, e.y - 10, 'ph_orb').setDepth(e.y + 5).setScale(0.8);
       this.pickups.push({ sprite, x: e.x, y: e.y, t: 0, dead: false });
     }
   }
@@ -211,8 +220,8 @@ export class RoomScene extends Phaser.Scene {
     const p = this.player;
     for (const o of this.pickups) {
       o.t += dt;
-      o.sprite.setY(o.y - 14 - Math.sin(o.t * 4) * 4);
-      if (!p.isDead() && Math.abs(p.x - o.x) < 34 && Math.abs(p.y - o.y) < 22) {
+      o.sprite.setY(o.y - 10 - Math.sin(o.t * 4) * 3);
+      if (!p.isDead() && Math.abs(p.x - o.x) < 24 && Math.abs(p.y - o.y) < 16) {
         o.dead = true;
         const heal = Math.min(15, p.maxHp - p.hp);
         p.hp += heal;
@@ -237,7 +246,8 @@ export class RoomScene extends Phaser.Scene {
   private updateWaves(dt: number) {
     if (this.player.isDead()) return;
     if (this.gateOpen) {
-      if (!this.leaving && this.player.x > this.world.exitX - 40) {
+      const ex = this.world.exit;
+      if (!this.leaving && Math.hypot(this.player.x - ex.x, (this.player.y - ex.y) * 1.6) < 46) {
         this.leaving = true;
         this.cameras.main.fadeOut(400);
         this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -268,17 +278,35 @@ export class RoomScene extends Phaser.Scene {
     const tier = 1 + 0.15 * (this.room - 1);
     const types: ('g' | 't')[] = [...Array(w.ghouls).fill('g'), ...Array(w.throwers).fill('t')];
     types.forEach((type, i) => {
-      let side = i % 2 === 0 ? 1 : -1;
-      let x = side > 0 ? left + viewW + 40 + i * 22 : left - 40 - i * 22;
-      if (x < 40 || x > roomW - 40) { side = -side; x = side > 0 ? left + viewW + 40 + i * 22 : left - 40 - i * 22; }
-      x = Phaser.Math.Clamp(x, 40, roomW - 40);
-      const y = Phaser.Math.Between(groundTop + 10, groundBottom - 10);
-      this.enemies.push(type === 'g' ? new Ghoul(this, x, y, tier) : new BoneThrower(this, x, y, tier));
+      let x: number, y: number;
+      if (i % 3 === 2) {
+        // out of the trees at the back, somewhere in view
+        x = Phaser.Math.Clamp(left + Phaser.Math.Between(120, viewW - 120), 60, roomW - 60);
+        y = groundTop + 2;
+      } else {
+        let side = i % 2 === 0 ? 1 : -1;
+        x = side > 0 ? left + viewW + 30 + i * 16 : left - 30 - i * 16;
+        if (x < 20 || x > roomW - 20) { side = -side; x = side > 0 ? left + viewW + 30 + i * 16 : left - 30 - i * 16; }
+        x = Phaser.Math.Clamp(x, 20, roomW - 20);
+        y = Phaser.Math.Between(groundTop + 30, groundBottom - 20);
+      }
+      const e = type === 'g' ? new Ghoul(this, x, y, tier) : new BoneThrower(this, x, y, tier);
+      e.appear = 0; // fades in
+      this.enemies.push(e);
     });
   }
 
 
   // ---- feedback --------------------------------------------------------
+
+  // Little puffs of dust at someone's feet.
+  dust(x: number, y: number, n: number) {
+    for (let i = 0; i < n; i++) {
+      const d = this.add.image(x + (Math.random() - 0.5) * 14, y - 2, 'fw_dust').setDepth(y + 1)
+        .setTint(0x8a7a66).setAlpha(0.5).setScale(0.5 + Math.random() * 0.4);
+      this.tweens.add({ targets: d, scale: d.scale * 2, alpha: 0, y: y - 8 - Math.random() * 6, duration: 420 + Math.random() * 200, onComplete: () => d.destroy() });
+    }
+  }
 
   shake(ms: number, intensity: number) {
     if (settings.screenShake) this.cameras.main.shake(ms, intensity);

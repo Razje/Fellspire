@@ -1,12 +1,17 @@
 // Tuning knobs that are likely to need adjusting once real art is in place.
 
+// A room is an arena seen from above at an angle, as in Lost Castle 2: a deep
+// floor taking most of the screen, small characters, a tree line behind. The
+// room is a little larger than the screen, so the camera follows both ways.
 export const WORLD = {
   viewW: 960,
   viewH: 540,
-  roomW: 2400,
-  // The walkable strip of ground, in screen pixels from the top.
-  groundTop: 375,
-  groundBottom: 515,
+  roomW: 1500,
+  roomH: 660,
+  // The walkable floor, in room pixels from the top: groundTop is the tree
+  // line at the back, groundBottom the front edge.
+  groundTop: 292,
+  groundBottom: 622,
 };
 
 export type CharKey = 'hero' | 'ghoul' | 'archer';
@@ -26,9 +31,9 @@ export interface CharConfig {
 }
 
 export const CHARACTERS: Record<CharKey, CharConfig> = {
-  hero: { label: 'Hero', height: 170, footY: 0.84, variant: 0, facesLeft: false },
-  ghoul: { label: 'Ghoul', height: 150, footY: 0.84, variant: 0, facesLeft: false },
-  archer: { label: 'Bone thrower', height: 155, footY: 0.84, variant: 0, facesLeft: false },
+  hero: { label: 'Hero', height: 100, footY: 0.84, variant: 0, facesLeft: false },
+  ghoul: { label: 'Ghoul', height: 92, footY: 0.84, variant: 0, facesLeft: false },
+  archer: { label: 'Bone thrower', height: 94, footY: 0.84, variant: 0, facesLeft: false },
 };
 
 // Which folder names in a pack feed which animation, first match wins.

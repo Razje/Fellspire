@@ -89,6 +89,12 @@ gold and deep red, Cinzel lettering.
 5. **done** The fight scene in the title screen's look: painted Blightwood
    layers, torches whose light warms the characters, the rune ring as the exit,
    foreground framing, a gold unit-frame HUD (2026-11-23).
+   **done** Depth rework after Martijn found it "too 2D side-scrolling" next to
+   Lost Castle 2: rooms are now arenas seen from above at an angle (floor about
+   half the screen and more, a tree line behind), characters about half the
+   size, props throughout the floor with footprints, the camera following both
+   ways, equal speed in every direction, attacks aimed up or down, a dodge in any
+   direction, ghouls that spread out around you, enemies stepping out of the trees.
 6. **next** The Lantern Warden boss fight.
 7. Gold and the first weapon drops.
 8. A second class, and two-player co-op on one screen.
@@ -97,6 +103,13 @@ gold and deep red, Cinzel lettering.
 After 6, zone 1 is a complete, playable slice.
 
 ## Notes from the Lost Castle 2 reference
+
+What gives it depth, from frames of a gameplay video (2026-11-23): the camera looks
+down at the ground rather than across it; the walkable floor fills half the screen
+or more (at camp nearly all of it); characters are about a tenth of the screen
+high; barrels, torches, crates and logs stand throughout the floor, not only along
+the back; paths curve away into the depth; movement is equally free in every
+direction.
 
 `lost-castle-2-reference.md` (Martijn's research, 2026-11-23) describes the game in
 detail. Points to carry into Fellspire as the matching steps come up:

@@ -21,6 +21,7 @@ export abstract class Fighter {
   invuln = 0;
   removed = false;
   protected fading = false;
+  appear = 1; // 0..1, rises to 1: lets a newcomer fade in
   protected knockVx = 0;
   protected flashT = 0;
   protected tintColor: number | null = null;
@@ -37,7 +38,7 @@ export abstract class Fighter {
     this.sprite.setOrigin(0.5, art ? this.cfg.footY : 0.98);
     this.baseScale = art ? this.cfg.height / this.sprite.height : (this.cfg.height * 0.62) / PH_H;
     this.sprite.setScale(this.baseScale);
-    this.shadow = scene.add.ellipse(x, y, 58, 14, 0x000000, 0.35).setDepth(1);
+    this.shadow = scene.add.ellipse(x, y, this.cfg.height * 0.36, this.cfg.height * 0.1, 0x000000, 0.4).setDepth(1);
   }
 
   get hasArt() {
@@ -152,8 +153,10 @@ export abstract class Fighter {
   }
 
   clamp() {
-    this.x = Phaser.Math.Clamp(this.x, 30, WORLD.roomW - 30);
+    this.x = Phaser.Math.Clamp(this.x, 20, WORLD.roomW - 20);
     this.y = Phaser.Math.Clamp(this.y, WORLD.groundTop, WORLD.groundBottom);
+    // props have footprints nobody can walk through
+    this.scene.pushOut(this);
   }
 
   protected sync(dt: number, moving = false) {
@@ -176,6 +179,7 @@ export abstract class Fighter {
       this.sprite.setTint(this.scene.lightAt(this.x, this.y));
     }
     // Blink while invulnerable after a hit (not during a dodge, which is obvious).
-    if (!this.fading) this.sprite.setAlpha(this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1);
+    this.appear = Math.min(1, this.appear + dt * 2.5);
+    if (!this.fading) this.sprite.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear);
   }
 }

@@ -67,7 +67,7 @@ export class Hud {
     fixed(scene.add.circle(ox + 42, oy + 40, 34, 0x0c1420, 0.95), 0);
     const face = scene.add.image(ox + 42, oy + 52, art ? firstFrame.hero! : 'ph_hero');
     face.setScale(art ? 92 / face.height : 0.9).setOrigin(0.5, art ? 0.42 : 0.5);
-    const mask = scene.make.graphics({}, false).fillCircle(ox + 42, oy + 40, 31);
+    const mask = scene.make.graphics({}, false).fillCircle(ox + 42, oy + 40, 31).setScrollFactor(0); // fixed to the screen, like the HUD
     face.setMask(mask.createGeometryMask());
     fixed(face, 1);
     fixed(scene.add.image(ox, oy, 'hud_frame').setOrigin(0), 2);
