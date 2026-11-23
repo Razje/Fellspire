@@ -3,7 +3,9 @@ import { WORLD } from '../config';
 import { Player } from '../entities/Player';
 import { BoneThrower, Enemy, Ghoul } from '../entities/Enemies';
 import type { Fighter } from '../entities/Fighter';
-import { buildBackground, type Background } from '../background';
+import { buildBlightwood, type Blightwood } from '../blightwood';
+import { makeTitleTextures } from '../titleArt';
+import { Hud } from '../hud';
 import { settings } from '../settings';
 
 export interface AttackSpec {
@@ -40,9 +42,8 @@ export class RoomScene extends Phaser.Scene {
   private freeze = 0;
   private startHp?: number;
   private kills = 0;
-  private bg!: Background;
-  private gate!: Phaser.GameObjects.Container;
-  private hud!: { bar: Phaser.GameObjects.Graphics; info: Phaser.GameObjects.Text; banner: Phaser.GameObjects.Text; dead: Phaser.GameObjects.Text };
+  private world!: Blightwood;
+  private hud!: Hud;
 
   constructor() {
     super('room');
@@ -76,28 +77,16 @@ export class RoomScene extends Phaser.Scene {
     const { viewW, viewH, roomW, groundTop, groundBottom } = WORLD;
     const cam = this.cameras.main;
     cam.setBounds(0, 0, roomW, viewH);
-    this.bg = buildBackground(this);
+    if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
+    this.world = buildBlightwood(this);
 
     this.player = new Player(this, 180, (groundTop + groundBottom) / 2);
     if (this.startHp !== undefined) this.player.hp = this.startHp;
     cam.startFollow(this.player.sprite, true, 0.12, 0.12);
     cam.fadeIn(350);
 
-    this.gate = this.buildGate(roomW - 80, (groundTop + groundBottom) / 2);
-    this.gate.setVisible(false);
-
-    const bar = this.add.graphics().setScrollFactor(0).setDepth(20000);
-    const info = this.add.text(viewW - 16, 14, '', { fontFamily: FONT, fontSize: '18px', color: '#e8dcb5' })
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(20000).setShadow(1, 1, '#000', 2);
-    const banner = this.add.text(viewW / 2, 120, '', { fontFamily: FONT, fontSize: '34px', color: '#f3d27a' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(20000).setShadow(2, 2, '#000', 4).setAlpha(0);
-    const dead = this.add.text(viewW / 2, viewH / 2 - 40, '', { fontFamily: FONT, fontSize: '30px', color: '#ff9b8a', align: 'center' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(20000).setShadow(2, 2, '#000', 4);
-    this.add.text(16, viewH - 26, 'Move WASD / arrows   J light (x3 combo)   K heavy   Space dodge   L block   R restart   Esc menu', {
-      fontFamily: 'monospace', fontSize: '13px', color: '#cfc6a8',
-    }).setScrollFactor(0).setDepth(20000).setAlpha(0.75).setShadow(1, 1, '#000', 2);
-    this.hud = { bar, info, banner, dead };
-    this.showBanner(`Blightwood, room ${this.room}`);
+    this.hud = new Hud(this, this.room, this.waves.length);
+    this.hud.showBanner(`The Blightwood  ·  Room ${this.room}`);
 
     this.input.keyboard!.on('keydown-R', () => this.scene.restart({ room: 1 }));
     this.input.keyboard!.on('keydown-ESC', () => {
@@ -123,8 +112,9 @@ export class RoomScene extends Phaser.Scene {
     this.updatePickups(dt);
     this.updateWaves(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
-    this.bg.update(this.cameras.main);
-    this.drawHud();
+    const cam = this.cameras.main;
+    this.world.update(cam, this.player.x - cam.scrollX);
+    this.hud.update(this.player.hp, this.player.maxHp, this.wave, this.gateOpen, dt);
   }
 
   // ---- combat -----------------------------------------------------------
@@ -147,7 +137,7 @@ export class RoomScene extends Phaser.Scene {
       this.hitStop(spec.heavy ? 85 : 45);
       if (spec.heavy) this.shake(110, 0.006);
     }
-    if (this.player.isDead() && !this.hud.dead.text) this.onPlayerDied();
+    if (this.player.isDead()) this.onPlayerDied();
     return hits;
   }
 
@@ -234,10 +224,12 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private onPlayerDied() {
-    if (this.hud.dead.text) return;
-    this.hud.dead.setText(`You fell in room ${this.room}.\nPress R to try again, Esc for the menu.`);
-    this.hud.dead.setAlpha(0);
-    this.tweens.add({ targets: this.hud.dead, alpha: 1, duration: 600, delay: 500 });
+    this.hud.showDeath(this.room);
+  }
+
+  // Colour a character should be tinted where it stands: moonlight, warmer near fire.
+  lightAt(x: number, y: number) {
+    return this.world.lightAt(x, y);
   }
 
   // ---- waves and the exit ----------------------------------------------
@@ -245,7 +237,7 @@ export class RoomScene extends Phaser.Scene {
   private updateWaves(dt: number) {
     if (this.player.isDead()) return;
     if (this.gateOpen) {
-      if (!this.leaving && this.player.x > WORLD.roomW - 120) {
+      if (!this.leaving && this.player.x > this.world.exitX - 40) {
         this.leaving = true;
         this.cameras.main.fadeOut(400);
         this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -262,12 +254,11 @@ export class RoomScene extends Phaser.Scene {
       this.spawnWave(this.waves[this.wave]);
       this.wave++;
       this.waveDelay = 1.0;
-      if (this.wave > 1) this.showBanner(`Wave ${this.wave} of ${this.waves.length}`);
+      if (this.wave > 1) this.hud.showBanner(`Wave ${this.wave} of ${this.waves.length}`);
     } else {
       this.gateOpen = true;
-      this.gate.setVisible(true).setAlpha(0);
-      this.tweens.add({ targets: this.gate, alpha: 1, duration: 600 });
-      this.showBanner('Room cleared! Head right');
+      this.world.openExit();
+      this.hud.showBanner('Room cleared  ·  The rune gate opens');
     }
   }
 
@@ -286,14 +277,6 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
-  private buildGate(x: number, y: number) {
-    const glow = this.add.ellipse(0, -70, 120, 170, 0xffb347, 0.18);
-    const ring = this.add.ellipse(0, -70, 84, 140, 0xffd27a, 0.55);
-    const core = this.add.ellipse(0, -70, 60, 112, 0x2a1408, 0.9);
-    const c = this.add.container(x, y, [glow, ring, core]).setDepth(y - 60);
-    this.tweens.add({ targets: [glow, ring], scaleX: 1.08, scaleY: 1.05, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
-    return c;
-  }
 
   // ---- feedback --------------------------------------------------------
 
@@ -318,22 +301,5 @@ export class RoomScene extends Phaser.Scene {
     this.tweens.add({ targets: s, scale: 1.8, alpha: 0, angle: 60, duration: 200, onComplete: () => s.destroy() });
   }
 
-  private showBanner(text: string) {
-    const b = this.hud.banner;
-    this.tweens.killTweensOf(b);
-    b.setText(text).setAlpha(0);
-    this.tweens.chain({ targets: b, tweens: [{ alpha: 1, duration: 250 }, { alpha: 1, duration: 1400 }, { alpha: 0, duration: 500 }] });
-  }
 
-  private drawHud() {
-    const g = this.hud.bar;
-    const p = this.player;
-    g.clear();
-    g.fillStyle(0x000000, 0.55).fillRoundedRect(12, 12, 248, 26, 6);
-    g.fillStyle(0x5b1a16, 1).fillRoundedRect(16, 16, 240, 18, 4);
-    g.fillStyle(0xd0463a, 1).fillRoundedRect(16, 16, Math.max(0, 240 * (p.hp / p.maxHp)), 18, 4);
-    g.fillStyle(0xffffff, 0.18).fillRect(18, 18, Math.max(0, 236 * (p.hp / p.maxHp)), 5);
-    const waveText = this.gateOpen ? 'cleared' : `wave ${Math.max(1, this.wave)}/${this.waves.length}`;
-    this.hud.info.setText(`Room ${this.room}   ${waveText}   kills ${this.kills}`);
-  }
 }

@@ -172,7 +172,8 @@ export abstract class Fighter {
     } else if (this.tintColor !== null) {
       this.sprite.setTint(this.tintColor);
     } else {
-      this.sprite.clearTint();
+      // moonlight, warming up near torches
+      this.sprite.setTint(this.scene.lightAt(this.x, this.y));
     }
     // Blink while invulnerable after a hit (not during a dodge, which is obvious).
     if (!this.fading) this.sprite.setAlpha(this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1);

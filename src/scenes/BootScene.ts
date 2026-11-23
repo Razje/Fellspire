@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CHARACTERS, LOOPING, type CharKey } from '../config';
 import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
-import { makeBlightwoodTextures, makePlaceholderTextures } from '../placeholders';
+import { makePlaceholderTextures } from '../placeholders';
 
 export class BootScene extends Phaser.Scene {
   private found: Partial<Record<CharKey, Record<string, string[]>>> = {};
@@ -52,7 +52,6 @@ export class BootScene extends Phaser.Scene {
     console.info('[fellspire] art found\n' + report.join('\n') + `\nbackground layers: ${this.registry.get('bgCount')}`);
 
     makePlaceholderTextures(this);
-    makeBlightwoodTextures(this);
     this.scene.start('menu');
   }
 }

@@ -58,7 +58,14 @@ export class MenuScene extends Phaser.Scene {
     this.cameras.main.fadeIn(1400, 0, 0, 0);
     this.time.delayedCall(2300, () => this.showPrompt());
 
-    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => this.onKey(e.code || e.key, e.key));
+    // Phaser sometimes hands the same browser event over twice (seen in tests:
+    // identical timestamps), which moved the selection two places. Handle each once.
+    const seen = new WeakSet<KeyboardEvent>();
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
+      if (seen.has(e)) return;
+      seen.add(e);
+      this.onKey(e.code || e.key, e.key);
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => { this.lookTarget = (p.x - 480) / 480; });
     this.input.on('pointerdown', () => { if (this.mode === 'prompt' || this.mode === 'intro') this.openMenu(); });
   }

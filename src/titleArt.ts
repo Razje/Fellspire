@@ -3,9 +3,9 @@
 // pools of fire light, cyan and violet magic, black foliage framing the edges.
 import Phaser from 'phaser';
 
-type Ctx = CanvasRenderingContext2D;
+export type Ctx = CanvasRenderingContext2D;
 
-function rng(seed: number) {
+export function rng(seed: number) {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -14,7 +14,7 @@ function rng(seed: number) {
   };
 }
 
-function canvas(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void) {
+export function canvas(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void) {
   if (scene.textures.exists(key)) scene.textures.remove(key);
   const tex = scene.textures.createCanvas(key, w, h)!;
   draw(tex.getContext());
@@ -23,7 +23,7 @@ function canvas(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c
 
 // ---- soft shapes used for light and particles -------------------------------
 
-function radial(ctx: Ctx, x: number, y: number, r: number, stops: [number, string][]) {
+export function radial(ctx: Ctx, x: number, y: number, r: number, stops: [number, string][]) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   for (const [o, c] of stops) g.addColorStop(o, c);
   ctx.fillStyle = g;
@@ -96,7 +96,7 @@ function sky(scene: Phaser.Scene) {
   });
 }
 
-function trunk(c: Ctx, x: number, base: number, top: number, w: number, lean: number, r: () => number) {
+export function trunk(c: Ctx, x: number, base: number, top: number, w: number, lean: number, r: () => number) {
   c.beginPath();
   c.moveTo(x - w * 1.6, base);
   c.quadraticCurveTo(x - w * 0.6, base - 18, x - w / 2, base - 40);

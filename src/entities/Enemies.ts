@@ -121,8 +121,10 @@ export class Ghoul extends Enemy {
         const k = this.stateT / Ghoul.WINDUP;
         const g = this.telegraph;
         g.clear();
-        g.fillStyle(0xff3b30, 0.12 + 0.35 * k);
+        g.fillStyle(0xff3b30, 0.12 + 0.3 * k);
         g.fillEllipse(this.x + this.facing * 48, this.y, 100, 34);
+        g.lineStyle(2, 0xff6a5a, 0.35 + 0.6 * k);
+        g.strokeEllipse(this.x + this.facing * 48, this.y, 100, 34);
         if (this.stateT >= Ghoul.WINDUP) {
           g.clear();
           this.state = 'attack';
@@ -182,6 +184,8 @@ export class BoneThrower extends Enemy {
         g.fillStyle(0xff3b30, 0.08 + 0.3 * k);
         const x0 = this.x + this.facing * 20;
         g.fillRect(Math.min(x0, x0 + this.facing * BoneThrower.REACH), this.y - 5, BoneThrower.REACH, 10);
+        g.lineStyle(2, 0xff6a5a, 0.3 + 0.6 * k);
+        g.strokeRect(Math.min(x0, x0 + this.facing * BoneThrower.REACH), this.y - 5, BoneThrower.REACH, 10);
         if (this.stateT >= BoneThrower.WINDUP) {
           g.clear();
           this.state = 'attack';

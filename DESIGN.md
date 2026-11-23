@@ -86,16 +86,33 @@ gold and deep red, Cinzel lettering.
 2. **done** Ghouls and bone throwers in a room, with waves.
 3. **done** Rooms in a row, the exit, health orbs. (Weapon drops still to come.)
 4. **done** Title screen with menu, options and credits (2026-11-23).
-5. **next** The fight scene brought up to the title screen's look: painted
-   Blightwood layers, lighting, foreground framing.
-6. The Lantern Warden boss fight.
+5. **done** The fight scene in the title screen's look: painted Blightwood
+   layers, torches whose light warms the characters, the rune ring as the exit,
+   foreground framing, a gold unit-frame HUD (2026-11-23).
+6. **next** The Lantern Warden boss fight.
 7. Gold and the first weapon drops.
 8. A second class, and two-player co-op on one screen.
 9. Hub camp with embers between runs.
 
 After 6, zone 1 is a complete, playable slice.
 
+## Notes from the Lost Castle 2 reference
+
+`lost-castle-2-reference.md` (Martijn's research, 2026-11-23) describes the game in
+detail. Points to carry into Fellspire as the matching steps come up:
+
+- Telegraph colours: red circle or line = an attack is coming there; blue or dark
+  zone = get out. Bosses follow wind-up, attack, rest window, phase change, ultimate.
+- Rooms lock until every wave is dead; enemies come in from the sides (as now).
+- Side rooms with breakable crates and barrels that drop gold and items.
+- A healing spring room, and cursed routes that are cleansed there.
+- HUD: HP, plus a gauge under it for the weapon's own resource.
+- Their controls: J attack, K special, **Space jump**, **L dodge**, E interact.
+  Ours: Space dodge, L block, no jump yet. Worth deciding before co-op.
+
 ## Open questions
+
+- Controls: keep Space as dodge, or follow Lost Castle 2 (Space jump, L dodge)?
 
 - Which free or paid pack becomes the Ironguard? (Paladin or Armored Knight, $5.50 each.)
 - Sound and music: not started; needs a source with a licence that fits.

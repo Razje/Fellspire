@@ -46,27 +46,55 @@ test('title screen comes up without errors', async ({ page }, info) => {
   expect(errors).toEqual([]);
 });
 
-test('menu responds to the keyboard', async ({ page }) => {
+test('menu responds to the keyboard, one step per key', async ({ page }) => {
   await page.goto('/');
   await waitForScene(page, 'menu');
   const state = () => page.evaluate(() => {
     const m = (window as any).game.scene.getScene('menu');
     return { mode: m.mode, sel: m.sel };
   });
+  // a short settle after each key, so a key handled twice would show up as a double move
+  const press = async (key: string) => { await page.keyboard.press(key); await page.waitForTimeout(150); };
 
-  await page.keyboard.press('Enter'); // "press any key"
-  await expect.poll(state).toMatchObject({ mode: 'menu', sel: 0 });
-  await page.keyboard.press('ArrowDown');
-  await expect.poll(state).toMatchObject({ mode: 'menu', sel: 1 });
-  await page.keyboard.press('Enter'); // Options
-  await expect.poll(state).toMatchObject({ mode: 'options' });
-  await page.keyboard.press('Escape');
-  await expect.poll(state).toMatchObject({ mode: 'menu' });
-  await page.keyboard.press('ArrowUp');
-  await expect.poll(state).toMatchObject({ mode: 'menu', sel: 0 });
-  await page.keyboard.press('Enter'); // New Run
-  await expect.poll(state).toMatchObject({ mode: 'leaving' });
+  await press('Enter'); // "press any key"
+  await expect.poll(state).toEqual({ mode: 'menu', sel: 0 });
+  await press('ArrowDown');
+  expect(await state()).toEqual({ mode: 'menu', sel: 1 });
+  await press('Enter'); // Options
+  expect(await state()).toMatchObject({ mode: 'options' });
+  await press('Escape');
+  expect(await state()).toEqual({ mode: 'menu', sel: 1 });
+  await press('ArrowUp');
+  expect(await state()).toEqual({ mode: 'menu', sel: 0 });
+  await press('Enter'); // New Run
+  expect(await state()).toMatchObject({ mode: 'leaving' });
   await waitForScene(page, 'room');
+});
+
+test('fight scene draws the Blightwood', async ({ page }, info) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await waitForScene(page, 'menu');
+  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await waitForScene(page, 'room');
+  await page.waitForTimeout(2600); // fade-in, banner, first wave walking in
+
+  const r = await page.evaluate(() => {
+    const g = (window as any).game;
+    const s = g.scene.getScene('room');
+    const warm = (c: number) => (c >> 16) - (c & 0xff); // red minus blue
+    return {
+      textures: ['fw_far', 'fw_mid', 'fw_ground', 'fw_front', 'fw_torch', 'hud_frame'].filter((k) => !g.textures.exists(k)),
+      nearTorch: warm(s.lightAt(380, 410)),
+      inTheDark: warm(s.lightAt(150, 440)),
+    };
+  });
+  expect(r.textures).toEqual([]); // every painted layer exists
+  expect(r.nearTorch).toBeGreaterThan(r.inTheDark); // firelight warms a character
+
+  await page.screenshot({ path: info.outputPath('fight.png') });
+  await info.attach('fight scene', { path: info.outputPath('fight.png'), contentType: 'image/png' });
+  expect(errors).toEqual([]);
 });
 
 test('combat rules hold', async ({ page }) => {

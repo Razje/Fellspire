@@ -57,10 +57,12 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
 | `src/scenes/MenuScene.ts` | Title screen, menu, options, credits |
-| `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up |
+| `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
 | `src/scenes/RoomScene.ts` | A room: waves, exit, HUD, hit resolution, projectiles, pickups |
 | `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower) |
-| `src/placeholders.ts`, `src/background.ts` | Drawn stand-in characters and the fight background |
+| `src/blightwood.ts` | The fight scenery: tiling painted layers, props, torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
+| `src/hud.ts` | Fight HUD: unit frame with portrait and health bar, room plaque, wave ribbon, death panel |
+| `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `shrink.mjs`, `measure-feet.mjs` |
 
@@ -79,10 +81,22 @@ downloads need Martijn's sign-in; downloads from the browser pane reach him as a
 dialog. macOS zips carry `__MACOSX/._*.png` files that are not images; the tools skip
 them.
 
-The look follows Lost Castle 2 (dark teal night forests, warm light pools, glowing
+`lost-castle-2-reference.md` is Martijn's write-up of Lost Castle 2 (look, HUD,
+combat, rooms, bosses); read the relevant section before designing a step. The look follows Lost Castle 2 (dark teal night forests, warm light pools, glowing
 cyan and violet magic, black foliage framing the screen) with a WoW-like feel for the
 UI: gold bevelled lettering, red buttons with gold trim. Fonts are Cinzel and Cinzel
 Decorative, bundled from npm.
+
+## Things that bite
+
+- **Phaser sometimes delivers one key event twice** (same `timeStamp`), so a
+  `keydown` listener that moves a selection must ignore an event it has already
+  handled; `MenuScene` uses a `WeakSet`. Found by the menu test, 2026-11-23.
+  `Key.isDown`/`JustDown` in the fight are not affected.
+- **Bash heredocs eat backslashes** in this harness (see `C:\IXON\CLAUDE.md`).
+  Write scripts with the Write tool.
+- Phaser tweens time themselves by the real clock, so stepping the game by hand
+  in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 
 ## Workflow
 
