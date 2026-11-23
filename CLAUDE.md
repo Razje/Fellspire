@@ -9,6 +9,9 @@ Martijn is not a programmer. He decides what the game is and how it feels, plays
 each step, and says when it is right. Explain in plain words, build in small steps,
 and show evidence (test results, a screenshot) rather than claiming something works.
 
+Its git `origin` is the private GitLab project `martijn.terol/fellspire`, created
+2026-11-23 by pushing to it. `C:\IXON` (the General repo) ignores this folder.
+
 ## Hard rules
 
 - **No Blizzard or World of Warcraft material**, not models, art, sound, names or
