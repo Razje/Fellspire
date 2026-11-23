@@ -1,0 +1,23 @@
+{
+  "name": "fellspire",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/cinzel": "5.3.0",
+    "@fontsource/cinzel-decorative": "5.3.0",
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.54.2",
+    "sharp": "0.34.2",
+    "typescript": "5.8.3",
+    "vite": "6.3.5"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+# Bought and free art packs stay out of git: their licences forbid passing
+# the source files on. Only the README that explains where they go is kept.
+assets/**
+!assets/README.md
+test-results/
+playwright-report/
