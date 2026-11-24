@@ -33,7 +33,7 @@ export class Player extends Fighter {
   private combo = 0;
   private comboTimer = 0;
   private buffer: 'light' | 'heavy' | null = null;
-  private dodgeCd = 0;
+  dodgeCd = 0; // seconds until the next dodge; the HUD shows it
   private dodgeDir = { x: 1, y: 0 };
   private vx = 0;
   private vy = 0;
@@ -161,6 +161,7 @@ export class Player extends Fighter {
   }
 
   private startLight() {
+    this.scene.onPlayerAction('light');
     const m = LIGHT[this.combo];
     this.combo = (this.combo + 1) % LIGHT.length;
     this.comboTimer = 1;
@@ -174,6 +175,7 @@ export class Player extends Fighter {
     this.state = 'attack';
     this.stateT = 0;
     this.playAnim(m.anim, { duration: m.dur * 1000, force: true });
+    if (m === HEAVY) this.scene.onPlayerAction('heavy');
   }
 
   private startDodge(inp: Input) {
@@ -187,6 +189,7 @@ export class Player extends Fighter {
     this.move = null;
     this.combo = 0;
     this.playAnim('dodge', { duration: DODGE_TIME * 1000, force: true });
+    this.scene.onPlayerAction('dodge');
     this.scene.dust(this.x, this.y, 3);
   }
 

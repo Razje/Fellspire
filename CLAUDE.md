@@ -56,12 +56,16 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/config.ts` | Tuning knobs: room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
-| `src/scenes/MenuScene.ts` | Title screen, menu, options, credits |
+| `src/scenes/MenuScene.ts` | Title screen and its menu; Options and Credits come from `ui/panels.ts` |
+| `src/scenes/HudScene.ts` | Runs on top of a room: unit frame, action bar, room plaque, objective, banners, pause menu, end screen. Owns Esc |
+| `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
+| `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `FocusList` (keys, stick and mouse), banner bands, the cursor |
+| `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
+| `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
-| `src/scenes/RoomScene.ts` | A room: waves, exit, HUD, hit resolution, projectiles, pickups |
+| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution, projectiles, pickups, combat text, run stats; launches the HUD |
 | `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
-| `src/hud.ts` | Fight HUD: unit frame with portrait and health bar, room plaque, wave ribbon, death panel |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `shrink.mjs`, `measure-feet.mjs` |
@@ -92,10 +96,19 @@ Decorative, bundled from npm.
 - **Depth is drawing order.** Everything on the floor sets its depth to its feet's
   y (characters y + 10, props y), so whoever stands lower on screen is drawn in
   front. Floor-level effects (light pools 0.5, shadows 1, attack markers 2) sit
-  just above the floor (-50). The HUD is 20000 and up, foreground framing 15000.
-- Anything pinned to the screen needs `setScrollFactor(0)`, masks included: the
-  camera moves both ways now, and a mask left in the room slides off its target.
-
+  just above the floor (-50), combat text 19000, foreground framing 15000. The HUD
+  is a separate scene drawn over the room.
+- **The canvas is 1920 x 1080, the game is laid out in 960 x 540.** Every camera is
+  zoomed 2x (`ui/view.ts`). Phaser zooms around the camera's middle, so a screen
+  scene calls `screenCamera()`, the room uses `worldView.x` (not `scrollX`) for the
+  left edge of the view, and anything in the room with a scroll factor other than 1
+  is corrected by `shiftParallax()` after it is built. Screen-pinned things go in
+  `HudScene`, not in the room with `setScrollFactor(0)`.
+- **UI art is painted at twice its size** with `hi()` and shown with `pic()` at half
+  scale; text goes through `txt()` (resolution 2). A UI part drawn any other way looks
+  soft next to the rest. Build screens from `ui/kit.ts` parts so they match.
+- A drawn frame's drop shadow is a filled shape: clear its middle
+  (`destination-out`) or it hides whatever sits inside. Cost the action bar its icons once.
 - **Phaser sometimes delivers one key event twice** (same `timeStamp`), so a
   `keydown` listener that moves a selection must ignore an event it has already
   handled; `MenuScene` uses a `WeakSet`. Found by the menu test, 2026-11-23.

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CHARACTERS, LOOPING, type CharKey } from '../config';
 import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
+import { screenCamera } from '../ui/view';
 
 export class BootScene extends Phaser.Scene {
   private found: Partial<Record<CharKey, Record<string, string[]>>> = {};
@@ -11,7 +12,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    const label = this.add.text(480, 270, 'Loading...', { fontFamily: '"Cinzel", Georgia, serif', fontSize: '22px', color: '#d8c79a' }).setOrigin(0.5);
+    screenCamera(this);
+    const label = this.add.text(480, 270, 'Loading...', { fontFamily: '"Cinzel", Georgia, serif', fontSize: '22px', color: '#d8c79a', resolution: 2 }).setOrigin(0.5);
     this.load.on('progress', (p: number) => label.setText(`Loading... ${Math.round(p * 100)}%`));
 
     const queued = new Set<string>();

@@ -8,6 +8,8 @@ export abstract class Enemy extends Fighter {
   protected hitDone = false;
   protected readonly telegraph: Phaser.GameObjects.Graphics;
   private readonly hpBar: Phaser.GameObjects.Graphics;
+  private lagFrac = 1;
+  private plateAlpha = 0;
   protected speed: number;
 
   constructor(scene: RoomScene, key: CharKey, x: number, y: number, hp: number, speed: number) {
@@ -82,13 +84,23 @@ export abstract class Enemy extends Fighter {
     return true;
   }
 
+  // A small health plate over the head, shown once the enemy has been hurt.
   private drawHpBar() {
     const g = this.hpBar;
     g.clear();
-    if (this.isDead() || this.hp >= this.maxHp) return;
-    const w = 36, x = this.x - w / 2, y = this.y - this.visualHeight - 10;
-    g.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, 7);
-    g.fillStyle(0xc8463c, 1).fillRect(x, y, w * (this.hp / this.maxHp), 5);
+    const want = this.isDead() || this.hp >= this.maxHp ? 0 : 1;
+    this.plateAlpha += (want - this.plateAlpha) * 0.2;
+    if (this.plateAlpha < 0.02) return;
+    const a = this.plateAlpha;
+    const f = Math.max(0, this.hp / this.maxHp);
+    this.lagFrac = this.lagFrac > f ? Math.max(f, this.lagFrac - 0.012) : f;
+    const w = 34, h = 4, x = Math.round(this.x - w / 2), y = Math.round(this.y - this.visualHeight - 10);
+    g.fillStyle(0x000000, 0.85 * a).fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    g.lineStyle(0.75, 0x8a6a34, 0.9 * a).strokeRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    g.fillStyle(0x1a0806, a).fillRect(x, y, w, h);
+    g.fillStyle(0xe8c890, a).fillRect(x, y, w * this.lagFrac, h);
+    g.fillStyle(0xc4281c, a).fillRect(x, y, w * f, h);
+    g.fillStyle(0xff7a5c, a).fillRect(x, y, w * f, 1);
   }
 }
 

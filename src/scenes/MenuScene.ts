@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
-import { makeTitleTextures, panelTexture } from '../titleArt';
+import { makeTitleTextures } from '../titleArt';
 import { firstFrame, loadedAnims } from '../assets';
-import { settings, saveSettings } from '../settings';
 import { CHARACTERS, type CharKey } from '../config';
+import { Button, keyHint } from '../ui/kit';
+import { openCredits, openOptions, type Panel } from '../ui/panels';
+import { C, RES, txt } from '../ui/theme';
+import { screenCamera } from '../ui/view';
 
 const DISPLAY = '"Cinzel Decorative", "Cinzel", Georgia, serif';
 const SERIF = '"Cinzel", Georgia, serif';
-const GOLD = '#f3d68a';
-const IVORY = '#e9dcc0';
 
 type Mode = 'intro' | 'prompt' | 'menu' | 'options' | 'credits' | 'leaving';
-
-interface Row { text: Phaser.GameObjects.Text; label: () => string; act: () => void }
 
 export class MenuScene extends Phaser.Scene {
   private mode: Mode = 'intro';
@@ -19,13 +18,11 @@ export class MenuScene extends Phaser.Scene {
   private look = 0; // eased pointer offset, -1..1
   private lookTarget = 0;
   private prompt!: Phaser.GameObjects.Text;
-  private buttons: { bg: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text; act: () => void }[] = [];
+  private buttons: Button[] = [];
   private flames: Phaser.GameObjects.Image[] = [];
   private menu!: Phaser.GameObjects.Container;
   private sel = 0;
-  private panel?: Phaser.GameObjects.Container;
-  private rows: Row[] = [];
-  private rowSel = 0;
+  private panel?: Panel;
   private padPrev: boolean[] = [];
 
   constructor() {
@@ -37,22 +34,22 @@ export class MenuScene extends Phaser.Scene {
     this.layers = [];
     this.buttons = [];
     this.flames = [];
-    this.rows = [];
     this.sel = 0;
     this.panel = undefined;
     this.padPrev = [];
   }
 
   create() {
+    screenCamera(this);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.buildScene();
     this.buildLogo();
     this.buildMenu();
 
-    this.prompt = this.add.text(480, 498, 'Press any key to begin', { fontFamily: SERIF, fontSize: '20px', fontStyle: '700', color: '#f6e7c4', stroke: '#05070c', strokeThickness: 5 })
+    this.prompt = txt(this, 480, 498, 'Press any key to begin', 'head', { fontSize: '20px', color: '#f6e7c4', strokeThickness: 5 })
       .setOrigin(0.5).setDepth(900).setAlpha(0).setShadow(0, 2, '#000', 6, true, true);
 
-    this.add.text(948, 530, 'prototype v0.1', { fontFamily: SERIF, fontSize: '11px', color: '#8a9aa6' })
+    txt(this, 948, 530, 'prototype v0.2', 'small', { color: '#8a9aa6', strokeThickness: 0 })
       .setOrigin(1, 1).setDepth(900).setAlpha(0.6);
 
     this.cameras.main.fadeIn(1400, 0, 0, 0);
@@ -66,7 +63,7 @@ export class MenuScene extends Phaser.Scene {
       seen.add(e);
       this.onKey(e.code || e.key, e.key);
     });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => { this.lookTarget = (p.x - 480) / 480; });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => { this.lookTarget = (p.worldX - 480) / 480; });
     this.input.on('pointerdown', () => { if (this.mode === 'prompt' || this.mode === 'intro') this.openMenu(); });
   }
 
@@ -194,7 +191,7 @@ export class MenuScene extends Phaser.Scene {
   private buildLogo() {
     const logo = this.add.text(480, 96, 'FELLSPIRE', {
       fontFamily: DISPLAY, fontSize: '84px', fontStyle: '900', color: '#f6d77c',
-      stroke: '#2a1205', strokeThickness: 9, padding: { x: 20, y: 14 },
+      stroke: '#2a1205', strokeThickness: 9, padding: { x: 20, y: 14 }, resolution: RES,
     }).setOrigin(0.5).setDepth(800);
     const grd = logo.context.createLinearGradient(0, 14, 0, logo.height - 14);
     grd.addColorStop(0, '#fff6c8');
@@ -211,7 +208,7 @@ export class MenuScene extends Phaser.Scene {
 
     const ribbon = this.add.image(480, 164, 'tt_ribbon').setDepth(799).setScale(0.92);
     const sub = this.add.text(480, 160, 'Tales of the Blightwood', {
-      fontFamily: SERIF, fontSize: '17px', fontStyle: '700', color: '#f8e7bd',
+      fontFamily: SERIF, fontSize: '17px', fontStyle: '700', color: '#f8e7bd', resolution: RES,
     }).setOrigin(0.5).setDepth(801).setShadow(0, 1, '#000', 3, true, true);
 
     // drop in after the scene fades up
@@ -236,8 +233,8 @@ export class MenuScene extends Phaser.Scene {
   private buildMenu() {
     this.menu = this.add.container(0, 0).setDepth(850).setAlpha(0);
     const strip = this.add.graphics();
-    strip.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.7, 0, 0.7, 0);
-    strip.fillRect(0, 210, 380, 260);
+    strip.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.72, 0, 0.72, 0);
+    strip.fillRect(0, 206, 400, 268);
     this.menu.add(strip);
 
     const items: [string, () => void][] = [
@@ -246,14 +243,10 @@ export class MenuScene extends Phaser.Scene {
       ['Credits', () => this.openCredits()],
     ];
     items.forEach(([label, act], i) => {
-      const y = 262 + i * 64;
-      const bg = this.add.image(172, y, 'tt_btn').setInteractive({ useHandCursor: true });
-      const text = this.add.text(172, y - 1, label, { fontFamily: SERIF, fontSize: '22px', fontStyle: '700', color: IVORY })
-        .setOrigin(0.5).setShadow(0, 2, '#000', 4, true, true);
-      bg.on('pointerover', () => { if (this.mode === 'menu') this.select(i); });
-      bg.on('pointerdown', () => { if (this.mode === 'menu') { this.select(i); act(); } });
-      this.buttons.push({ bg, text, act });
-      this.menu.add([bg, text]);
+      const b = new Button(this, 172, 262 + i * 62, 236, 44, label, () => { if (this.mode === 'menu') act(); }, 19);
+      b.onHover = () => { if (this.mode === 'menu') this.select(i); };
+      this.buttons.push(b);
+      this.menu.add(b);
     });
     for (const side of [-1, 1]) {
       const f = this.add.image(0, 0, 'tt_flame').setScale(0.22, 0.3).setTint(0xffa03a).setBlendMode(Phaser.BlendModes.ADD);
@@ -261,20 +254,22 @@ export class MenuScene extends Phaser.Scene {
       this.flames.push(f);
       this.menu.add(f);
     }
+    const hint = this.add.container(0, 468);
+    const h1 = keyHint(this, 0, 0, ['W', 'S'], 'Choose');
+    const h2 = keyHint(this, h1.width + 14, 0, ['Enter'], 'Confirm');
+    hint.add([h1, h2]);
+    hint.x = 172 - (h1.width + 14 + h2.width) / 2;
+    hint.setAlpha(0.8);
+    this.menu.add(hint);
     this.select(0);
   }
 
   private select(i: number) {
     this.sel = (i + this.buttons.length) % this.buttons.length;
-    this.buttons.forEach((b, k) => {
-      const on = k === this.sel;
-      b.bg.setTexture(on ? 'tt_btn_hi' : 'tt_btn');
-      b.text.setColor(on ? '#fff3cc' : IVORY);
-      this.tweens.add({ targets: [b.bg, b.text], scale: on ? 1.05 : 1, duration: 120 });
-    });
-    const b = this.buttons[this.sel].bg;
-    this.flames[0].setPosition(b.x - 152, b.y + 6);
-    this.flames[1].setPosition(b.x + 152, b.y + 6);
+    this.buttons.forEach((b, k) => b.setFocus(k === this.sel));
+    const b = this.buttons[this.sel];
+    this.flames[0].setPosition(b.x - 138, b.y + 6);
+    this.flames[1].setPosition(b.x + 138, b.y + 6);
   }
 
   private showPrompt() {
@@ -304,77 +299,19 @@ export class MenuScene extends Phaser.Scene {
 
   // ---- panels -----------------------------------------------------------------
 
-  private openPanel(title: string, w: number, h: number, body: string | null, rows: Omit<Row, 'text'>[]) {
-    const key = `tt_panel_${w}x${h}`;
-    if (!this.textures.exists(key)) panelTexture(this, key, w, h);
-    const c = this.add.container(480, 300).setDepth(950).setAlpha(0);
-    const shade = this.add.rectangle(0, -300 + 270, 960, 540, 0x000000, 0.55).setInteractive();
-    c.add(shade);
-    c.add(this.add.image(0, 0, key));
-    c.add(this.add.text(0, -h / 2 + 38, title, { fontFamily: DISPLAY, fontSize: '28px', fontStyle: '700', color: GOLD })
-      .setOrigin(0.5).setShadow(0, 2, '#000', 4, true, true));
-    let y = -h / 2 + 82;
-    if (body) {
-      const t = this.add.text(0, y, body, { fontFamily: SERIF, fontSize: '15px', color: IVORY, align: 'center', lineSpacing: 7, wordWrap: { width: w - 70 } })
-        .setOrigin(0.5, 0);
-      c.add(t);
-      y += t.height + 24;
-    }
-    this.rows = rows.map((r, i) => {
-      const text = this.add.text(0, y + i * 42, r.label(), { fontFamily: SERIF, fontSize: '20px', fontStyle: '700', color: IVORY })
-        .setOrigin(0.5).setInteractive({ useHandCursor: true }).setShadow(0, 2, '#000', 4, true, true);
-      text.on('pointerover', () => this.selectRow(i));
-      text.on('pointerdown', () => { this.selectRow(i); this.activateRow(); });
-      c.add(text);
-      return { ...r, text };
-    });
-    this.panel = c;
-    this.selectRow(0);
-    this.tweens.add({ targets: c, alpha: 1, duration: 200 });
-  }
-
-  private selectRow(i: number) {
-    this.rowSel = (i + this.rows.length) % this.rows.length;
-    this.rows.forEach((r, k) => {
-      const on = k === this.rowSel;
-      r.text.setText(on ? `~  ${r.label()}  ~` : r.label());
-      r.text.setColor(on ? '#ffe9a8' : IVORY);
-    });
-  }
-
-  private activateRow() {
-    this.rows[this.rowSel]?.act();
-    if (this.panel) this.selectRow(this.rowSel);
-  }
-
-  private closePanel() {
-    const p = this.panel;
-    if (!p) return;
-    this.panel = undefined;
-    this.rows = [];
-    this.tweens.add({ targets: p, alpha: 0, duration: 150, onComplete: () => p.destroy() });
-    this.mode = 'menu';
-  }
-
   private openOptions() {
     this.mode = 'options';
-    const onOff = (v: boolean) => (v ? 'On' : 'Off');
-    this.openPanel('Options', 440, 300, null, [
-      { label: () => `Screen shake: ${onOff(settings.screenShake)}`, act: () => { settings.screenShake = !settings.screenShake; saveSettings(); } },
-      { label: () => `Damage numbers: ${onOff(settings.damageNumbers)}`, act: () => { settings.damageNumbers = !settings.damageNumbers; saveSettings(); } },
-      { label: () => `Fullscreen: ${onOff(this.scale.isFullscreen)}`, act: () => { this.scale.toggleFullscreen(); this.time.delayedCall(200, () => this.panel && this.selectRow(this.rowSel)); } },
-      { label: () => 'Back', act: () => this.closePanel() },
-    ]);
+    this.panel = openOptions(this, 950, () => this.panelClosed(), 0.75);
   }
 
   private openCredits() {
     this.mode = 'credits';
-    this.openPanel('Credits', 560, 360,
-      'A personal prototype, built with Claude.\n\n' +
-      'Character art: CraftPix.net chibi packs\n(Valkyrie, Zombie Villager, Skeleton Warrior)\n' +
-      'Fonts: Cinzel and Cinzel Decorative by Natanael Gama\n' +
-      'Engine: Phaser 3',
-      [{ label: () => 'Back', act: () => this.closePanel() }]);
+    this.panel = openCredits(this, 950, () => this.panelClosed(), 0.75);
+  }
+
+  private panelClosed() {
+    this.panel = undefined;
+    this.mode = 'menu';
   }
 
   // ---- input --------------------------------------------------------------------
@@ -385,11 +322,13 @@ export class MenuScene extends Phaser.Scene {
     const down = is('ArrowDown', 'Down', 'KeyS', 's');
     const ok = is('Enter', 'Space', ' ', 'KeyJ', 'j', 'NumpadEnter');
     const back = is('Escape', 'Esc', 'Backspace', 'KeyK', 'k');
+    const left = is('ArrowLeft', 'Left', 'KeyA', 'a');
+    const right = is('ArrowRight', 'Right', 'KeyD', 'd');
     if (this.mode === 'intro' || this.mode === 'prompt') { this.openMenu(); return; }
-    this.nav(up, down, ok, back);
+    this.nav(up, down, ok, back, left, right);
   }
 
-  private nav(up: boolean, down: boolean, ok: boolean, back: boolean) {
+  private nav(up: boolean, down: boolean, ok: boolean, back: boolean, left = false, right = false) {
     switch (this.mode) {
       case 'intro':
       case 'prompt':
@@ -398,14 +337,12 @@ export class MenuScene extends Phaser.Scene {
       case 'menu':
         if (up) this.select(this.sel - 1);
         if (down) this.select(this.sel + 1);
-        if (ok) this.buttons[this.sel].act();
+        if (ok) this.buttons[this.sel].activate();
         break;
       case 'options':
       case 'credits':
-        if (up) this.selectRow(this.rowSel - 1);
-        if (down) this.selectRow(this.rowSel + 1);
-        if (ok) this.activateRow();
-        if (back) this.closePanel();
+        if (back) this.panel?.close();
+        else this.panel?.list.nav(up, down, left, right, ok);
         break;
     }
   }
@@ -421,7 +358,7 @@ export class MenuScene extends Phaser.Scene {
       const hit = (i: number) => b(i) && !this.padPrev[i];
       const stickUp = pad.leftStick.y < -0.5 && !this.padPrev[99];
       const stickDown = pad.leftStick.y > 0.5 && !this.padPrev[98];
-      this.nav(hit(12) || stickUp, hit(13) || stickDown, hit(0) || hit(9), hit(1));
+      this.nav(hit(12) || stickUp, hit(13) || stickDown, hit(0) || hit(9), hit(1), hit(14), hit(15));
       this.padPrev = pad.buttons.map((x) => x.pressed);
       this.padPrev[99] = pad.leftStick.y < -0.5;
       this.padPrev[98] = pad.leftStick.y > 0.5;

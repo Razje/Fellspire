@@ -5,8 +5,10 @@ import { BoneThrower, Enemy, Ghoul } from '../entities/Enemies';
 import type { Fighter } from '../entities/Fighter';
 import { buildBlightwood, type Blightwood } from '../blightwood';
 import { makeTitleTextures } from '../titleArt';
-import { Hud } from '../hud';
 import { settings } from '../settings';
+import type { Action, HudScene, RunStats } from './HudScene';
+import { shiftParallax, ZOOM } from '../ui/view';
+import { FONT, RES } from '../ui/theme';
 
 export interface AttackSpec {
   dmg: number;
@@ -26,8 +28,6 @@ interface Projectile {
 
 interface Pickup { sprite: Phaser.GameObjects.Image; x: number; y: number; t: number; dead: boolean }
 
-const FONT = '"Cinzel", Georgia, serif';
-
 export class RoomScene extends Phaser.Scene {
   player!: Player;
   enemies: Enemy[] = [];
@@ -35,24 +35,25 @@ export class RoomScene extends Phaser.Scene {
   private pickups: Pickup[] = [];
   private room = 1;
   private waves: Wave[] = [];
-  private wave = 0;
+  wave = 0; // waves started so far
   private waveDelay = 0;
-  private gateOpen = false;
+  gateOpen = false;
   private leaving = false;
   private freeze = 0;
   private startHp?: number;
-  private kills = 0;
+  slain = 0; // in this room
+  run: RunStats = { rooms: 0, kills: 0, damage: 0, time: 0 };
   private world!: Blightwood;
-  private hud!: Hud;
 
   constructor() {
     super('room');
   }
 
   // Phaser reuses the scene object on restart, so all state is reset here.
-  init(data: { room?: number; hp?: number }) {
+  init(data: { room?: number; hp?: number; run?: RunStats }) {
     this.room = data.room ?? 1;
     this.startHp = data.hp;
+    this.run = data.run ? { ...data.run } : { rooms: 0, kills: 0, damage: 0, time: 0 };
     this.enemies = [];
     this.projectiles = [];
     this.pickups = [];
@@ -61,7 +62,7 @@ export class RoomScene extends Phaser.Scene {
     this.gateOpen = false;
     this.leaving = false;
     this.freeze = 0;
-    this.kills = 0;
+    this.slain = 0;
     this.waves = this.makeWaves(this.room);
   }
 
@@ -73,12 +74,28 @@ export class RoomScene extends Phaser.Scene {
     }));
   }
 
+  get waveCount() {
+    return this.waves.length;
+  }
+
+  get totalFoes() {
+    return this.waves.reduce((n, w) => n + w.ghouls + w.throwers, 0);
+  }
+
+  // The HUD runs as its own scene; it may not have started yet on the first frame.
+  private get hud(): HudScene | null {
+    const h = this.scene.get('hud') as HudScene | null;
+    return h?.ready ? h : null;
+  }
+
   create() {
-    const { viewW, viewH, roomW, groundTop, groundBottom } = WORLD;
+    const { roomW } = WORLD;
     const cam = this.cameras.main;
+    cam.setZoom(ZOOM);
     cam.setBounds(0, 0, roomW, WORLD.roomH);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.world = buildBlightwood(this);
+    shiftParallax(this);
 
     this.player = new Player(this, 150, 470);
     if (this.startHp !== undefined) this.player.hp = this.startHp;
@@ -86,16 +103,32 @@ export class RoomScene extends Phaser.Scene {
     cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
     cam.fadeIn(350);
 
-    this.hud = new Hud(this, this.room, this.waves.length);
-    this.hud.showBanner(`The Blightwood  ·  Room ${this.room}`);
+    this.scene.launch('hud', { room: this.room });
+  }
 
-    this.input.keyboard!.on('keydown-R', () => this.scene.restart({ room: 1 }));
-    this.input.keyboard!.on('keydown-ESC', () => {
-      if (this.leaving) return;
-      this.leaving = true;
-      this.cameras.main.fadeOut(400);
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('menu'));
-    });
+  canPause() {
+    return !this.leaving && !this.player.isDead();
+  }
+
+  restartRun() {
+    this.leaveTo(() => this.scene.restart({ room: 1 }));
+  }
+
+  toMenu() {
+    this.leaveTo(() => { this.scene.stop('hud'); this.scene.start('menu'); });
+  }
+
+  // Fade out, then go. Works from a paused room too.
+  private leaveTo(go: () => void) {
+    if (this.leaving && !this.scene.isPaused()) return;
+    if (this.scene.isPaused()) this.scene.resume();
+    this.leaving = true;
+    this.cameras.main.fadeOut(400);
+    this.cameras.main.once('camerafadeoutcomplete', go);
+  }
+
+  onPlayerAction(a: Action) {
+    this.hud?.used(a);
   }
 
   update(_time: number, deltaMs: number) {
@@ -113,9 +146,8 @@ export class RoomScene extends Phaser.Scene {
     this.updatePickups(dt);
     this.updateWaves(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
-    const cam = this.cameras.main;
-    this.world.update(cam);
-    this.hud.update(this.player.hp, this.player.maxHp, this.wave, this.gateOpen, dt);
+    this.world.update(this.cameras.main);
+    if (!this.player.isDead()) this.run.time += dt;
   }
 
   // ---- combat -----------------------------------------------------------
@@ -131,7 +163,8 @@ export class RoomScene extends Phaser.Scene {
       if (dealt < 0) continue;
       hits++;
       const byPlayer = attacker === this.player;
-      this.floatText(t.x, t.y - t.visualHeight - 6, String(dealt), byPlayer ? '#ffe08a' : '#ff6b5e');
+      if (byPlayer) this.run.damage += dealt;
+      this.combatText(t, dealt, byPlayer ? (spec.heavy ? 'heavy' : 'hit') : 'hurt');
       this.hitSpark(t.x - attacker.facing * 12, t.y - t.visualHeight * 0.5, byPlayer ? 0xfff1c0 : 0xff6b5e);
     }
     if (hits > 0) {
@@ -164,7 +197,7 @@ export class RoomScene extends Phaser.Scene {
         const dealt = p.takeHit(b.dmg, b.x - Math.sign(b.vx) * 40, 140, false);
         if (dealt >= 0) {
           b.dead = true;
-          if (dealt > 0) this.floatText(p.x, p.y - p.visualHeight - 6, String(dealt), '#ff6b5e');
+          if (dealt > 0) this.combatText(p, dealt, 'hurt');
           if (p.isDead()) this.onPlayerDied();
         }
       }
@@ -209,7 +242,8 @@ export class RoomScene extends Phaser.Scene {
   }
 
   onEnemyDied(e: Enemy) {
-    this.kills++;
+    this.slain++;
+    this.run.kills++;
     if (Math.random() < 0.25) {
       const sprite = this.add.image(e.x, e.y - 10, 'ph_orb').setDepth(e.y + 5).setScale(0.8);
       this.pickups.push({ sprite, x: e.x, y: e.y, t: 0, dead: false });
@@ -225,7 +259,7 @@ export class RoomScene extends Phaser.Scene {
         o.dead = true;
         const heal = Math.min(15, p.maxHp - p.hp);
         p.hp += heal;
-        this.floatText(p.x, p.y - p.visualHeight - 6, `+${heal}`, '#6dffa0');
+        if (heal > 0) this.combatText(p, heal, 'heal');
         o.sprite.destroy();
       }
     }
@@ -233,7 +267,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private onPlayerDied() {
-    this.hud.showDeath(this.room);
+    this.hud?.showDeath(this.run);
   }
 
   // Colour a character should be tinted where it stands: moonlight, warmer near fire.
@@ -250,8 +284,9 @@ export class RoomScene extends Phaser.Scene {
       if (!this.leaving && Math.hypot(this.player.x - ex.x, (this.player.y - ex.y) * 1.6) < 46) {
         this.leaving = true;
         this.cameras.main.fadeOut(400);
+        this.run.rooms++;
         this.cameras.main.once('camerafadeoutcomplete', () => {
-          this.scene.restart({ room: this.room + 1, hp: Math.min(this.player.maxHp, this.player.hp + 20) });
+          this.scene.restart({ room: this.room + 1, hp: Math.min(this.player.maxHp, this.player.hp + 20), run: this.run });
         });
       }
       return;
@@ -264,17 +299,17 @@ export class RoomScene extends Phaser.Scene {
       this.spawnWave(this.waves[this.wave]);
       this.wave++;
       this.waveDelay = 1.0;
-      if (this.wave > 1) this.hud.showBanner(`Wave ${this.wave} of ${this.waves.length}`);
+      if (this.wave > 1) this.hud?.banner('warn', `Wave ${this.wave} of ${this.waves.length}`);
     } else {
       this.gateOpen = true;
       this.world.openExit();
-      this.hud.showBanner('Room cleared  ·  The rune gate opens');
+      this.hud?.banner('good', 'Room Cleared', 'The rune gate has opened');
     }
   }
 
   private spawnWave(w: Wave) {
     const { viewW, roomW, groundTop, groundBottom } = WORLD;
-    const left = this.cameras.main.scrollX;
+    const left = this.cameras.main.worldView.x;
     const tier = 1 + 0.15 * (this.room - 1);
     const types: ('g' | 't')[] = [...Array(w.ghouls).fill('g'), ...Array(w.throwers).fill('t')];
     types.forEach((type, i) => {
@@ -312,11 +347,27 @@ export class RoomScene extends Phaser.Scene {
     if (settings.screenShake) this.cameras.main.shake(ms, intensity);
   }
 
-  floatText(x: number, y: number, text: string, color: string) {
-    if (!settings.damageNumbers && /^\d+$/.test(text)) return;
-    const t = this.add.text(x, y, text, { fontFamily: FONT, fontSize: '20px', color, fontStyle: 'bold' })
-      .setOrigin(0.5).setDepth(19000).setStroke('#000', 4);
-    this.tweens.add({ targets: t, y: y - 36, alpha: 0, duration: 700, ease: 'Quad.easeOut', onComplete: () => t.destroy() });
+  // Floating combat text: your hits in white, heavy hits large and gold, damage
+  // you take in red, heals in green. Each pops, then drifts up and away.
+  combatText(on: Fighter, n: number, kind: 'hit' | 'heavy' | 'hurt' | 'heal') {
+    if (!settings.damageNumbers && kind !== 'heal') return;
+    const style = {
+      hit: { size: 17, color: '#ffffff', pop: 1.5 },
+      heavy: { size: 24, color: '#ffd100', pop: 1.9 },
+      hurt: { size: 17, color: '#ff3b2f', pop: 1.4 },
+      heal: { size: 17, color: '#3cff3c', pop: 1.3 },
+    }[kind];
+    const x = on.x + (Math.random() - 0.5) * 16;
+    const y = on.y - on.visualHeight - 4;
+    const t = this.add.text(x, y, kind === 'heal' ? `+${n}` : String(n), {
+      fontFamily: FONT.head, fontSize: `${style.size}px`, fontStyle: '700', color: style.color,
+      stroke: '#000000', strokeThickness: 4, resolution: RES * 1.5,
+    }).setOrigin(0.5).setDepth(19000).setScale(style.pop);
+    t.setShadow(0, 2, '#000', 2, true, true);
+    const drift = kind === 'hurt' ? -18 : (Math.random() - 0.5) * 30;
+    this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, x: x + drift, y: y - (kind === 'heavy' ? 46 : 36), duration: 900, delay: 120, ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, duration: 350, delay: kind === 'heavy' ? 760 : 620, onComplete: () => t.destroy() });
   }
 
   private hitSpark(x: number, y: number, color: number) {

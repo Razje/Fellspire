@@ -84,7 +84,7 @@ test('fight scene draws the Blightwood', async ({ page }, info) => {
     const s = g.scene.getScene('room');
     const warm = (c: number) => (c >> 16) - (c & 0xff); // red minus blue
     return {
-      textures: ['fw_far', 'fw_mid', 'fw_wall', 'fw_floor', 'fw_front', 'fw_torch', 'fw_barrel', 'hud_frame'].filter((k) => !g.textures.exists(k)),
+      textures: ['fw_far', 'fw_mid', 'fw_wall', 'fw_floor', 'fw_front', 'fw_torch', 'fw_barrel', 'ui_ring'].filter((k) => !g.textures.exists(k)),
       nearTorch: warm(s.lightAt(s.world.lights[0].x, s.world.lights[0].y)),
       inTheDark: Math.min(...[[750, 470], [150, 560], [1300, 380]].map(([x, y]) => warm(s.lightAt(x, y)))),
       props: s.world.obstacles.length,

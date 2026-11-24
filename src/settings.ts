@@ -2,10 +2,14 @@
 export interface Settings {
   screenShake: boolean;
   damageNumbers: boolean;
+  // Volumes 0..1. Stored now; the game has no sound yet.
+  master: number;
+  music: number;
+  effects: number;
 }
 
 const KEY = 'fellspire.settings';
-const defaults: Settings = { screenShake: true, damageNumbers: true };
+const defaults: Settings = { screenShake: true, damageNumbers: true, master: 0.8, music: 0.7, effects: 0.8 };
 
 function load(): Settings {
   try {

@@ -77,8 +77,19 @@ lantern breaks and the fight continues in a shrinking circle of light.
 
 Lost Castle 2's palette: dark teal night, warm pools of fire and lantern light, glowing
 cyan and violet magic, black foliage silhouettes framing the screen. Characters are
-CraftPix's vector chibi range (one studio, so they match); backgrounds painted. UI in
-gold and deep red, Cinzel lettering.
+CraftPix's vector chibi range (one studio, so they match); backgrounds painted.
+
+The interface takes its **layout from Lost Castle 2** (small, at the screen edges, the
+hero's things bottom left, announcements on a dark band across the screen) and its
+**styling from classic fantasy MMOs**: a portrait in a gilded ring, green health with
+white outlined numbers, square action slots with the key in the corner and a cooldown
+sweep, dark panels with a silver bevel for small things and a gilded bevel with corner
+gems for menus, red buttons with gold trim and gold lettering, an objective tracker,
+floating combat text (white hits, big gold heavy hits, red damage taken, green heals),
+zone text when entering a place. Fonts: Cinzel Decorative for the logo, Cinzel for
+headings and numbers, Marcellus for labels and body text. Item quality colours are set
+aside for loot (white, green, blue, purple, orange). Azeroth Survivors' interface was
+studied for its card and end-screen ideas only; none of its art is used.
 
 ## Build order
 
@@ -95,6 +106,9 @@ gold and deep red, Cinzel lettering.
    size, props throughout the floor with footprints, the camera following both
    ways, equal speed in every direction, attacks aimed up or down, a dodge in any
    direction, ghouls that spread out around you, enemies stepping out of the trees.
+   **done** Interface overhaul (2026-11-24): full-HD rendering, one UI kit for every
+   screen, the HUD above, a pause menu on Esc, an end-of-run screen with the run's
+   numbers counting up, title menus and Options rebuilt with check boxes and sliders.
 6. **next** The Lantern Warden boss fight.
 7. Gold and the first weapon drops.
 8. A second class, and two-player co-op on one screen.
