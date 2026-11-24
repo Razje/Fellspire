@@ -188,7 +188,11 @@ studied for its card and end-screen ideas only; none of its art is used.
    skin tone (seven tones, recoloured from the art), Randomise; the first New Run opens
    it, the title menu's Character item reopens it, the hero is remembered in the
    browser and shown at the title campfire, in the fight, on the HUD and the end screen;
-   8.3 the hub with weapon rack and portal; 8.4 the weapon
+   8.3 **done** the hub (2026-11-24): New Run, Try Again and Restart Run all lead to a
+   camp in the Blightwood with a campfire, a weapon rack (E offers the three weapons that
+   exist today as cards; the pick is remembered for the next run), a training dummy that
+   takes every blow, never falls and shows damage per second, and the rune gate, lit from
+   the start, into room 1. `?camp` on the address goes straight there; 8.4 the weapon
    framework, skill key and the first four weapons (sword and shield, two-handed,
    bow, staff); 8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
    Overall: make a character with

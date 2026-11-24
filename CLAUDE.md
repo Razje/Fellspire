@@ -29,8 +29,8 @@ Its git `origin` is the private GitLab project `martijn.terol/fellspire`, create
 node C:\IXON\fellspire\node_modules\vite\bin\vite.js C:\IXON\fellspire
 ```
 
-Then http://127.0.0.1:5180, or http://127.0.0.1:5180/?boss to go straight to the
-boss fight. In Claude's browser pane, `preview_start` with the name
+Then http://127.0.0.1:5180, http://127.0.0.1:5180/?boss to go straight to the
+boss fight, or http://127.0.0.1:5180/?camp for the camp. In Claude's browser pane, `preview_start` with the name
 `fellspire` (from `C:\IXON\.claude\launch.json`). The pane pauses the game when it is
 hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen frame.
 `window.game` is the Phaser game in development builds, for inspecting state.
@@ -79,8 +79,9 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
+| `src/hub.ts` | The camp between runs, which is room 0 of `RoomScene`: where things stand (`CAMP`), the campfire, the weapon rack and what it offers (`RACK_KINDS`), the chosen weapon remembered in the browser (`fellspire.weapon`) |
 | `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
-| `src/entities/` | `Fighter` (shared body, damage, animation), `Player` (moves per weapon kind in `KITS`), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`) |
+| `src/entities/` | `Fighter` (shared body, damage, animation), `Player` (moves per weapon kind in `KITS`), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |

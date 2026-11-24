@@ -152,7 +152,8 @@ export class HudScene extends Phaser.Scene {
       this.onKey(e.code);
     });
     this.ready = true;
-    if (!this.room.boss) this.banner('zone', 'The Blightwood', `Room ${this.roomNo}`);
+    if (this.room.isCamp) this.banner('zone', 'The Camp', 'Ready yourself for the Blightwood');
+    else if (!this.room.boss) this.banner('zone', 'The Blightwood', `Room ${this.roomNo}`);
     else this.buildBossBar();
   }
 
@@ -195,7 +196,8 @@ export class HudScene extends Phaser.Scene {
     const total = room.totalFoes;
     const f = new Frame(this, 820, 38, 172, 58, 'dark');
     f.add(txt(this, 0, -15, 'BLIGHTWOOD', 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
-    f.add(txt(this, 0, room.boss ? 5 : 2, room.boss ? "Warden's Glade" : `Room ${this.roomNo}`, 'head', { fontSize: room.boss ? '15px' : '17px', color: C.ivory }).setOrigin(0.5));
+    const where = room.isCamp ? 'Camp' : room.boss ? "Warden's Glade" : `Room ${this.roomNo}`;
+    f.add(txt(this, 0, room.boss || room.isCamp ? 5 : 2, where, 'head', { fontSize: room.boss ? '15px' : '17px', color: C.ivory }).setOrigin(0.5));
     const n = room.waveCount;
     for (let i = 0; i < n; i++) {
       const p = pic(this, (i - (n - 1) / 2) * 16, 19, 'ui_pip_off');
@@ -214,9 +216,15 @@ export class HudScene extends Phaser.Scene {
 
     // an objective tracker under the plaque
     const ox = 740;
-    txt(this, ox, 80, room.boss ? 'The Drowned Light' : 'The Restless Dead', 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
-    this.objective = txt(this, ox + 8, 98, room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
+    const heading = room.isCamp ? 'Before the Run' : room.boss ? 'The Drowned Light' : 'The Restless Dead';
+    const first = room.isCamp ? '- Choose a weapon at the rack' : room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`;
+    txt(this, ox, 80, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
+    this.objective = txt(this, ox + 8, 98, first, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
     this.objectiveDone = txt(this, ox + 8, 114, '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
+    if (room.isCamp) {
+      this.gateShown = true; // the gate is open from the start: both lines show
+      this.objectiveDone.setAlpha(1);
+    }
 
     // gold and kills over the whole run, bottom right
     const gf = new Frame(this, 902, 468, 92, 32, 'dark');
@@ -268,7 +276,8 @@ export class HudScene extends Phaser.Scene {
     this.pips.forEach((pip, i) => pip.setTexture(r.gateOpen || i < r.wave - 1 ? 'ui_pip' : i === r.wave - 1 ? 'ui_pip' : 'ui_pip_off')
       .setAlpha(r.gateOpen || i < r.wave - 1 ? 1 : i === r.wave - 1 ? 0.55 + 0.45 * Math.sin(this.time.now / 300) ** 2 : 1));
     const total = r.totalFoes;
-    if (!r.boss) this.objective.setText(`- Dead laid to rest: ${Math.min(r.slain, total)}/${total}`);
+    if (r.isCamp) this.objective.setColor(r.camp?.chosen ? C.grey : C.ivory);
+    else if (!r.boss) this.objective.setText(`- Dead laid to rest: ${Math.min(r.slain, total)}/${total}`);
     this.updateBossBar(dt);
     if (r.gateOpen && !this.gateShown) {
       this.gateShown = true;
@@ -334,13 +343,13 @@ export class HudScene extends Phaser.Scene {
 
   // The chest's three cards, after Lost Castle 2's "Choose a treasure". The room
   // is paused underneath; choose with keys, stick or mouse.
-  openChest(items: Item[], gear: Gear, onPick: (it: Item) => void) {
+  openChest(items: Item[], gear: Gear, onPick: (it: Item) => void, heading?: string) {
     this.hideTip();
     this.blurRoom(true);
     const cx = viewW / 2;
     const root = this.add.container(0, 0).setDepth(90);
     const shade = this.add.rectangle(cx, viewH / 2, viewW, viewH, 0x05070c, 0.62).setInteractive();
-    const what = items[0].cat === 'weapon' ? 'Choose a weapon' : items[0].cat === 'armor' ? 'Choose an armor kit' : 'Choose a trinket';
+    const what = heading ?? (items[0].cat === 'weapon' ? 'Choose a weapon' : items[0].cat === 'armor' ? 'Choose an armor kit' : 'Choose a trinket');
     const title = txt(this, cx, 42, what.toUpperCase(), 'head', { fontSize: '26px', letterSpacing: 4, strokeThickness: 6, padding: { x: 6, y: 6 } }).setOrigin(0.5);
     gild(title, GOLD_STOPS);
     const orn = pic(this, cx, 66, 'ui_ornament');

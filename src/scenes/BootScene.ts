@@ -64,6 +64,7 @@ export class BootScene extends Phaser.Scene {
     const q = new URLSearchParams(location.search);
     if (q.has('rig')) this.scene.start('riglab'); // the rig lab, a test page for characters from parts
     else if (q.has('boss')) this.scene.start('room', { room: ZONE.bossRoom });
+    else if (q.has('camp')) this.scene.start('room', { room: 0 });
     else this.scene.start('menu');
   }
 }

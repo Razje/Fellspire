@@ -164,7 +164,7 @@ export class CreateScene extends Phaser.Scene {
       this.flourish();
       cam.flash(250, 255, 170, 90);
       this.time.delayedCall(250, () => cam.fade(700, 0, 0, 0, true));
-      cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 1 }));
+      cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 0 })); // the camp
     } else {
       cam.fade(300, 0, 0, 0, true);
       cam.once('camerafadeoutcomplete', () => this.scene.start('menu', { skipIntro: true }));

@@ -319,7 +319,7 @@ export class MenuScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.flash(250, 255, 170, 90);
     this.time.delayedCall(150, () => cam.fade(700, 0, 0, 0, true));
-    cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 1 }));
+    cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 0 })); // the camp
   }
 
   private toCreate(then: 'run' | 'menu') {

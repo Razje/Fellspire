@@ -3,6 +3,8 @@ import { DARK, WORLD, ZONE } from '../config';
 import { Player } from '../entities/Player';
 import { BoneThrower, Enemy, Ghoul } from '../entities/Enemies';
 import { Warden } from '../entities/Warden';
+import { Dummy } from '../entities/Dummy';
+import { Camp, CAMP, CAMP_CLEAR, saveWeapon, savedWeapon } from '../hub';
 import type { Fighter } from '../entities/Fighter';
 import { buildBlightwood, type Blightwood } from '../blightwood';
 import { canvas, makeTitleTextures } from '../titleArt';
@@ -64,6 +66,8 @@ export class RoomScene extends Phaser.Scene {
   private secondWindUsed = false;
   private world!: Blightwood;
   boss: Warden | null = null;
+  camp: Camp | null = null; // room 0, between runs
+  dummy: Dummy | null = null;
   cutscene = false; // the player cannot act (boss introduction)
   private intro = true;
   private dark: { img: Phaser.GameObjects.Image; t: number; r: number; tick: number; warned: boolean } | null = null;
@@ -79,12 +83,16 @@ export class RoomScene extends Phaser.Scene {
     this.room = data.room ?? 1;
     this.intro = data.intro ?? true;
     this.boss = null;
+    this.camp = null;
+    this.dummy = null;
     this.cutscene = false;
     this.dark = null;
     this.slow = { k: 1, left: 0 };
     this.emberFx = undefined;
     this.startHp = data.hp;
     this.run = data.run ? { ...data.run } : newRun();
+    // the camp hands out the weapon chosen at its rack last time
+    if (this.isCamp && !data.run) this.run.gear = { ...this.run.gear, weapon: savedWeapon() };
     this.stats = gearStats(this.run.gear);
     this.coins = [];
     this.fires = [];
@@ -107,8 +115,12 @@ export class RoomScene extends Phaser.Scene {
     return this.room === ZONE.bossRoom;
   }
 
+  get isCamp() {
+    return this.room === 0;
+  }
+
   private makeWaves(r: number): Wave[] {
-    if (r === ZONE.bossRoom) return [];
+    if (r === ZONE.bossRoom || r === 0) return [];
     const count = Math.min(2 + r, 4);
     return Array.from({ length: count }, (_, w) => ({
       ghouls: Math.min(2 + Math.floor(r / 2) + w, 6),
@@ -136,16 +148,23 @@ export class RoomScene extends Phaser.Scene {
     cam.setZoom(ZOOM);
     cam.setBounds(0, 0, roomW, WORLD.roomH);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
-    this.world = buildBlightwood(this, { boss: this.isBossRoom });
+    this.world = buildBlightwood(this, { boss: this.isBossRoom, camp: this.isCamp, clear: this.isCamp ? CAMP_CLEAR : undefined });
     shiftParallax(this);
 
-    this.player = new Player(this, 150, 470);
+    const start = this.isCamp ? CAMP.start : { x: 150, y: 470 };
+    this.player = new Player(this, start.x, start.y);
     if (this.startHp !== undefined) this.player.hp = this.startHp;
     // follow the body, not the feet, and lag a touch so movement reads
     cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
     cam.fadeIn(350);
 
-    if (!this.isBossRoom) this.placeChest();
+    if (this.isCamp) {
+      this.camp = new Camp(this, this.world.lights, this.world.obstacles);
+      this.dummy = new Dummy(this, CAMP.dummy.x, CAMP.dummy.y);
+      this.enemies.push(this.dummy);
+      this.gateOpen = true; // the rune gate is the way into the run
+      this.world.openExit();
+    } else if (!this.isBossRoom) this.placeChest();
     if (this.isBossRoom) {
       const b = new Warden(this, roomW / 2 + 260, (WORLD.groundTop + WORLD.groundBottom) / 2);
       this.boss = b;
@@ -177,8 +196,9 @@ export class RoomScene extends Phaser.Scene {
     return !this.leaving && !this.player.isDead();
   }
 
+  // A new run starts back at the camp.
   restartRun() {
-    this.leaveTo(() => this.scene.restart({ room: 1 }));
+    this.leaveTo(() => this.scene.restart({ room: 0 }));
   }
 
   toMenu() {
@@ -214,6 +234,7 @@ export class RoomScene extends Phaser.Scene {
 
     this.player.update(dt);
     this.updateChest();
+    this.updateCamp();
     for (const e of this.enemies) e.update(dt);
     this.separate();
     this.updateProjectiles(dt);
@@ -224,7 +245,7 @@ export class RoomScene extends Phaser.Scene {
     this.updateDark(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
     this.world.update(this.cameras.main);
-    if (!this.player.isDead()) this.run.time += dt;
+    if (!this.player.isDead() && !this.isCamp) this.run.time += dt;
   }
 
   // ---- combat -----------------------------------------------------------
@@ -387,9 +408,19 @@ export class RoomScene extends Phaser.Scene {
       const ex = this.world.exit;
       if (!this.leaving && Math.hypot(this.player.x - ex.x, (this.player.y - ex.y) * 1.6) < 46) {
         this.leaving = true;
-        this.cameras.main.fadeOut(400);
+        const cam = this.cameras.main;
+        if (this.isCamp) {
+          // through the gate: the run begins, carrying only the chosen weapon
+          cam.flash(250, 127, 252, 240);
+          this.time.delayedCall(120, () => cam.fade(600, 0, 0, 0, true));
+          cam.once('camerafadeoutcomplete', () => {
+            this.scene.restart({ room: 1, run: { ...newRun(), gear: { ...newRun().gear, weapon: this.run.gear.weapon } } });
+          });
+          return;
+        }
+        cam.fadeOut(400);
         this.run.rooms++;
-        this.cameras.main.once('camerafadeoutcomplete', () => {
+        cam.once('camerafadeoutcomplete', () => {
           this.scene.restart({ room: this.room + 1, hp: Math.min(this.player.maxHp, this.player.hp + 20), run: this.run });
         });
       }
@@ -805,6 +836,33 @@ export class RoomScene extends Phaser.Scene {
     p.maxHp = 100 + this.stats.fx.maxHp;
     if (p.maxHp > before) p.hp += p.maxHp - before;
     p.hp = Math.min(p.hp, p.maxHp);
+  }
+
+  // ---- the camp -----------------------------------------------------------
+
+  private rackNear() {
+    const p = this.player, r = CAMP.rack;
+    return !!this.camp && !p.isDead() && Math.hypot(p.x - r.x, (p.y - r.y) * 1.6) < 80;
+  }
+
+  private updateCamp() {
+    if (!this.camp) return;
+    const near = this.rackNear();
+    this.camp.update(near);
+    if (near && this.player.interact) this.openRack();
+  }
+
+  // The rack's weapons come up as cards over the paused camp; the pick is remembered.
+  openRack() {
+    const hud = this.hud, camp = this.camp;
+    if (!hud || !camp || hud.choosing) return;
+    this.scene.pause();
+    hud.openChest(camp.rackItems(), this.run.gear, (it) => {
+      this.equip(it);
+      if (it.kind) saveWeapon(it.kind);
+      camp.chosen = true;
+      this.scene.resume();
+    }, 'Choose your weapon');
   }
 
   // ---- the boss fight -----------------------------------------------------

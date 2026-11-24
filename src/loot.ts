@@ -135,9 +135,12 @@ const ARMOR_PREFIX = ['Patched', 'Sturdy', 'Warded', 'Gilded', 'Everlit'];
 
 const pick = <T>(a: T[], rnd: () => number) => a[Math.floor(rnd() * a.length)];
 
-export const STARTING_WEAPON: Item = {
-  cat: 'weapon', name: 'Worn Longsword', rarity: 'poor', icon: 'longsword', kind: 'longsword', power: 1, effects: {},
-};
+// A plain weapon of a kind, as the camp's rack offers them before a run.
+export function starterWeapon(kind: WeaponKind): Item {
+  return { cat: 'weapon', name: `Worn ${WEAPON_KINDS[kind].label}`, rarity: 'poor', icon: kind, kind, power: 1, effects: {} };
+}
+
+export const STARTING_WEAPON: Item = starterWeapon('longsword');
 
 export function makeWeapon(rarity: Rarity, rnd: () => number = Math.random, kind?: WeaponKind): Item {
   const t = RARITY[rarity].tier;

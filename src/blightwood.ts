@@ -341,7 +341,12 @@ const KINDS: Record<string, PropKind> = {
   bones: { key: 'fw_bones', scale: 0.7, rx: 0, ry: 0 },
 };
 
-export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = {}): Blightwood {
+// A clear spot on the floor that no prop may take (the camp's fire, rack and dummy).
+export interface ClearSpot { x: number; y: number; r: number }
+
+// opts.camp lays out the camp between runs: no breakable barrels (nothing to loot
+// there), no graves, and the rune gate already lit as the way out.
+export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; camp?: boolean; clear?: ClearSpot[] } = {}): Blightwood {
   if (!scene.textures.exists('fw_floor')) makeBlightwoodTextures(scene);
   const lights: Light[] = [];
   const torches: (() => void)[] = [];
@@ -370,7 +375,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
   scene.add.image(0, FLOOR_Y, 'fw_floor').setOrigin(0).setDepth(-50);
 
   // ---- props: along the back edge, along the front edge, and a few in the open
-  const rnd = new Phaser.Math.RandomDataGenerator([opts.boss ? 'blightwood-warden' : 'blightwood-arena']);
+  const rnd = new Phaser.Math.RandomDataGenerator([opts.boss ? 'blightwood-warden' : opts.camp ? 'blightwood-camp' : 'blightwood-arena']);
   const placed: { x: number; y: number }[] = [];
   const free = (x: number, y: number, gap: number) => placed.every((p) => Math.hypot(p.x - x, (p.y - y) * 2) > gap);
   const put = (name: string, x: number, y: number) => {
@@ -379,7 +384,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
     const img = scene.add.image(x, y, k.key).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
     const obstacle = k.rx ? { x, y, rx: k.rx, ry: k.ry } : undefined;
     if (obstacle) obstacles.push(obstacle);
-    if (name === 'barrel' || name === 'crate') breakables.push({ x, y, img, obstacle, hp: 2 });
+    if (!opts.camp && (name === 'barrel' || name === 'crate')) breakables.push({ x, y, img, obstacle, hp: 2 });
     if (k.glow) scene.add.image(x, y - 8, 'tt_light').setDepth(y - 1).setScale(0.3).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
     if (k.light) torches.push(addTorchFire(scene, x, y, k.scale, lights));
   };
@@ -387,13 +392,17 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
   const mid = (groundTop + groundBottom) / 2;
   const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || Math.hypot(x - exit.x, (y - exit.y) * 1.6) < 150
     || (!!opts.boss && Math.hypot(x - roomW / 2, (y - mid) * 2.2) < 420)
-    || (!opts.boss && Math.abs(x - roomW / 2) < 130 && y < groundTop + 80);
+    || (!opts.boss && !opts.camp && Math.abs(x - roomW / 2) < 130 && y < groundTop + 80)
+    || (opts.clear ?? []).some((c) => Math.hypot(x - c.x, (y - c.y) * 1.6) < c.r);
 
   // torches at fixed beats, back and front, so every room has its pools of light
   // (a combat room keeps the top middle for the chest's shrine, with a torch either side)
   const backTorches = opts.boss ? [[760, groundTop + 8]] : [[652, groundTop + 12], [848, groundTop + 12]];
-  for (const [x, y] of [[300, groundTop + 14], ...backTorches, [1180, groundTop + 14], [520, groundBottom - 6], [1000, groundBottom - 4]]) put('torch', x, y);
-  const backKinds = ['grave', 'grave', 'shroom', 'bones', 'stump', 'rock', 'fence'];
+  const torchSpots = opts.camp
+    ? [[250, groundTop + 14], [1000, groundTop + 14], [1180, groundTop + 14], [1000, groundBottom - 4]]
+    : [[300, groundTop + 14], ...backTorches, [1180, groundTop + 14], [520, groundBottom - 6], [1000, groundBottom - 4]];
+  for (const [x, y] of torchSpots) put('torch', x, y);
+  const backKinds = opts.camp ? ['shroom', 'stump', 'rock', 'fence', 'crate'] : ['grave', 'grave', 'shroom', 'bones', 'stump', 'rock', 'fence'];
   for (let x = 60; x < roomW - 40; x += rnd.between(70, 140)) {
     const y = groundTop + rnd.between(4, 22);
     if (!free(x, y, 60) || keepClear(x, y)) continue;
@@ -404,7 +413,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
       placed.push({ x, y });
     } else put(name, x, y);
   }
-  const frontKinds = ['barrel', 'barrel', 'crate', 'rock', 'stump', 'grave', 'bones'];
+  const frontKinds = opts.camp ? ['barrel', 'crate', 'rock', 'stump'] : ['barrel', 'barrel', 'crate', 'rock', 'stump', 'grave', 'bones'];
   for (let x = 120; x < roomW - 60; x += rnd.between(110, 220)) {
     const y = groundBottom - rnd.between(0, 18);
     if (!free(x, y, 70) || keepClear(x, y)) continue;
@@ -413,7 +422,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
     if (name === 'barrel' && rnd.frac() < 0.6 && free(x + 26, y - 10, 20)) put(rnd.pick(['barrel', 'crate']), x + 26, y - 10);
   }
   // a few out in the open floor, to fight around
-  for (let i = 0, tries = 0; i < (opts.boss ? 0 : 4) && tries < 60; tries++) {
+  for (let i = 0, tries = 0; i < (opts.boss || opts.camp ? 0 : 4) && tries < 60; tries++) {
     const x = rnd.between(320, roomW - 320), y = rnd.between(groundTop + 70, groundBottom - 70);
     if (!free(x, y, 160) || keepClear(x, y) || Math.abs(x - roomW / 2) < 200) continue;
     put(rnd.pick(['rock', 'stump', 'grave', 'shroom']), x, y);
