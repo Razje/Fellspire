@@ -13,17 +13,18 @@ const SPEED = 205; // the same in every direction: the floor is a place, not a l
 const ACCEL = 16; // how quickly speed follows the stick (higher = snappier)
 const DODGE_TIME = 0.3;
 const DODGE_SPEED = 380;
-const AIM_Y = 0.55; // how much of a lunge goes up or down when aiming that way
+const ATTACK_MOVE = 0.5; // share of walking speed kept while attacking
 
-interface Input { mx: number; my: number; light: boolean; heavy: boolean; skill: boolean; dodge: boolean; block: boolean; interact: boolean }
+// light/heavy: pressed this frame; lightHeld/heavyHeld: held down (repeats the attack)
+interface Input { mx: number; my: number; light: boolean; heavy: boolean; lightHeld: boolean; heavyHeld: boolean; skill: boolean; dodge: boolean; block: boolean; interact: boolean }
 
 // The moves of each weapon kind are in weapons.ts; the skills in skills.ts.
 
 export class Player extends Fighter {
   private keys: Record<string, Phaser.Input.Keyboard.Key>;
   private move: Move | null = null;
-  private aimY = 0;
   private hitDone = false;
+  private swept = new Set<object>(); // what a dashing move has already cut
   private combo = 0;
   private comboTimer = 0;
   private buffer: 'light' | 'heavy' | null = null;
@@ -69,13 +70,16 @@ export class Player extends Fighter {
   }
 
   private readInput(): Input {
-    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, skill: false, dodge: false, block: false, interact: false };
+    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, lightHeld: false, heavyHeld: false, skill: false, dodge: false, block: false, interact: false };
     const k = this.keys;
     const jd = Phaser.Input.Keyboard.JustDown;
     const mx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
     const my = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    // light and heavy count while held: holding J or K keeps attacking
-    const inp: Input = { mx, my, light: jd(k.J) || k.J.isDown, heavy: jd(k.K) || k.K.isDown, skill: jd(k.I), dodge: jd(k.SPACE), block: k.L.isDown || k.SHIFT.isDown, interact: jd(k.E) };
+    // a press queues one attack; holding J or K keeps attacking once the move ends
+    const inp: Input = {
+      mx, my, light: jd(k.J), heavy: jd(k.K), lightHeld: k.J.isDown, heavyHeld: k.K.isDown,
+      skill: jd(k.I), dodge: jd(k.SPACE), block: k.L.isDown || k.SHIFT.isDown, interact: jd(k.E),
+    };
 
     // Controller: stick (analogue) or d-pad, X light, Y heavy (both held to repeat), LB skill, A dodge, RB block.
     const pad = this.scene.input.gamepad?.pad1;
@@ -86,8 +90,10 @@ export class Player extends Fighter {
       const sy = Math.abs(pad.leftStick.y) > 0.25 ? pad.leftStick.y : 0;
       inp.mx = mx || sx || (b(15) ? 1 : b(14) ? -1 : 0);
       inp.my = my || sy || (b(13) ? 1 : b(12) ? -1 : 0);
-      inp.light ||= b(2);
-      inp.heavy ||= b(3);
+      inp.light ||= pressed(2);
+      inp.heavy ||= pressed(3);
+      inp.lightHeld ||= b(2);
+      inp.heavyHeld ||= b(3);
       inp.skill ||= pressed(4);
       inp.dodge ||= pressed(0);
       inp.block ||= b(5);
@@ -118,8 +124,8 @@ export class Player extends Fighter {
         this.comboTimer -= dt;
         if (this.comboTimer <= 0) this.combo = 0;
         if (inp.dodge && this.dodgeCd <= 0) { this.startDodge(inp); break; }
-        if (inp.light) { this.aim(inp); this.startLight(); break; }
-        if (inp.heavy) { this.aim(inp); this.startMove(this.kit.heavy); break; }
+        if (inp.light || inp.lightHeld) { this.aim(inp); this.startLight(); break; }
+        if (inp.heavy || inp.heavyHeld) { this.aim(inp); this.startMove(this.kit.heavy); break; }
         if (inp.skill && this.skillCd <= 0) { this.aim(inp); this.startSkill(); break; }
         const blocking = inp.block;
         if (inp.mx !== 0 && !blocking) this.facing = Math.sign(inp.mx);
@@ -143,14 +149,25 @@ export class Player extends Fighter {
         const m = this.move;
         if (!m) { this.state = 'idle'; this.stateT = 0; break; }
         const t = this.stateT;
-        this.vx = this.vy = 0;
+        if (m.sweep) this.vx = this.vy = 0; // a dash goes where it goes
+        else {
+          // still walking, at half speed, while the attack plays; the facing stays put
+          const len = Math.hypot(inp.mx, inp.my) || 1;
+          const top = SPEED * ATTACK_MOVE, k = Math.min(1, ACCEL * dt);
+          this.vx += ((inp.mx / len) * top - this.vx) * k;
+          this.vy += ((inp.my / len) * top - this.vy) * k;
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+        }
+        // the lunge is always straight ahead
         if (t < m.hitAt) {
           this.x += this.facing * (m.lunge / m.hitAt) * dt;
-          this.y += this.aimY * AIM_Y * (m.lunge / m.hitAt) * dt;
+          if (m.sweep) this.sweepCut(m);
         }
         if (!this.hitDone && t >= m.hitAt) {
           this.hitDone = true;
-          if (m.shot) this.scene.shots.fire(this, this.aimY, m);
+          if (m.shot) this.scene.shots.fire(this, m);
+          else if (m.sweep) this.sweepCut(m);
           else this.scene.resolveMelee(this, m, this.scene.enemies);
         }
         if (inp.light) this.buffer = 'light';
@@ -158,10 +175,13 @@ export class Player extends Fighter {
         // dodging cancels the end of an attack, once the blow has landed
         if (inp.dodge && this.hitDone && this.dodgeCd <= 0) { this.startDodge(inp); break; }
         if (t >= m.dur) {
-          const b = this.buffer;
+          // a press made during the move goes first, else whatever is still held.
+          // A new press turns to the side you hold; a held attack keeps its facing,
+          // so you can walk away while still attacking the way you started.
+          if (this.buffer) this.aim(inp);
+          const b = this.buffer ?? (inp.lightHeld ? 'light' : inp.heavyHeld ? 'heavy' : null);
           this.buffer = null;
-          this.aim(inp);
-          if (b === 'light' && this.combo > 0) this.startLight();
+          if (b === 'light') this.startLight();
           else if (b === 'heavy') this.startMove(this.kit.heavy);
           else { this.state = 'idle'; this.stateT = 0; this.comboTimer = 0.4; }
         }
@@ -191,10 +211,9 @@ export class Player extends Fighter {
     this.sync(dt, moving);
   }
 
-  // Attacks turn to the side you hold and lean up or down with it.
+  // Attacks turn to the side you hold; they always go straight, never up or down.
   private aim(inp: Input) {
     if (inp.mx) this.facing = Math.sign(inp.mx);
-    this.aimY = Math.sign(inp.my);
   }
 
   private startLight() {
@@ -206,9 +225,17 @@ export class Player extends Fighter {
     this.startMove(m);
   }
 
+  // A dash cuts whatever it passes, each foe once, without stopping the dash.
+  private sweepCut(m: Move) {
+    const s = this.scene;
+    s.strike(this, true, { ...m, quiet: true }, s.enemies, (x, y) => s.inReach(this, x, y, m), { once: this.swept });
+  }
+
   private startMove(m: Move) {
     this.move = m;
     this.hitDone = false;
+    this.swept.clear();
+    if (m.sweep) { this.invuln = Math.max(this.invuln, m.hitAt); this.scene.dust(this.x, this.y, 3); }
     this.buffer = null;
     this.state = 'attack';
     this.stateT = 0;
@@ -222,7 +249,7 @@ export class Player extends Fighter {
     this.stateT = 0;
     this.move = null;
     this.combo = 0;
-    this.skillLock = startSkill(this.scene.stats.skill, this.scene, this, this.aimY);
+    this.skillLock = startSkill(this.scene.stats.skill, this.scene, this);
     this.scene.onPlayerAction('skill');
   }
 

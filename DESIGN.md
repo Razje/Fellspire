@@ -85,7 +85,8 @@ for this list: an off-hand weapon (dual blades, dual revolvers), and new animati
 for shooting, casting and firing, written as keyframes in the same format.
 
 Since 8.4 the hero holds the weapon she carries: the pack's sword and shield, or a
-drawn greatsword, bow or staff on the sword's grip (`armRig` in `src/rig/weapons.ts`),
+drawn greatsword, bow, staff, wand or dagger on the sword's grip (and since 8.5 a
+second dagger on the shield's) (`armRig` in `src/rig/weapons.ts`),
 held upright while the pack's animation would hide its sword. Real weapon types need character art where the
 weapon is separate from the body (see Open questions). The Valkyrie pack stands in
 for the player character until then.
@@ -161,7 +162,8 @@ studied for its card and end-screen ideas only; none of its art is used.
    Lost Castle 2: rooms are now arenas seen from above at an angle (floor about
    half the screen and more, a tree line behind), characters about half the
    size, props throughout the floor with footprints, the camera following both
-   ways, equal speed in every direction, attacks aimed up or down, a dodge in any
+   ways, equal speed in every direction, attacks aimed up or down (dropped on
+   2026-11-24: attacks now always go straight), a dodge in any
    direction, ghouls that spread out around you, enemies stepping out of the trees.
    **done** Interface overhaul (2026-11-24): full-HD rendering, one UI kit for every
    screen, the HUD above, a pause menu on Esc, an end-of-run screen with the run's
@@ -206,7 +208,24 @@ studied for its card and end-screen ideas only; none of its art is used.
    greatsword. One skill per type so far; the list per type is ready for more.
    Bow and staff borrow the pack's Throwing animation, so the bow is held at the
    hip while shooting: a draw-and-shoot and a cast animation are still to make.
-   8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
+   8.5 **built** dual blades and wand (2026-11-24). Dual blades: a four-cut combo that lands
+   more than half again as many blows as the sword's in the same time (each cut weak, with a short hit-stop so speed is not
+   eaten by it), a double-blade finisher, and a dash cut on K that carries her about
+   120 px and cuts everything it passes; skill Blade Storm, a whirl of cuts all around
+   while drifting forward. A drawn dagger in each hand, the second where the shield
+   was. Wand: rapid violet sparks, a heavy fan of three spreading up and down the
+   floor; skill Spark Volley, six sparks that seek the nearest foes. The rack now
+   offers six: past four cards they rest smaller and overlap a little, and the focused
+   one grows to full size in front. A remembered Rapier now becomes the dual blades.
+   Fixes after Martijn played 8.5 (2026-11-24): one press of J or K is one attack
+   (a press used to queue a second one while the key was still down); W and S no
+   longer bend attacks, shots or skills up or down, everything goes straight ahead;
+   she walks at half speed while attacking (not during the blades' dash), and a held
+   attack chains straight into the next, keeping the way she faces, so she can back
+   away still attacking; a new press turns her to the side held. The training dummy is now elite-sized, about
+   twice the hero's height: a round stuffed belly on a post, beam arms, a sack head
+   under a dented iron pot, arrows stuck in it.
+   8.6 blunderbuss and dual revolvers.
    Overall: make a character with
    customisation, pick a starting weapon type, each type with its own moves.
    Depends on the art question below.

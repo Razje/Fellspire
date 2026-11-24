@@ -93,6 +93,27 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
       c.restore();
       break;
     }
+    case 'blades': {
+      // two short blades crossed
+      back(c, s, '#5a2a5a', '#120612');
+      blade(c, s, 0.045, 0.3, 0.11);
+      c.save(); c.translate(s, 0); c.scale(-1, 1); blade(c, s, 0.045, 0.3, 0.11); c.restore();
+      break;
+    }
+    case 'wand': {
+      back(c, s, '#4a2a7a', '#0a0418');
+      c.save(); c.translate(s * 0.5, s * 0.5); c.rotate(Math.PI / 4);
+      c.strokeStyle = INK; c.lineWidth = s * 0.09; c.beginPath(); c.moveTo(0, -s * 0.14); c.lineTo(0, s * 0.4); c.stroke();
+      c.strokeStyle = vg(c, -s * 0.1, s * 0.4, [[0, '#7a5a7a'], [1, '#2a1626']]); c.lineWidth = s * 0.045; c.beginPath(); c.moveTo(0, -s * 0.12); c.lineTo(0, s * 0.38); c.stroke();
+      const glow = c.createRadialGradient(0, -s * 0.24, 0, 0, -s * 0.24, s * 0.24);
+      glow.addColorStop(0, 'rgba(210,160,255,0.95)'); glow.addColorStop(1, 'rgba(210,160,255,0)');
+      c.fillStyle = glow; c.fillRect(-s * 0.3, -s * 0.5, s * 0.6, s * 0.52);
+      c.fillStyle = INK; c.beginPath(); c.moveTo(0, -s * 0.38); c.lineTo(s * 0.1, -s * 0.24); c.lineTo(0, -s * 0.1); c.lineTo(-s * 0.1, -s * 0.24); c.closePath(); c.fill();
+      c.fillStyle = vg(c, -s * 0.36, -s * 0.12, [[0, '#f8eaff'], [0.5, '#a86af0'], [1, '#4a1a8a']]);
+      c.beginPath(); c.moveTo(0, -s * 0.34); c.lineTo(s * 0.065, -s * 0.24); c.lineTo(0, -s * 0.14); c.lineTo(-s * 0.065, -s * 0.24); c.closePath(); c.fill();
+      c.restore();
+      break;
+    }
     // the skills, for the action bar's I slot
     case 'sk_shieldCharge': {
       back(c, s, '#3a5aa8', '#060c20');
@@ -147,6 +168,33 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
       }
       c.restore();
       disc(s * 0.5, s * 0.44, s * 0.06, '#ffffff');
+      break;
+    }
+    case 'sk_bladeStorm': {
+      // pale crescents whirling round a centre
+      back(c, s, '#6a3a8a', '#100618');
+      c.save(); c.translate(s * 0.5, s * 0.5);
+      for (let i = 0; i < 3; i++) {
+        c.rotate((Math.PI * 2) / 3);
+        c.strokeStyle = INK; c.lineWidth = s * 0.1; c.beginPath(); c.arc(0, 0, s * 0.3, 0, 1.5); c.stroke();
+        c.strokeStyle = '#eef4ff'; c.lineWidth = s * 0.05; c.beginPath(); c.arc(0, 0, s * 0.3, 0.05, 1.45); c.stroke();
+      }
+      c.restore();
+      disc(s * 0.5, s * 0.5, s * 0.08, vg(c, s * 0.42, s * 0.58, STEEL));
+      break;
+    }
+    case 'sk_sparkVolley': {
+      back(c, s, '#5a2aa8', '#0a0420');
+      // sparks curving out from the lower left
+      for (const [x, y, k] of [[0.72, 0.22, 1], [0.8, 0.5, 0.9], [0.56, 0.12, 0.8], [0.66, 0.74, 0.75]] as const) {
+        c.strokeStyle = 'rgba(200,150,255,0.6)'; c.lineWidth = s * 0.035;
+        c.beginPath(); c.moveTo(s * 0.2, s * 0.8); c.quadraticCurveTo(s * 0.3, s * y, s * x, s * y); c.stroke();
+        const r = s * 0.09 * k;
+        c.fillStyle = '#ffffff'; c.beginPath();
+        for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; const rr = i % 2 ? r * 0.4 : r; c.lineTo(s * x + Math.cos(a) * rr, s * y + Math.sin(a) * rr); }
+        c.closePath(); c.fill();
+      }
+      disc(s * 0.2, s * 0.8, s * 0.07, '#d8b8ff');
       break;
     }
     case 'armor': {
@@ -360,9 +408,12 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
   private focused = false;
   readonly baseY: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, readonly item: Item, gear: Gear) {
+  // size: the card's scale at rest; with many cards in a row they rest smaller and
+  // the focused one grows to full size
+  constructor(scene: Phaser.Scene, x: number, y: number, readonly item: Item, gear: Gear, readonly size = 1) {
     super(scene, x, y);
     this.baseY = y;
+    this.setScale(size);
     const r = item.rarity, { w, h } = CARD;
     cardTextures(scene, r);
     this.glow = pic(scene, 0, 0, `card_glow_${r}`).setAlpha(0);
@@ -394,8 +445,10 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
     if (on === this.focused) return;
     this.focused = on;
     this.scene.tweens.killTweensOf(this.glow);
-    this.scene.tweens.add({ targets: this, y: this.baseY - (on ? 14 : 0), scale: on ? 1.05 : 1, duration: 160, ease: 'Cubic.easeOut' });
+    const big = this.size < 1 ? 1 : 1.05;
+    this.scene.tweens.add({ targets: this, y: this.baseY - (on ? 14 : 0), scale: on ? big : this.size, duration: 160, ease: 'Cubic.easeOut' });
     if (on) {
+      this.parentContainer?.bringToTop(this);
       this.glow.setAlpha(0.6);
       this.scene.tweens.add({ targets: this.glow, alpha: 1, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else this.glow.setAlpha(0);

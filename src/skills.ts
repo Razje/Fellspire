@@ -6,7 +6,7 @@
 // ice falling on an area after the hero has moved on.
 import Phaser from 'phaser';
 import { WORLD } from './config';
-import type { SkillId } from './weapons';
+import type { Move, SkillId } from './weapons';
 import type { AttackSpec, RoomScene } from './scenes/RoomScene';
 import type { Player } from './entities/Player';
 
@@ -16,32 +16,36 @@ export const SKILL_TUNING = {
   leapSlam: { time: 0.55, height: 62, distance: 150, dmg: 32, rx: 100, ry: 42, knock: 360 },
   rainOfArrows: { ahead: 170, rx: 84, ry: 34, mark: 0.5, volleys: 6, every: 0.18, dmg: 6, cast: 0.36 },
   blizzard: { ahead: 190, rx: 112, ry: 46, last: 3.5, every: 0.35, dmg: 5, slow: 1.2, cast: 0.5 },
+  bladeStorm: { time: 0.85, every: 0.085, dmg: 4, rx: 74, ry: 30, knock: 25, drift: 70 },
+  sparkVolley: { count: 6, dmg: 7, speed: 430, reach: 560, homing: 7, cast: 0.34 },
 };
 
 type Effect = (dt: number) => boolean; // false when done
 
 const inEllipse = (cx: number, cy: number, rx: number, ry: number) => (x: number, y: number) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
 
-// Where an area skill lands: ahead of the hero, leaning with the aim, on the floor.
-function ahead(p: Player, dist: number, aimY: number) {
+// Where an area skill lands: straight ahead of the hero, on the floor.
+function ahead(p: Player, dist: number) {
   return {
     x: Phaser.Math.Clamp(p.x + p.facing * dist, 40, WORLD.roomW - 40),
-    y: Phaser.Math.Clamp(p.y + aimY * 70, WORLD.groundTop + 10, WORLD.groundBottom - 10),
+    y: Phaser.Math.Clamp(p.y, WORLD.groundTop + 10, WORLD.groundBottom - 10),
   };
 }
 
 // Starts a skill; returns the seconds the hero is busy with it.
-export function startSkill(id: SkillId, s: RoomScene, p: Player, aimY: number): number {
+export function startSkill(id: SkillId, s: RoomScene, p: Player): number {
   switch (id) {
-    case 'shieldCharge': return shieldCharge(s, p, aimY);
-    case 'leapSlam': return leapSlam(s, p, aimY);
-    case 'rainOfArrows': return rainOfArrows(s, p, aimY);
-    case 'blizzard': return blizzard(s, p, aimY);
+    case 'shieldCharge': return shieldCharge(s, p);
+    case 'leapSlam': return leapSlam(s, p);
+    case 'rainOfArrows': return rainOfArrows(s, p);
+    case 'blizzard': return blizzard(s, p);
+    case 'bladeStorm': return bladeStorm(s, p);
+    case 'sparkVolley': return sparkVolley(s, p);
   }
 }
 
 // Rush forward behind the shield: everything touched is hit once and stunned.
-function shieldCharge(s: RoomScene, p: Player, aimY: number) {
+function shieldCharge(s: RoomScene, p: Player) {
   const T = SKILL_TUNING.shieldCharge;
   const hit = new Set<object>();
   const spec: AttackSpec = { dmg: T.dmg, range: 0, depth: 22, knock: T.knock, heavy: true, stun: T.stun };
@@ -54,7 +58,6 @@ function shieldCharge(s: RoomScene, p: Player, aimY: number) {
     if (p.state !== 'skill' || t > T.time) return false;
     const k = 1 - (t / T.time) * 0.4;
     p.x += p.facing * T.speed * k * dt;
-    p.y += aimY * T.speed * 0.4 * k * dt;
     if ((dustT -= dt) <= 0) { dustT = 0.05; s.dust(p.x - p.facing * 10, p.y, 1); }
     s.strike(p, true, spec, s.enemies, (x, y) => Math.abs(x - (p.x + p.facing * 14)) < 30 && Math.abs(y - p.y) <= spec.depth, { once: hit });
     return true;
@@ -64,7 +67,7 @@ function shieldCharge(s: RoomScene, p: Player, aimY: number) {
 }
 
 // Up into the air, forward, and down in a ring of force.
-function leapSlam(s: RoomScene, p: Player, aimY: number) {
+function leapSlam(s: RoomScene, p: Player) {
   const T = SKILL_TUNING.leapSlam;
   p.invuln = Math.max(p.invuln, T.time + 0.05);
   p.playAnim('leap', { duration: T.time * 1000, force: true });
@@ -75,7 +78,6 @@ function leapSlam(s: RoomScene, p: Player, aimY: number) {
     if (p.isDead()) { p.lift = 0; return false; }
     const step = Math.min(dt, Math.max(0, T.time - (t - dt)));
     p.x += p.facing * (T.distance / T.time) * step;
-    p.y += aimY * (T.distance * 0.35 / T.time) * step;
     p.lift = Math.sin(Math.min(1, t / T.time) * Math.PI) * T.height;
     if (t < T.time) return true;
     p.lift = 0;
@@ -90,9 +92,9 @@ function leapSlam(s: RoomScene, p: Player, aimY: number) {
 }
 
 // A red circle ahead, then volleys of arrows falling into it.
-function rainOfArrows(s: RoomScene, p: Player, aimY: number) {
+function rainOfArrows(s: RoomScene, p: Player) {
   const T = SKILL_TUNING.rainOfArrows;
-  const { x, y } = ahead(p, T.ahead, aimY);
+  const { x, y } = ahead(p, T.ahead);
   p.playAnim('throw', { duration: T.cast * 1000, force: true });
   const mark = s.add.ellipse(x, y, T.rx * 2, T.ry * 2, 0xff3a2a, 0.14).setStrokeStyle(2, 0xff5a3a, 0.9).setDepth(2);
   s.tweens.add({ targets: mark, alpha: { from: 0.4, to: 1 }, duration: 160, yoyo: true, repeat: -1 });
@@ -130,9 +132,9 @@ function rainOfArrows(s: RoomScene, p: Player, aimY: number) {
 }
 
 // Ice falls over an area ahead for a few seconds: it hurts and slows what stands in it.
-function blizzard(s: RoomScene, p: Player, aimY: number) {
+function blizzard(s: RoomScene, p: Player) {
   const T = SKILL_TUNING.blizzard;
-  const { x, y } = ahead(p, T.ahead, aimY);
+  const { x, y } = ahead(p, T.ahead);
   p.playAnim('throw', { duration: T.cast * 1000, force: true });
   const pool = s.add.image(x, y, 'fw_pool').setTint(0x9fd8ff).setBlendMode(Phaser.BlendModes.ADD)
     .setScale((T.rx * 2.4) / 256, (T.ry * 2.4) / 96).setAlpha(0).setDepth(0.5);
@@ -154,6 +156,69 @@ function blizzard(s: RoomScene, p: Player, aimY: number) {
     if (t < T.last) return true;
     snow.stop();
     s.tweens.add({ targets: [pool, frost], alpha: 0, duration: 500, onComplete: () => { pool.destroy(); frost.destroy(); snow.destroy(); } });
+    return false;
+  };
+  s.addEffect(run);
+  return T.cast;
+}
+
+// A whirl of quick cuts all around, drifting forward a little: many small hits.
+function bladeStorm(s: RoomScene, p: Player) {
+  const T = SKILL_TUNING.bladeStorm;
+  const spec: AttackSpec = { dmg: T.dmg, range: 0, depth: T.ry, knock: T.knock, quiet: true };
+  const dir = p.facing;
+  let t = 0, tick = 0, n = 0;
+  const run: Effect = (dt) => {
+    t += dt;
+    if (p.state !== 'skill' || t > T.time) { if (!p.isDead()) p.facing = dir; return false; }
+    p.x += dir * T.drift * dt;
+    if ((tick -= dt) <= 0) {
+      tick = T.every;
+      // cut left and right in turn, each cut a slash arc around the hero
+      p.facing = n % 2 ? -dir : dir;
+      p.playAnim(n % 3 === 2 ? 'heavy' : 'attack', { duration: T.every * 1000 * 1.6, force: true });
+      slashArc(s, p.x, p.y, n++);
+      s.strike({ x: p.x, y: p.y - 1, facing: p.facing }, true, spec, s.enemies, inEllipse(p.x, p.y, T.rx, T.ry));
+    }
+    return true;
+  };
+  s.addEffect(run);
+  return T.time;
+}
+
+// A pale crescent flashing round the hero at a turning angle.
+function slashArc(s: RoomScene, x: number, y: number, n: number) {
+  const g = s.add.graphics().setDepth(y + 12).setBlendMode(Phaser.BlendModes.ADD);
+  const a0 = n * 2.1, flip = n % 2 ? -1 : 1;
+  g.lineStyle(5, 0xe8f0ff, 0.9);
+  g.beginPath();
+  for (let i = 0; i <= 10; i++) {
+    const a = a0 + flip * (i / 10) * 2.2;
+    const px = x + Math.cos(a) * 56, py = y - 30 + Math.sin(a) * 26;
+    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  }
+  g.strokePath();
+  s.tweens.add({ targets: g, alpha: 0, duration: 180, onComplete: () => g.destroy() });
+}
+
+// Sparks burst out in a fan and seek the nearest foes.
+function sparkVolley(s: RoomScene, p: Player) {
+  const T = SKILL_TUNING.sparkVolley;
+  p.playAnim('throw', { duration: T.cast * 1000, force: true });
+  const move: Move = {
+    anim: 'throw', dur: 0, hitAt: 0, dmg: T.dmg, range: 0, depth: 18, knock: 60, lunge: 0, quiet: true,
+    shot: { look: 'spark', speed: T.speed, reach: T.reach, homing: T.homing },
+  };
+  let t = 0;
+  const run: Effect = (dt) => {
+    t += dt;
+    if (t < T.cast * 0.45) return true;
+    for (let i = 0; i < T.count; i++) {
+      // spread over a half circle in front, up and down the floor
+      const a = (i / (T.count - 1) - 0.5) * Math.PI * 0.9;
+      s.shots.launch(p.x + p.facing * 18, p.y, Math.cos(a) * T.speed * p.facing, Math.sin(a) * T.speed * 0.6, move);
+    }
+    s.shockwave(p.x + p.facing * 18, p.y, 0xb98aff);
     return false;
   };
   s.addEffect(run);

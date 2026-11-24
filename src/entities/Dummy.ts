@@ -1,5 +1,5 @@
-// The camp's training dummy: a straw sack on a post that takes every blow and
-// never falls. It shows the numbers like any enemy, and a small damage-per-second
+// The camp's training dummy: a big stuffed straw dummy on a post, elite-sized, that
+// takes every blow and never falls. It shows the numbers like any enemy, and a small damage-per-second
 // readout over its head, so weapons can be compared before a run.
 import Phaser from 'phaser';
 import { Enemy } from './Enemies';
@@ -10,49 +10,78 @@ import { FONT, RES } from '../ui/theme';
 const INK = '#06090d';
 const SCALE = 0.5; // the texture is painted at twice its size, for sharp edges
 
+// A big training dummy, elite-sized: a round stuffed belly on a thick post, plank
+// feet, beam arms with straw, a sack head under a dented iron pot. Painted at 2x.
 function dummyTexture(scene: Phaser.Scene) {
   if (scene.textures.exists('camp_dummy')) return;
-  canvas(scene, 'camp_dummy', 96, 176, (c) => {
+  canvas(scene, 'camp_dummy', 240, 300, (c) => {
     const line = (w: number, col: string, pts: number[]) => {
-      c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round';
+      c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round';
       c.beginPath(); c.moveTo(pts[0], pts[1]);
       for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
       c.stroke();
     };
-    // the post, stuck in a little mound, and the crossbar for arms
-    c.fillStyle = INK; c.beginPath(); c.ellipse(48, 168, 26, 7, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#2a2018'; c.beginPath(); c.ellipse(48, 166, 22, 5, 0, 0, Math.PI * 2); c.fill();
-    line(14, INK, [48, 166, 48, 40]);
-    line(8, '#6a4424', [48, 164, 48, 42]);
-    line(3, '#8a5f36', [46, 160, 46, 46]);
-    line(12, INK, [10, 74, 86, 70]);
-    line(6, '#6a4424', [12, 74, 84, 70]);
-    // straw sticking out of the arm ends
-    for (const [x, y, d] of [[12, 74, -1], [84, 70, 1]] as const) {
-      for (let i = -2; i <= 2; i++) line(2, '#d8b060', [x, y + i * 2, x + d * (8 + Math.abs(i) * 2), y + i * 3]);
+    const wood = (w: number, pts: number[]) => { line(w + 7, INK, pts); line(w, '#6a4424', pts); };
+    // plank feet crossed under the post
+    wood(13, [62, 288, 178, 276]);
+    wood(13, [70, 272, 172, 290]);
+    // the post
+    wood(20, [120, 286, 120, 150]);
+    line(4, '#8a5f36', [114, 280, 114, 160]);
+    // beam arms through the belly, straw bursting from the ends
+    wood(14, [22, 150, 218, 140]);
+    for (const [x, y, d] of [[22, 150, -1], [218, 140, 1]] as const) {
+      for (let i = -3; i <= 3; i++) line(3, i % 2 ? '#c89a48' : '#e0bc68', [x, y + i * 3, x + d * (14 + Math.abs(i) * 3), y + i * 5]);
     }
-    // the sack body, tied at the waist
-    c.fillStyle = INK; c.beginPath(); c.ellipse(48, 98, 25, 37, 0, 0, Math.PI * 2); c.fill();
-    const g = c.createLinearGradient(24, 0, 72, 0);
-    g.addColorStop(0, '#8a6a3c'); g.addColorStop(0.45, '#c8a066'); g.addColorStop(1, '#6a4e2a');
-    c.fillStyle = g; c.beginPath(); c.ellipse(48, 98, 21, 33, 0, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = 'rgba(60,40,18,0.55)'; c.lineWidth = 1;
-    for (let y = 72; y < 130; y += 7) { c.beginPath(); c.moveTo(30, y); c.quadraticCurveTo(48, y + 3, 66, y); c.stroke(); }
-    line(5, INK, [28, 106, 68, 106]);
-    line(2.5, '#b8402a', [29, 106, 67, 106]);
-    // a painted target on the chest
-    for (const [r, col] of [[12, '#f0e6d2'], [9, '#b8402a'], [5.5, '#f0e6d2'], [2.5, '#b8402a']] as const) {
-      c.fillStyle = col; c.beginPath(); c.arc(48, 88, r, 0, Math.PI * 2); c.fill();
+    // the round belly, a rope belt and seams
+    c.fillStyle = INK; c.beginPath(); c.ellipse(120, 172, 76, 70, 0, 0, Math.PI * 2); c.fill();
+    const g = c.createRadialGradient(100, 150, 8, 120, 172, 72);
+    g.addColorStop(0, '#dcb478'); g.addColorStop(0.65, '#a8804a'); g.addColorStop(1, '#6a4e2a');
+    c.fillStyle = g; c.beginPath(); c.ellipse(120, 172, 69, 63, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(60,40,18,0.45)'; c.lineWidth = 2;
+    for (let y = 124; y < 232; y += 12) {
+      const half = Math.sqrt(Math.max(0, 1 - ((y - 172) / 63) ** 2)) * 66;
+      c.beginPath(); c.moveTo(120 - half, y); c.quadraticCurveTo(120, y + 6, 120 + half, y); c.stroke();
     }
-    // the burlap head with stitched eyes
-    c.fillStyle = INK; c.beginPath(); c.arc(48, 46, 19, 0, Math.PI * 2); c.fill();
-    const h = c.createRadialGradient(42, 40, 2, 48, 46, 17);
+    // a stitched patch on the side
+    c.fillStyle = INK; c.fillRect(146, 178, 34, 30);
+    c.fillStyle = '#7a5a8a'; c.fillRect(149, 181, 28, 24);
+    c.strokeStyle = '#e8dcc0'; c.lineWidth = 2;
+    for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(151 + i * 7, 179); c.lineTo(153 + i * 7, 184); c.stroke(); c.beginPath(); c.moveTo(151 + i * 7, 203); c.lineTo(153 + i * 7, 208); c.stroke(); }
+    // rope belt low on the belly
+    line(10, INK, [52, 204, 120, 216, 188, 204]);
+    line(5, '#c8a060', [53, 204, 120, 216, 187, 204]);
+    line(6, INK, [96, 214, 88, 238]); line(3, '#c8a060', [96, 214, 88, 237]);
+    // the painted target
+    for (const [r, col] of [[27, INK], [24, '#f0e6d2'], [18, '#b8402a'], [12, '#f0e6d2'], [6, '#b8402a']] as const) {
+      c.fillStyle = col; c.beginPath(); c.arc(112, 166, r, 0, Math.PI * 2); c.fill();
+    }
+    // two arrows stuck in it
+    for (const [x, y, a] of [[84, 196, -0.5], [168, 150, -0.55]] as const) {
+      const dx = Math.cos(a), dy = Math.sin(a);
+      line(6, INK, [x, y, x + dx * 40, y + dy * 40]);
+      line(3, '#b08050', [x, y, x + dx * 39, y + dy * 39]);
+      const fx = x + dx * 40, fy = y + dy * 40;
+      c.fillStyle = '#e8e0d0';
+      for (const sd of [-1, 1]) { c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx - dx * 12 - dy * 7 * sd, fy - dy * 12 + dx * 7 * sd); c.lineTo(fx - dx * 4, fy - dy * 4); c.closePath(); c.fill(); }
+    }
+    // the sack head, stitched face
+    c.fillStyle = INK; c.beginPath(); c.arc(120, 86, 34, 0, Math.PI * 2); c.fill();
+    const h = c.createRadialGradient(110, 80, 3, 120, 86, 31);
     h.addColorStop(0, '#d8b47a'); h.addColorStop(1, '#8a6a3c');
-    c.fillStyle = h; c.beginPath(); c.arc(48, 46, 15.5, 0, Math.PI * 2); c.fill();
-    for (const ex of [41, 55]) { line(2.2, '#2a1a0c', [ex - 3, 41, ex + 3, 47]); line(2.2, '#2a1a0c', [ex + 3, 41, ex - 3, 47]); }
-    line(1.6, '#2a1a0c', [41, 54, 44, 52, 47, 54, 50, 52, 53, 54, 56, 52]);
-    // a tuft of straw on top
-    for (let i = -3; i <= 3; i++) line(2, '#e0bc68', [48 + i * 2, 32, 48 + i * 4, 24 - Math.abs(i)]);
+    c.fillStyle = h; c.beginPath(); c.arc(120, 86, 29, 0, Math.PI * 2); c.fill();
+    for (const ex of [108, 132]) { line(3.5, '#2a1a0c', [ex - 5, 84, ex + 5, 94]); line(3.5, '#2a1a0c', [ex + 5, 84, ex - 5, 94]); }
+    line(2.5, '#2a1a0c', [106, 106, 111, 102, 116, 106, 121, 102, 126, 106, 131, 102, 136, 106]);
+    // a dented iron pot for a helmet, tipped to one side
+    c.save(); c.translate(120, 62); c.rotate(-0.16);
+    c.fillStyle = INK; c.beginPath(); c.moveTo(-38, 8); c.lineTo(-32, -26); c.quadraticCurveTo(0, -40, 32, -26); c.lineTo(38, 8); c.closePath(); c.fill();
+    const m = c.createLinearGradient(-32, 0, 32, 0);
+    m.addColorStop(0, '#5a6470'); m.addColorStop(0.4, '#b8c4d0'); m.addColorStop(1, '#4a525c');
+    c.fillStyle = m; c.beginPath(); c.moveTo(-32, 3); c.lineTo(-27, -22); c.quadraticCurveTo(0, -34, 27, -22); c.lineTo(32, 3); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(30,36,44,0.55)'; c.beginPath(); c.ellipse(10, -14, 7, 5, 0.4, 0, Math.PI * 2); c.fill();
+    c.fillStyle = INK; c.fillRect(-44, 2, 88, 11);
+    c.fillStyle = '#6a7480'; c.fillRect(-41, 4, 82, 6);
+    c.restore();
   });
 }
 
@@ -69,9 +98,9 @@ export class Dummy extends Enemy {
     dummyTexture(scene);
     this.sprite.setVisible(false); // drawn as the dummy instead
     this.showPlate = false;
-    this.body = 1.3; // the hero is pushed off it rather than walking through
+    this.body = 1.8; // big, like the Warden: the hero is pushed off it, still within a dagger's reach
     this.home = { x, y };
-    this.shadow.setSize(44, 10);
+    this.shadow.setSize(96, 18);
     this.img = scene.add.image(x, y + 3, 'camp_dummy').setOrigin(0.5, 0.96).setScale(SCALE).setDepth(y + 10);
     // at its feet, clear of the hit numbers that float up from its head
     this.dpsText = scene.add.text(x, y + 16, '', {
@@ -81,7 +110,7 @@ export class Dummy extends Enemy {
   }
 
   get visualHeight() {
-    return 78;
+    return 140;
   }
 
   // it has nothing to be stopped from doing
@@ -92,7 +121,7 @@ export class Dummy extends Enemy {
     this.flashT = 0.07;
     this.hits.push({ t: this.clock, dmg });
     this.totalDamage += dmg;
-    const lean = (this.x >= fromX ? 1 : -1) * (dmg > 20 ? 16 : 9);
+    const lean = (this.x >= fromX ? 1 : -1) * (dmg > 20 ? 10 : 5); // heavy, so it rocks less
     this.scene.tweens.killTweensOf(this.img);
     this.img.angle = 0;
     this.scene.tweens.chain({

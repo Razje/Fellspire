@@ -364,7 +364,10 @@ export class HudScene extends Phaser.Scene {
     gild(title, GOLD_STOPS);
     const orn = pic(this, cx, 66, 'ui_ornament');
     root.add([shade, title, orn]);
-    const cards = items.map((it, i) => new ItemCard(this, cx + (i - (items.length - 1) / 2) * 228, 312, it, gear));
+    // up to four cards side by side; more (the camp's rack) rest smaller and overlap a little
+    const many = items.length > 4;
+    const gap = many ? Math.min(228, 740 / (items.length - 1)) : 228, size = many ? 0.74 : 1;
+    const cards = items.map((it, i) => new ItemCard(this, cx + (i - (items.length - 1) / 2) * gap, 312, it, gear, size));
     root.add(cards);
     const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, 0xffd100).setStrokeStyle(1.5, 0x3a2000);
     root.add(arrow);
@@ -410,14 +413,14 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: shade, alpha: 1, duration: 250 });
     this.tweens.add({ targets: [title, orn], alpha: 1, duration: 400, delay: 100 });
     cards.forEach((c, i) => {
-      c.setAlpha(0).setScale(0.05, 1).setY(c.baseY + 40);
-      this.tweens.add({ targets: c, alpha: 1, scaleX: 1, y: c.baseY, duration: 380, delay: 200 + i * 120, ease: 'Back.easeOut' });
+      c.setAlpha(0).setScale(0.05 * c.size, c.size).setY(c.baseY + 40);
+      this.tweens.add({ targets: c, alpha: 1, scaleX: c.size, y: c.baseY, duration: 380, delay: 200 + i * 120, ease: 'Back.easeOut' });
     });
     this.tweens.add({ targets: [hint, arrow], alpha: 1, duration: 300, delay: 700 });
     this.time.delayedCall(640, () => focus(1));
     const follow = () => {
       const c = cards[ch.index];
-      if (c && arrow.active) arrow.setPosition(c.x, c.y - 220 + Math.sin(this.time.now / 160) * 4);
+      if (c && arrow.active) arrow.setPosition(c.x, c.y - 52 - 168 * c.scaleY + Math.sin(this.time.now / 160) * 4);
     };
     this.events.on('update', follow);
     root.once('destroy', () => this.events.off('update', follow));

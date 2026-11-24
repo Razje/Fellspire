@@ -10,16 +10,18 @@
 // in rig/weapons.ts; Player reads everything else from this list.
 import type { AttackSpec } from './scenes/RoomScene';
 
-export type WeaponKind = 'sword' | 'greatsword' | 'bow' | 'staff';
-export type SkillId = 'shieldCharge' | 'leapSlam' | 'rainOfArrows' | 'blizzard';
+export type WeaponKind = 'sword' | 'greatsword' | 'blades' | 'bow' | 'staff' | 'wand';
+export type SkillId = 'shieldCharge' | 'leapSlam' | 'bladeStorm' | 'rainOfArrows' | 'blizzard' | 'sparkVolley';
 
 // What a move sends out instead of swinging.
 export interface ShotSpec {
-  look: 'arrow' | 'bolt' | 'orb';
+  look: 'arrow' | 'bolt' | 'orb' | 'spark';
   speed: number; // pixels a second
   reach: number; // pixels before it falls or fades
   pierce?: boolean; // goes on through everything in its line
   burst?: { rx: number; ry: number }; // bursts where it stops, hitting all around
+  spread?: { count: number; lean: number }; // several at once, fanned out up and down the floor
+  homing?: number; // turns towards the nearest foe, radians a second
 }
 
 export interface Move extends AttackSpec {
@@ -28,6 +30,7 @@ export interface Move extends AttackSpec {
   hitAt: number; // when the blow lands or the shot leaves
   lunge: number; // pixels stepped forward before it lands
   shot?: ShotSpec;
+  sweep?: boolean; // cuts everything it passes during the lunge, not only at the end (a dash)
 }
 
 export interface WeaponDef {
@@ -74,6 +77,21 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     names: ['Ashen', 'Tombbreaker', 'Hollowed', 'Thornwood', 'Barrowking'],
     legendary: 'Fellmourn, the Spire-Cleaver',
   },
+  // quick and close: a fast four-cut combo, a dash that cuts through
+  blades: {
+    label: 'Dual Blades', noun: 'Blades', speed: 'Fast', block: false,
+    blurb: 'A blade in each hand: a fast four-cut combo, and a dash that cuts through everything in its path.',
+    light: [
+      { anim: 'attack', dur: 0.15, hitAt: 0.06, dmg: 5, range: 46, depth: 20, knock: 30, lunge: 12, stop: 22 },
+      { anim: 'attack', dur: 0.15, hitAt: 0.06, dmg: 5, range: 46, depth: 20, knock: 30, lunge: 12, stop: 22 },
+      { anim: 'attack', dur: 0.15, hitAt: 0.06, dmg: 6, range: 46, depth: 20, knock: 40, lunge: 12, stop: 22 },
+      { anim: 'heavy', dur: 0.28, hitAt: 0.11, dmg: 12, range: 54, depth: 22, knock: 200, lunge: 30, heavy: true, stop: 60 },
+    ],
+    heavy: { anim: 'heavy', dur: 0.42, hitAt: 0.2, dmg: 16, range: 40, depth: 24, knock: 160, lunge: 120, heavy: true, sweep: true },
+    skills: ['bladeStorm'],
+    names: ['Nightfang', 'Twinshade', 'Ravencut', 'Gloomkiss', 'Ashwhisper'],
+    legendary: 'Sorrow and Solace, the Mourning Pair',
+  },
   // from a distance: quick arrows, a long draw for one that goes through a line
   bow: {
     label: 'Bow', noun: 'Bow', speed: 'Ranged', block: false,
@@ -98,6 +116,18 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     names: ['Gloamwood', 'Emberheart', 'Rimefrost', 'Hollowroot', 'Starbound'],
     legendary: 'Lanternheart, Staff of the Last Ember',
   },
+  // quick one-handed casting: rapid sparks, a fan of three for the heavy
+  wand: {
+    label: 'Wand', noun: 'Wand', speed: 'Ranged, fast', block: false,
+    blurb: 'Rapid sparks from afar; the heavy throws a fan of three that spreads across the floor.',
+    light: [
+      { anim: 'throw', dur: 0.24, hitAt: 0.1, dmg: 5, range: 0, depth: 16, knock: 40, lunge: 0, stop: 22, shot: { look: 'spark', speed: 620, reach: 380 } },
+    ],
+    heavy: { anim: 'throw', dur: 0.5, hitAt: 0.28, dmg: 11, range: 0, depth: 18, knock: 120, lunge: 0, heavy: true, shot: { look: 'spark', speed: 560, reach: 400, spread: { count: 3, lean: 0.35 } } },
+    skills: ['sparkVolley'],
+    names: ['Duskwillow', 'Sparkthorn', 'Witchbriar', 'Glimmerbone', 'Hexwood'],
+    legendary: 'Cinderwisp, the Wand That Remembers',
+  },
 };
 
 export const KINDS = Object.keys(WEAPONS) as WeaponKind[];
@@ -115,10 +145,13 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   leapSlam: { name: 'Leap Slam', blurb: 'Leap into the air and crash down in a ring of force.', cooldown: 8 },
   rainOfArrows: { name: 'Rain of Arrows', blurb: 'Arrows pepper a marked circle ahead from above.', cooldown: 9 },
   blizzard: { name: 'Blizzard', blurb: 'Ice falls over an area ahead, hurting and slowing all in it.', cooldown: 12 },
+  bladeStorm: { name: 'Blade Storm', blurb: 'A whirl of quick cuts all around you.', cooldown: 7 },
+  sparkVolley: { name: 'Spark Volley', blurb: 'Sparks burst out and seek the nearest foes.', cooldown: 8 },
 };
 
-// Weapon kinds from before 8.4, as a browser may still remember them.
-const OLD: Record<string, WeaponKind> = { longsword: 'sword', greatblade: 'greatsword', rapier: 'sword' };
+// Weapon kinds from before 8.4, as a browser may still remember them (the rapier's
+// place went to the dual blades in 8.5).
+const OLD: Record<string, WeaponKind> = { longsword: 'sword', greatblade: 'greatsword', rapier: 'blades' };
 
 export function asKind(k: string | null | undefined): WeaponKind | null {
   if (!k) return null;

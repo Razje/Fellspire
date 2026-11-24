@@ -10,6 +10,7 @@ import { evaluate, type SAnim, type Scml } from './scml';
 export interface PartSwap {
   texture: string | null; // null hides the part
   show?: boolean; // shown even where the animation hides the part it replaces
+  front?: string; // drawn just below this part ("Right Hand.png"), over the body, whatever the pose
   // rest: an extra turn (degrees) while the animation hides the part it replaces,
   // so a weapon the pack never poses at rest is held upright instead of levelled
   grip?: { from: [number, number]; to: [number, number]; angle?: number; scale?: number; rest?: number };
@@ -102,6 +103,17 @@ export class Rig extends Phaser.GameObjects.Container {
         img.setOrigin(s.file.px, 1 - s.file.py).setPosition(s.x, -s.y).setRotation(-rad).setScale(s.sx, s.sy);
       }
       this.moveTo(img, i);
+    });
+    // a part held in front: just below the part it names (a short wand behind the
+    // body would disappear)
+    states.forEach((s) => {
+      const front = this.skin.get(s.file.name)?.front;
+      if (!front) return;
+      const st = states.find((o) => o.file.name === front);
+      const img = this.parts.get(s.slot), over = st && this.parts.get(st.slot);
+      if (!img || !over) return;
+      const i = this.getIndex(img), o = this.getIndex(over);
+      if (i !== o - 1) this.moveTo(img, i < o ? o - 1 : o);
     });
     for (const [slot, img] of this.parts) if (!seen.has(slot)) img.setVisible(false);
   }

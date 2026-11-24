@@ -57,7 +57,8 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   };`)).toEqual({ camp: true, waves: 0, gate: true, dummy: true, weapon: 'sword' });
   await shot(page, info, 'camp-1-arrival');
 
-  // E beside the rack: four cards over the paused camp; D once and E takes the bow
+  // E beside the rack: six cards over the paused camp, the focused one on top at
+  // full size; D twice and E takes the bow
   await room(page, 'const p = s.player; p.x = 420; p.y = 360;');
   await page.waitForTimeout(300);
   // held for a few frames: the hero reads E once per frame
@@ -71,6 +72,18 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   expect(heading).toBe(true);
   await page.waitForTimeout(900);
   await shot(page, info, 'camp-2-rack');
+  const cards = await page.evaluate(() => {
+    const ch = (window as any).game.scene.getScene('hud').choice;
+    const vis = ch.cards.map((c: any) => { const b = c.getBounds(); return { l: b.left, r: b.right, scale: c.scale }; });
+    return { n: ch.cards.length, vis, top: ch.root.list.indexOf(ch.cards[ch.index]) > ch.root.list.indexOf(ch.cards[0]) };
+  });
+  expect(cards.n).toBe(6);
+  expect(Math.min(...cards.vis.map((v: any) => v.l))).toBeGreaterThanOrEqual(0); // all on screen (960 wide)
+  expect(Math.max(...cards.vis.map((v: any) => v.r))).toBeLessThanOrEqual(960);
+  expect(Math.max(...cards.vis.map((v: any) => v.scale))).toBeGreaterThanOrEqual(1); // the focused card at full size
+  expect(cards.top).toBe(true);
+  await page.keyboard.press('d');
+  await page.waitForTimeout(150);
   await page.keyboard.press('d');
   await page.waitForTimeout(150);
   await page.keyboard.press('e');

@@ -1,7 +1,8 @@
 // The player's arrows, bolts and orbs: what a ranged move sends out when it lands
-// (weapons.ts, a move's `shot`). They fly level at chest height, lean up or down
-// with the aim, and hit the first foe or barrel in their path; a piercing one goes
-// on through everything, an orb bursts where it stops.
+// (weapons.ts, a move's `shot`). They fly level at chest height, straight ahead,
+// and hit the first foe or barrel in their path; a piercing one goes
+// on through everything, an orb bursts where it stops. A wand's sparks can fan out
+// (spread) or seek the nearest foe (homing).
 import Phaser from 'phaser';
 import { WORLD } from './config';
 import { canvas } from './titleArt';
@@ -9,7 +10,6 @@ import type { Move } from './weapons';
 import type { RoomScene } from './scenes/RoomScene';
 
 const CHEST = 34; // how far above the feet a shot flies
-const LEAN = 0.3; // how much of a shot's speed goes up or down when aiming that way
 
 interface Shot {
   img: Phaser.GameObjects.Image;
@@ -18,6 +18,7 @@ interface Shot {
   x: number; y: number; vx: number; vy: number;
   left: number;
   move: Move;
+  speed: number;
   hit: Set<object>; // what it already struck (a piercing arrow strikes each once)
   dead: boolean;
 }
@@ -39,6 +40,15 @@ function textures(scene: Phaser.Scene) {
     g.addColorStop(0, 'rgba(90,232,208,0)'); g.addColorStop(0.7, 'rgba(120,250,230,0.8)'); g.addColorStop(1, '#ffffff');
     c.fillStyle = g; c.beginPath(); c.moveTo(0, 12); c.quadraticCurveTo(40, 2, 56, 4); c.arc(52, 12, 8, -Math.PI / 2, Math.PI / 2); c.quadraticCurveTo(40, 22, 0, 12); c.fill();
     c.fillStyle = '#ffffff'; c.beginPath(); c.arc(54, 12, 5, 0, Math.PI * 2); c.fill();
+  });
+  // a violet spark: a bright star with a short tail
+  canvas(scene, 'shot_spark', 48, 24, (c) => {
+    const g = c.createLinearGradient(0, 0, 48, 0);
+    g.addColorStop(0, 'rgba(170,110,255,0)'); g.addColorStop(0.75, 'rgba(200,150,255,0.85)'); g.addColorStop(1, '#ffffff');
+    c.fillStyle = g; c.beginPath(); c.moveTo(0, 12); c.quadraticCurveTo(28, 5, 40, 6); c.arc(38, 12, 6, -Math.PI / 2, Math.PI / 2); c.quadraticCurveTo(28, 19, 0, 12); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath();
+    for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, r = i % 2 ? 3 : 8; c.lineTo(39 + Math.cos(a) * r, 12 + Math.sin(a) * r); }
+    c.closePath(); c.fill();
   });
   // a swirling orb
   canvas(scene, 'shot_orb', 40, 40, (c) => {
@@ -62,29 +72,62 @@ export class Shots {
     return this.list.length;
   }
 
-  // Sends out the move's shot from the hero's hand, the way they face.
-  fire(from: { x: number; y: number; facing: number }, aimY: number, move: Move) {
+  // Sends out the move's shot from the hero's hand, straight the way they face; a
+  // spread sends several, fanned up and down the floor around that line.
+  fire(from: { x: number; y: number; facing: number }, move: Move) {
+    const spec = move.shot!;
+    const dir = from.facing;
+    const n = spec.spread?.count ?? 1;
+    for (let i = 0; i < n; i++) {
+      const lean = n > 1 ? (i - (n - 1) / 2) * (spec.spread!.lean / ((n - 1) / 2)) : 0;
+      this.launch(from.x + dir * 22, from.y, dir * spec.speed, lean * spec.speed, move);
+    }
+  }
+
+  // One shot from a point with a velocity (floor pixels a second).
+  launch(x: number, y: number, vx: number, vy: number, move: Move) {
     const spec = move.shot!;
     const s = this.scene;
-    const dir = from.facing;
-    const x = from.x + dir * 22, y = from.y;
+    const dir = Math.sign(vx) || 1;
     const img = s.add.image(x, y - CHEST, `shot_${spec.look}`).setScale(0.5).setFlipX(dir < 0);
     let glow: Phaser.GameObjects.Image | undefined;
     if (spec.look !== 'arrow') {
       img.setBlendMode(Phaser.BlendModes.ADD).setScale(spec.look === 'orb' ? 0.8 : 0.6);
-      glow = s.add.image(x, y - CHEST, 'tt_light').setTint(0x6fffd8).setBlendMode(Phaser.BlendModes.ADD)
-        .setScale(spec.look === 'orb' ? 0.5 : 0.3).setAlpha(0.7);
+      glow = s.add.image(x, y - CHEST, 'tt_light').setTint(spec.look === 'spark' ? 0xb98aff : 0x6fffd8).setBlendMode(Phaser.BlendModes.ADD)
+        .setScale(spec.look === 'orb' ? 0.5 : spec.look === 'spark' ? 0.24 : 0.3).setAlpha(0.7);
     }
     const shadow = s.add.ellipse(x, y, spec.look === 'arrow' ? 18 : 14, 5, 0x000000, 0.25).setDepth(1);
-    const vy = aimY * spec.speed * LEAN;
-    if (vy) img.setRotation(Math.atan2(vy, Math.abs(spec.speed)) * dir);
-    this.list.push({ img, glow, shadow, x, y, vx: dir * spec.speed, vy, left: spec.reach, move, hit: new Set(), dead: false });
+    const b: Shot = { img, glow, shadow, x, y, vx, vy, left: spec.reach, move, speed: Math.hypot(vx, vy), hit: new Set(), dead: false };
+    this.turn(b);
+    this.list.push(b);
+  }
+
+  // Points the picture along the way it flies.
+  private turn(b: Shot) {
+    const dir = Math.sign(b.vx) || 1;
+    b.img.setFlipX(dir < 0).setRotation(Math.atan2(b.vy, Math.abs(b.vx)) * dir);
+  }
+
+  // A seeking shot bends towards the nearest living foe it has not hit yet.
+  private seek(b: Shot, rate: number, dt: number) {
+    let best: { x: number; y: number } | null = null, bd = 420;
+    for (const e of this.scene.enemies) {
+      if (e.isDead() || b.hit.has(e)) continue;
+      const d = Math.hypot(e.x - b.x, e.y - b.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) return;
+    const cur = Math.atan2(b.vy, b.vx), want = Math.atan2(best.y - b.y, best.x - b.x);
+    const a = cur + Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(want - cur), -rate * dt, rate * dt);
+    b.vx = Math.cos(a) * b.speed; b.vy = Math.sin(a) * b.speed;
+    this.turn(b);
   }
 
   update(dt: number) {
     const s = this.scene;
     for (const b of this.list) {
       const spec = b.move.shot!;
+      if (spec.homing) this.seek(b, spec.homing, dt);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.left -= Math.hypot(b.vx, b.vy) * dt;
@@ -99,6 +142,7 @@ export class Shots {
       }
       b.img.setPosition(b.x, b.y - CHEST).setDepth(b.y + 11);
       if (spec.look === 'orb') b.img.setRotation(b.img.rotation + dt * 8);
+      if (spec.look === 'spark' && !b.dead && Math.random() < dt * 30) this.trail(b.x, b.y);
       b.glow?.setPosition(b.x, b.y - CHEST).setDepth(b.y + 10);
       b.shadow.setPosition(b.x, b.y);
       if (b.dead) {
@@ -107,6 +151,13 @@ export class Shots {
       }
     }
     this.list = this.list.filter((b) => !b.dead);
+  }
+
+  // A fading mote left behind a spark.
+  private trail(x: number, y: number) {
+    const s = this.scene;
+    const m = s.add.image(x, y - CHEST, 'tt_dot').setTint(0xc8a0ff).setBlendMode(Phaser.BlendModes.ADD).setScale(0.16).setDepth(y + 10);
+    s.tweens.add({ targets: m, alpha: 0, scale: 0.04, y: m.y - 6, duration: 260, onComplete: () => m.destroy() });
   }
 
   // An orb's end: a flash and a ring, hitting everything around it.

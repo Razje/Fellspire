@@ -9,6 +9,8 @@ const OUT = '#1c1612';
 // Where the hand holds the pack's own Sword.png (400 x 128): on the grip, between
 // pommel and crossguard.
 export const SWORD_GRIP: [number, number] = [80, 64];
+// Where the other hand holds the Valkyrie's Shield.png (160 x 160): its middle.
+export const SHIELD_GRIP: [number, number] = [80, 80];
 
 function canvas(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: CanvasRenderingContext2D) => void) {
   if (scene.textures.exists(key)) return;
@@ -78,20 +80,46 @@ export function weaponParts(scene: Phaser.Scene): Record<string, PartSwap> {
     c.fillStyle = OUT; c.beginPath(); c.arc(22, 75, 22, 0, Math.PI * 2); c.fill();
     c.fillStyle = gold; c.beginPath(); c.arc(22, 75, 14, 0, Math.PI * 2); c.fill();
   });
-  // A pair of short daggers would be two parts; for the proof, one long knife.
-  canvas(scene, 'wpn_dagger', 260, 110, (c) => {
-    c.fillStyle = OUT; c.beginPath(); c.moveTo(20, 55); c.lineTo(110, 40); c.lineTo(245, 55); c.lineTo(110, 72); c.closePath(); c.fill();
-    c.fillStyle = OUT; c.beginPath(); c.roundRect(10, 38, 100, 34, 10); c.fill();
-    const g = c.createLinearGradient(0, 44, 0, 66); g.addColorStop(0, '#f4f8fc'); g.addColorStop(1, '#7a8898');
-    c.fillStyle = g; c.beginPath(); c.moveTo(110, 46); c.lineTo(232, 55); c.lineTo(110, 64); c.closePath(); c.fill();
-    c.fillStyle = '#4a2a14'; c.beginPath(); c.roundRect(18, 46, 70, 18, 6); c.fill();
-    c.fillStyle = '#e0b04a'; c.fillRect(92, 32, 14, 46);
+  // A long dagger along the sword's line, a little curved: one for each hand.
+  canvas(scene, 'wpn_dagger', 280, 110, (c) => {
+    // blade
+    c.fillStyle = OUT; c.beginPath(); c.moveTo(96, 34); c.quadraticCurveTo(200, 30, 272, 52); c.quadraticCurveTo(200, 80, 96, 76); c.closePath(); c.fill();
+    const g = c.createLinearGradient(0, 40, 0, 72); g.addColorStop(0, '#f4f8fc'); g.addColorStop(0.5, '#b8c4d0'); g.addColorStop(0.55, '#7a8898'); g.addColorStop(1, '#c8d2dc');
+    c.fillStyle = g; c.beginPath(); c.moveTo(100, 42); c.quadraticCurveTo(200, 40, 256, 53); c.quadraticCurveTo(200, 70, 100, 68); c.closePath(); c.fill();
+    c.strokeStyle = 'rgba(60,70,84,0.7)'; c.lineWidth = 3; c.beginPath(); c.moveTo(104, 55); c.quadraticCurveTo(180, 53, 230, 54); c.stroke();
+    // guard, grip and pommel
+    c.fillStyle = OUT; c.beginPath(); c.roundRect(80, 20, 24, 70, 9); c.fill();
+    const gold = c.createLinearGradient(0, 24, 0, 86); gold.addColorStop(0, '#fff1b8'); gold.addColorStop(0.5, '#e0b04a'); gold.addColorStop(1, '#8a5f1a');
+    c.fillStyle = gold; c.beginPath(); c.roundRect(85, 25, 14, 60, 6); c.fill();
+    c.fillStyle = OUT; c.beginPath(); c.roundRect(22, 40, 62, 30, 9); c.fill();
+    c.fillStyle = '#3a1e30'; c.beginPath(); c.roundRect(28, 46, 52, 18, 6); c.fill();
+    c.strokeStyle = '#6a3a5a'; c.lineWidth = 3;
+    for (let x = 34; x < 78; x += 11) { c.beginPath(); c.moveTo(x, 47); c.lineTo(x + 6, 63); c.stroke(); }
+    c.fillStyle = OUT; c.beginPath(); c.arc(20, 55, 17, 0, Math.PI * 2); c.fill();
+    c.fillStyle = gold; c.beginPath(); c.arc(20, 55, 10, 0, Math.PI * 2); c.fill();
+  });
+  // A short wand of dark wood, a violet gem in a gold cap.
+  canvas(scene, 'wpn_wand', 300, 90, (c) => {
+    c.strokeStyle = OUT; c.lineWidth = 24; c.beginPath(); c.moveTo(14, 45); c.lineTo(236, 45); c.stroke();
+    const g = c.createLinearGradient(0, 36, 0, 56); g.addColorStop(0, '#6a4a6a'); g.addColorStop(1, '#2a1626');
+    c.strokeStyle = g; c.lineWidth = 12; c.beginPath(); c.moveTo(16, 45); c.lineTo(234, 45); c.stroke();
+    c.strokeStyle = 'rgba(255,220,255,0.3)'; c.lineWidth = 3; c.beginPath(); c.moveTo(24, 41); c.lineTo(226, 41); c.stroke();
+    for (const x of [92, 220]) { c.fillStyle = OUT; c.fillRect(x - 9, 28, 18, 34); c.fillStyle = '#e0b04a'; c.fillRect(x - 4, 33, 8, 24); }
+    const glow = c.createRadialGradient(262, 45, 0, 262, 45, 40);
+    glow.addColorStop(0, 'rgba(210,160,255,0.9)'); glow.addColorStop(1, 'rgba(210,160,255,0)');
+    c.fillStyle = glow; c.fillRect(222, 5, 78, 80);
+    c.fillStyle = OUT; c.beginPath(); c.moveTo(262, 18); c.lineTo(288, 45); c.lineTo(262, 72); c.lineTo(236, 45); c.closePath(); c.fill();
+    const cg = c.createLinearGradient(240, 20, 285, 70); cg.addColorStop(0, '#f8eaff'); cg.addColorStop(0.5, '#a86af0'); cg.addColorStop(1, '#4a1a8a');
+    c.fillStyle = cg; c.beginPath(); c.moveTo(262, 27); c.lineTo(279, 45); c.lineTo(262, 63); c.lineTo(245, 45); c.closePath(); c.fill();
   });
   return {
     greatsword: { texture: 'wpn_greatsword', grip: { from: SWORD_GRIP, to: [92, 75], rest: 70 } },
     bow: { texture: 'wpn_bow', grip: { from: SWORD_GRIP, to: [150, 220], scale: 1.2, rest: -35 } },
     staff: { texture: 'wpn_staff', grip: { from: SWORD_GRIP, to: [190, 75], scale: 1.25, rest: 80 } },
-    dagger: { texture: 'wpn_dagger', grip: { from: SWORD_GRIP, to: [52, 55] } },
+    blades: { texture: 'wpn_dagger', grip: { from: SWORD_GRIP, to: [52, 55], rest: 60 }, front: 'Right Hand.png' },
+    // the second blade sits where the shield was, in the other hand
+    offhand: { texture: 'wpn_dagger', grip: { from: SHIELD_GRIP, to: [52, 55], angle: 0 } },
+    wand: { texture: 'wpn_wand', grip: { from: SWORD_GRIP, to: [60, 45], scale: 1.15, rest: 15 }, front: 'Right Hand.png' },
   };
 }
 
@@ -103,8 +131,8 @@ export function armRig(rig: Rig, kind: WeaponKind) {
   for (const f of ['Sword.png', 'Shield.png', 'SlashFX.png']) rig.skin.delete(f);
   if (kind !== 'sword') {
     rig.skin.set('Sword.png', { ...parts[kind], show: true });
-    rig.skin.set('Shield.png', { texture: null });
-    if (kind !== 'greatsword') rig.skin.set('SlashFX.png', { texture: null });
+    rig.skin.set('Shield.png', kind === 'blades' ? { ...parts.offhand, show: true } : { texture: null });
+    if (kind !== 'greatsword' && kind !== 'blades') rig.skin.set('SlashFX.png', { texture: null });
   }
   rig.step(0);
   return rig;

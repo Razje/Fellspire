@@ -29,6 +29,7 @@ export interface AttackSpec {
   slow?: number; // seconds a foe is slowed after the hit
   dot?: boolean; // ticking damage: no flinch, no knockback, no hit-stop
   quiet?: boolean; // no hit-stop or shake (many small hits at once)
+  stop?: number; // hit-stop in ms instead of the usual (short for quick weapons)
 }
 
 // Where a blow comes from: knockback pushes away from x, sparks sit on its side.
@@ -269,7 +270,7 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- combat -----------------------------------------------------------
 
-  private inReach(attacker: { x: number; y: number; facing: number }, x: number, y: number, spec: AttackSpec) {
+  inReach(attacker: { x: number; y: number; facing: number }, x: number, y: number, spec: AttackSpec) {
     const ahead = (x - attacker.x) * attacker.facing;
     if (spec.around ? Math.abs(x - attacker.x) > spec.range : ahead < -20 || ahead > spec.range) return false;
     return Math.abs(y - attacker.y) <= spec.depth;
@@ -326,7 +327,7 @@ export class RoomScene extends Phaser.Scene {
       if (hits > 0 && spec.heavy && fx.burn > 0) this.burnGround(attacker.x + attacker.facing * (spec.around ? 0 : 40), attacker.y, fx.burn);
     }
     if (hits > 0 && !spec.dot && !spec.quiet) {
-      this.hitStop(spec.heavy ? 85 : 45);
+      this.hitStop(spec.stop ?? (spec.heavy ? 85 : 45));
       if (spec.heavy) this.shake(110, 0.006);
     }
     if (this.player.isDead()) this.onPlayerDied();

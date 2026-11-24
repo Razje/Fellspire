@@ -81,16 +81,16 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
 | `src/hub.ts` | The camp between runs, which is room 0 of `RoomScene`: where things stand (`CAMP`), the campfire, the weapon rack and what it offers (`RACK_KINDS`), the chosen weapon remembered in the browser (`fellspire.weapon`) |
 | `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution (`strike`, the one path for swings, shots and skill areas) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
-| `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A new weapon type starts here |
+| `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash) and set its own hit-stop (`stop`). A new weapon type starts here |
 | `src/skills.ts` | How each skill plays out (`SKILL_TUNING` holds its numbers): it returns how long the hero is busy and puts an effect on the room that runs each frame |
-| `src/shots.ts` | The player's arrows, bolts and orbs in flight: first foe or barrel hit, piercing, bursting |
-| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (reads its moves and skill from `weapons.ts`; I is the skill key), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
+| `src/shots.ts` | The player's arrows, bolts, orbs and sparks in flight: first foe or barrel hit, piercing, bursting, a spread fanned up and down the floor, seeking (`homing`); `launch()` sends one with any velocity, for skills |
+| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (reads its moves and skill from `weapons.ts`; I is the skill key; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
 | `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
-| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff and dagger and `armRig()` that puts the carried weapon in the hand, `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
+| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger and wand and `armRig()` that puts the carried weapon in the hand (dual blades put the second dagger on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
@@ -160,6 +160,13 @@ Decorative, bundled from npm.
 - **The pack's sword is hidden (alpha 0) in Idle, Walking and Throwing**; it only
   shows while swinging. A drawn weapon swapped in for it sets `show` so it stays in
   the hand, and `rest` turns it upright while the pack would have hidden it.
+- **A swapped weapon can vanish behind the body.** At rest the pack keeps its sword's
+  layer at the very back, which a long staff or bow sticks out of but a short wand
+  does not. A swap with `front: 'Right Hand.png'` (`rig/Rig.ts`) is drawn just under
+  that hand whatever the pose. Found on the wand, 2026-11-24.
+- **Hit-stop costs quick weapons more.** 45 ms per hit nearly matched a dual-blade
+  cut's whole length and made the blades barely faster than the sword in a held-J
+  test; their light cuts use `stop: 22`.
 - Phaser tweens time themselves by the real clock, so stepping the game by hand
   in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 
