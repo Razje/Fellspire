@@ -92,7 +92,7 @@ test('make a hero on the first run, and change her later', async ({ page }, info
   expect(hudName).toBe(true);
   await shot(page, info, 'create-3-in-the-fight');
 
-  // the next New Run goes straight in; the Character item reopens creation
+  // the Character item reopens creation
   await page.reload();
   await waitForScene(page, 'menu');
   await page.waitForTimeout(400);
@@ -111,9 +111,11 @@ test('make a hero on the first run, and change her later', async ({ page }, info
   await page.waitForTimeout(600);
   expect(await game(page, `const m = game.scene.getScene('menu'); return [m.mode, m.sel];`)).toEqual(['menu', 1]); // back on Character
   expect((await saved(page)).helmet).toBe(1);
-  // New Run now starts the run directly
+  // New Run now asks Solo or Co-op (no hero to make any more); Solo starts the run
   await press(page, 'ArrowUp');
   await press(page, 'Enter');
+  expect(await game(page, `return game.scene.getScene('menu').mode;`)).toBe('newrun');
+  await press(page, 'Enter'); // Solo
   await waitForScene(page, 'room');
   expect(errors).toEqual([]);
 });

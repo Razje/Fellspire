@@ -28,7 +28,9 @@ export interface HeroLook {
 }
 
 export const NAME_MAX = 14;
-const KEY = 'fellspire.hero';
+// one saved hero per player: 0 is player 1 (and solo), 1 is player 2 in co-op
+export type Who = 0 | 1;
+const KEYS = ['fellspire.hero', 'fellspire.hero2'];
 
 export const DEFAULT_LOOK: HeroLook = { name: 'Valkyrie', helmet: 0, eyes: 0, armour: 0, skin: 3 };
 
@@ -51,9 +53,9 @@ function valid(l: Partial<HeroLook>): l is HeroLook {
 }
 
 // The saved character, or null when none has been made in this browser yet.
-export function savedLook(): HeroLook | null {
+export function savedLook(who: Who = 0): HeroLook | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEYS[who]);
     if (raw) {
       const l = JSON.parse(raw);
       if (valid(l)) return l;
@@ -66,23 +68,23 @@ export function savedLook(): HeroLook | null {
 
 // The look to draw: the saved one, else the default. Storage can be blocked, so
 // the last saved look is also kept here for this session.
-let current: HeroLook | null = null;
-export function heroLook(): HeroLook {
-  return current ?? savedLook() ?? DEFAULT_LOOK;
+const current: (HeroLook | null)[] = [null, null];
+export function heroLook(who: Who = 0): HeroLook {
+  return current[who] ?? savedLook(who) ?? DEFAULT_LOOK;
 }
 
-export function saveLook(l: HeroLook) {
-  current = { ...l, name: l.name.trim() };
+export function saveLook(l: HeroLook, who: Who = 0) {
+  current[who] = { ...l, name: l.name.trim() };
   try {
-    localStorage.setItem(KEY, JSON.stringify(current));
+    localStorage.setItem(KEYS[who], JSON.stringify(current[who]));
   } catch {
     /* not fatal: it lasts this session */
   }
 }
 
 // Has a character been made (this session or saved earlier)?
-export function hasHero() {
-  return current !== null || savedLook() !== null;
+export function hasHero(who: Who = 0) {
+  return current[who] !== null || savedLook(who) !== null;
 }
 
 // Loaded parts for every set? Without them the game draws the hero from frames.

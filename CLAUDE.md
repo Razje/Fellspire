@@ -30,7 +30,8 @@ node C:\IXON\fellspire\node_modules\vite\bin\vite.js C:\IXON\fellspire
 ```
 
 Then http://127.0.0.1:5180, http://127.0.0.1:5180/?boss to go straight to the
-boss fight, or http://127.0.0.1:5180/?camp for the camp. In Claude's browser pane, `preview_start` with the name
+boss fight, http://127.0.0.1:5180/?camp for the camp, or
+http://127.0.0.1:5180/?coop for the co-op lobby. In Claude's browser pane, `preview_start` with the name
 `fellspire` (from `C:\IXON\.claude\launch.json`). The pane pauses the game when it is
 hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen frame.
 `window.game` is the Phaser game in development builds, for inspecting state.
@@ -38,7 +39,7 @@ hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen fram
 ## A copy to send someone
 
 ```powershell
-node C:\IXONellspire	ools\package.mjs
+node C:\IXON\fellspire\tools\package.mjs
 ```
 
 Builds `release\Fellspire.html`, one self-contained file (art, fonts and code inside,
@@ -47,6 +48,15 @@ with a how-to-play note as `release\Fellspire-<date>.zip`. Checked on 2026-11-24
 opening it from disk in Edge and playing into room 1. Only the art the game shows
 goes in (`KEEP` in the script); the CraftPix licence allows art inside a game, not
 the source files on their own. `release/` is ignored by git.
+
+**Check every new package from disk before handing it over**: open
+`release\Fellspire.html` in Playwright's Edge (a `file://` URL), wait about 25 s for
+it to load, and play into the camp. The dev server and the test suite never see what
+`KEEP` leaves out. On 2026-11-24 the copy had been broken since character creation
+(8.2) mixed all three Valkyrie part sets while `KEEP` held only the first: the left-out
+Spriter files arrived empty and crashed the start-up on a blank title. `KEEP` now has
+all three, and `rig/parts.ts` skips an empty pack instead of crashing. The release
+build has no `window.game`, so drive it with keys, clicks and screenshots.
 
 ## Testing: after every change
 
@@ -71,8 +81,9 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
 | `src/scenes/MenuScene.ts` | Title screen and its menu (New Run, Character, Options, Credits); Options and Credits come from `ui/panels.ts`. Shows your hero at the campfire once one is made |
-| `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts room 1 after, `'menu'` returns to the open menu |
-| `src/hero.ts` | The player's character: the saved look (`fellspire.hero` in the browser), the names of the choices, `heroRig()` / `dressRig()` that put the look on a rig |
+| `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts the camp after, `'menu'` returns to the open menu, `'lobby'` to the co-op lobby; `who` is the player (0 or 1) |
+| `src/scenes/LobbyScene.ts` | The co-op lobby (`?coop`): two slots joined from any device, Ready / Change hero / Leave on each player's own keys; both ready sets the party and opens the camp |
+| `src/hero.ts` | The players' characters: the saved look per player (`fellspire.hero`, and `fellspire.hero2` for co-op's player 2), the names of the choices, `heroRig()` / `dressRig()` that put the look on a rig |
 | `src/scenes/HudScene.ts` | Runs on top of a room: unit frame, action bar, room plaque, objective, banners, pause menu, end screen. Owns Esc |
 | `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
 | `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `ChoiceRow` (◀ value ▶), `TextRow` (a typed name), `FocusList` (keys, stick and mouse), banner bands, the cursor |
@@ -93,7 +104,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
-| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`. Tests press `p.keys[...]`, the Phaser names of that device's keys |
+| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show. Tests press `p.keys[...]`, the Phaser names of that device's keys |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
 
@@ -177,6 +188,14 @@ Decorative, bundled from npm.
   being pushed. A knock meant to be felt needs 350 or more.
 - A screen over the room (the rack) needs a shade of about 0.9: at 0.66 the HUD's
   bars and key hints show through and clash with its own.
+- **Fight keys go by position (`KeyboardEvent.code`), not keyCode.** With Num Lock off,
+  Numpad 2 arrives as Arrow Down (keyCode 40), and Playwright's Edge always sends the
+  numpad that way, so Phaser's own keys (keyCode-based) cannot tell player 2's heavy
+  attack from walking down. `Controls` makes its own Phaser `Key`s and feeds them from
+  the keyboard events by code. It also remembers a press until read: releasing a Phaser
+  Key clears its JustDown, so a tap that goes down and up between two frames (every
+  `page.keyboard.press` in a test) was lost. And it ignores an event it has seen: a
+  duplicate key-down arriving after the key-up left the key held. Found 2026-11-24.
 - Phaser tweens time themselves by the real clock, so stepping the game by hand
   in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 

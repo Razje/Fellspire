@@ -59,3 +59,31 @@ test('each keyboard layout drives its own actions', async ({ page }) => {
   });
   expect(errors).toEqual([]);
 });
+
+test('the numpad works with Num Lock off, and a quick tap is not lost', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await waitForScene(page, 'menu');
+  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await waitForScene(page, 'room');
+  await page.evaluate(() => {
+    const s = (window as any).game.scene.getScene('room');
+    (window as any).game.loop.sleep(); // nothing reads the keys but us
+    (window as any).rightPad = new s.player.controls.constructor(s, { kind: 'right' });
+  });
+  // this browser sends the numpad as with Num Lock off: Numpad 2 types ArrowDown
+  const tap = async (k: string) => {
+    await page.keyboard.press(k); // down and up before anything reads it
+    return page.evaluate(() => { const i = (window as any).rightPad.read(); return { my: i.my, heavy: i.heavy, light: i.light }; });
+  };
+  expect(await tap('Numpad2')).toEqual({ my: 0, heavy: true, light: false });
+  expect(await tap('Numpad1')).toEqual({ my: 0, heavy: false, light: true });
+  // read once: the next read no longer sees it
+  expect(await page.evaluate(() => (window as any).rightPad.read().light)).toBe(false);
+  // the real arrow still moves
+  await page.keyboard.down('ArrowDown');
+  expect(await page.evaluate(() => (window as any).rightPad.read().my)).toBe(1);
+  await page.keyboard.up('ArrowDown');
+  expect(errors).toEqual([]);
+});

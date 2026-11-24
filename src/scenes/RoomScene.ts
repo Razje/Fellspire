@@ -11,6 +11,7 @@ import { canvas, makeTitleTextures } from '../titleArt';
 import { settings } from '../settings';
 import type { Action, HudScene } from './HudScene';
 import { newRun, type Run } from '../run';
+import { getParty } from '../input';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
 import { hi, keycap } from '../ui/kit';
 import { Shots } from '../shots';
@@ -170,7 +171,7 @@ export class RoomScene extends Phaser.Scene {
     this.shots = new Shots(this);
 
     const start = this.isCamp ? CAMP.start : { x: 150, y: 470 };
-    this.player = new Player(this, start.x, start.y);
+    this.player = new Player(this, start.x, start.y, getParty()[0]); // a second hero comes in 9.3
     if (this.startHp !== undefined) this.player.hp = this.startHp;
     // follow the body, not the feet, and lag a touch so movement reads
     cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);

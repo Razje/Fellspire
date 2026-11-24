@@ -37,6 +37,8 @@ test('New Run goes to the camp', async ({ page }) => {
   await page.keyboard.press('Enter'); // opens the menu
   await page.waitForTimeout(600);
   await page.keyboard.press('Enter'); // New Run
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Enter'); // Solo
   await waitForScene(page, 'room');
   expect(await room(page, 'return s.isCamp;')).toBe(true);
   expect(errors).toEqual([]);

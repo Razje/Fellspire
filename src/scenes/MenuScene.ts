@@ -3,7 +3,8 @@ import { makeTitleTextures } from '../titleArt';
 import { firstFrame, loadedAnims } from '../assets';
 import { CHARACTERS, type CharKey } from '../config';
 import { Button, keyHint } from '../ui/kit';
-import { openCredits, openOptions, type Panel } from '../ui/panels';
+import { openCredits, openOptions, openPanel, type Panel } from '../ui/panels';
+import { setParty } from '../input';
 import { C, RES, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import { hasHero, heroRig } from '../hero';
@@ -12,7 +13,7 @@ import type { Rig } from '../rig/Rig';
 const DISPLAY = '"Cinzel Decorative", "Cinzel", Georgia, serif';
 const SERIF = '"Cinzel", Georgia, serif';
 
-type Mode = 'intro' | 'prompt' | 'menu' | 'options' | 'credits' | 'leaving';
+type Mode = 'intro' | 'prompt' | 'menu' | 'options' | 'credits' | 'leaving' | 'newrun';
 
 export class MenuScene extends Phaser.Scene {
   private mode: Mode = 'intro';
@@ -314,12 +315,37 @@ export class MenuScene extends Phaser.Scene {
   private startRun() {
     if (this.mode !== 'menu') return;
     // the first run starts by making your hero
-    if (!hasHero()) { this.toCreate('run'); return; }
+    if (!hasHero()) { setParty([]); this.toCreate('run'); return; }
+    this.openNewRun();
+  }
+
+  // Solo or co-op: a small panel over the menu.
+  private openNewRun() {
+    this.mode = 'newrun';
+    this.panel = openPanel(this, 340, 250, 'New Run', 950, (f, close) => {
+      f.add(txt(this, 0, -66, 'Alone, or two on one screen?', 'body', { fontSize: '14px', color: C.body }).setOrigin(0.5));
+      const solo = new Button(this, 0, -20, 220, 38, 'Solo', () => { close(); this.toCamp(); }, 16);
+      const coop = new Button(this, 0, 28, 220, 38, 'Co-op', () => { close(); this.toLobby(); }, 16);
+      const back = new Button(this, 0, 82, 140, 30, 'Back', close, 13);
+      f.add([solo, coop, back]);
+      return [solo, coop, back];
+    }, () => this.panelClosed(), 0.75);
+  }
+
+  private toCamp() {
+    setParty([]); // solo
     this.mode = 'leaving';
     const cam = this.cameras.main;
     cam.flash(250, 255, 170, 90);
     this.time.delayedCall(150, () => cam.fade(700, 0, 0, 0, true));
     cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 0 })); // the camp
+  }
+
+  private toLobby() {
+    this.mode = 'leaving';
+    const cam = this.cameras.main;
+    cam.fade(400, 0, 0, 0, true);
+    cam.once('camerafadeoutcomplete', () => this.scene.start('lobby'));
   }
 
   private toCreate(then: 'run' | 'menu') {
@@ -344,7 +370,7 @@ export class MenuScene extends Phaser.Scene {
 
   private panelClosed() {
     this.panel = undefined;
-    this.mode = 'menu';
+    if (this.mode !== 'leaving') this.mode = 'menu';
   }
 
   // ---- input --------------------------------------------------------------------
@@ -374,6 +400,7 @@ export class MenuScene extends Phaser.Scene {
         break;
       case 'options':
       case 'credits':
+      case 'newrun':
         if (back) this.panel?.close();
         else this.panel?.list.nav(up, down, left, right, ok);
         break;

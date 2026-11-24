@@ -1,9 +1,10 @@
 // Character creation: name, helmet, eyes, armour and skin tone, with the hero
 // shown large and updating as you choose. Opens from the title screen: on the
 // first New Run (then straight into the run), or from its Character item (then
-// back to the menu). Until the hub exists (DESIGN.md 8.3), this is the hub's job.
+// back to the menu), or from the co-op lobby for either player (then back to it).
 import Phaser from 'phaser';
-import { ARMOURS, EYES, HELMETS, NAME_MAX, dressRig, heroLook, heroRig, randomLook, saveLook, type HeroLook } from '../hero';
+import { hasHero, ARMOURS, EYES, HELMETS, NAME_MAX, dressRig, heroLook, heroRig, randomLook, saveLook, type HeroLook, type Who } from '../hero';
+import type { Device } from '../input';
 import { SKIN_TONES } from '../rig/skin';
 import type { Rig } from '../rig/Rig';
 import { makeTitleTextures } from '../titleArt';
@@ -12,8 +13,11 @@ import { C, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 
 export interface CreateData {
-  // 'run': made on the way into a run, which starts after; 'menu': back to the title
-  then: 'run' | 'menu';
+  // 'run': made on the way into a run, which starts after; 'menu': back to the title;
+  // 'lobby': back to the co-op lobby
+  then: 'run' | 'menu' | 'lobby';
+  who?: Who; // whose hero: player 1 (the default) or player 2
+  device?: Device; // in co-op, the device of the player making it (a controller reads that pad)
 }
 
 const rgbNum = ([r, g, b]: [number, number, number]) => (r << 16) | (g << 8) | b;
@@ -21,6 +25,8 @@ const rgbNum = ([r, g, b]: [number, number, number]) => (r << 16) | (g << 8) | b
 export class CreateScene extends Phaser.Scene {
   private look!: HeroLook;
   private then: CreateData['then'] = 'menu';
+  private who: Who = 0;
+  private device: Device | undefined;
   private rig: Rig | null = null;
   private list!: FocusList;
   private nameRow!: TextRow;
@@ -35,7 +41,10 @@ export class CreateScene extends Phaser.Scene {
 
   init(data: CreateData) {
     this.then = data?.then ?? 'menu';
-    this.look = { ...heroLook() };
+    this.who = data?.who ?? 0;
+    this.device = data?.device;
+    // a first hero for player 2 starts from a random look, so the two differ
+    this.look = this.who === 1 && !hasHero(1) ? randomLook() : { ...heroLook(this.who) };
     this.rows = [];
     this.leaving = false;
     this.padPrev = [];
@@ -101,7 +110,8 @@ export class CreateScene extends Phaser.Scene {
 
   private buildPanel() {
     bandTextures(this); // the gold ornament divider
-    const f = new Frame(this, 690, 262, 400, 430, 'gold', this.then === 'run' ? 'Create your Hero' : 'Your Hero').setDepth(100);
+    const title = this.then === 'lobby' ? `Player ${this.who + 1}'s Hero` : this.then === 'run' ? 'Create your Hero' : 'Your Hero';
+    const f = new Frame(this, 690, 262, 400, 430, 'gold', title).setDepth(100);
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => { f.add(o); return o; };
     add(txt(this, 0, -170, 'One hero, every run. The weapon you carry decides how you fight.', 'small', { fontSize: '11px', color: C.body, strokeThickness: 0 }).setOrigin(0.5));
 
@@ -120,7 +130,7 @@ export class CreateScene extends Phaser.Scene {
     const random = add(new Button(this, 0, 74, 200, 32, 'Randomise', () => this.randomise(), 14));
     this.confirm = add(new Button(this, 0, 126, 220, 40, this.then === 'run' ? 'Begin the Run' : 'Done', () => this.finish(), 17));
     const items: Focusable[] = [this.nameRow, helmet, eyes, armour, skin, random, this.confirm];
-    if (this.then === 'menu') items.push(add(new Button(this, 0, 172, 160, 30, 'Cancel', () => this.leave(false), 13)));
+    if (this.then !== 'run') items.push(add(new Button(this, 0, 172, 160, 30, 'Cancel', () => this.leave(false), 13)));
     this.list = new FocusList(items, 1);
 
     const hint = this.add.container(0, 514).setDepth(100).setAlpha(0.8);
@@ -152,7 +162,7 @@ export class CreateScene extends Phaser.Scene {
 
   private finish() {
     if (this.look.name.trim().length === 0) return;
-    saveLook(this.look);
+    saveLook(this.look, this.who);
     this.leave(true);
   }
 
@@ -167,7 +177,8 @@ export class CreateScene extends Phaser.Scene {
       cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 0 })); // the camp
     } else {
       cam.fade(300, 0, 0, 0, true);
-      cam.once('camerafadeoutcomplete', () => this.scene.start('menu', { skipIntro: true }));
+      if (this.then === 'lobby') cam.once('camerafadeoutcomplete', () => this.scene.start('lobby', { back: true }));
+      else cam.once('camerafadeoutcomplete', () => this.scene.start('menu', { skipIntro: true }));
     }
   }
 
@@ -185,7 +196,7 @@ export class CreateScene extends Phaser.Scene {
     const right = is('ArrowRight', 'KeyD');
     const ok = is('Enter', 'NumpadEnter', 'Space', 'KeyJ');
     if (is('Tab')) e.preventDefault();
-    if (is('Escape')) { if (this.then === 'menu') this.leave(false); return; }
+    if (is('Escape')) { if (this.then !== 'run') this.leave(false); return; }
     // Enter on the name moves on to the next row
     if (ok && this.nameRow.focused) { this.list.focus(this.list.index + 1); return; }
     this.list.nav(up, down, left, right, ok);
@@ -196,7 +207,8 @@ export class CreateScene extends Phaser.Scene {
       this.rig.step(dms);
       if (this.rig.done) this.rig.play('Idle');
     }
-    const pad = this.input.gamepad?.pad1;
+    const gp = this.input.gamepad;
+    const pad = this.device?.kind === 'pad' ? gp?.getPad(this.device.index) : gp?.pad1;
     if (pad && !this.leaving) {
       const b = (i: number) => !!pad.buttons[i]?.pressed;
       const hit = (i: number) => b(i) && !this.padPrev[i];
@@ -204,7 +216,7 @@ export class CreateScene extends Phaser.Scene {
       const st = { u: sy < -0.5, d: sy > 0.5, l: sx < -0.5, r: sx > 0.5 };
       const was = { u: this.padPrev[99], d: this.padPrev[98], l: this.padPrev[97], r: this.padPrev[96] };
       this.list.nav(hit(12) || (st.u && !was.u), hit(13) || (st.d && !was.d), hit(14) || (st.l && !was.l), hit(15) || (st.r && !was.r), hit(0) || hit(9));
-      if (hit(1) && this.then === 'menu') this.leave(false);
+      if (hit(1) && this.then !== 'run') this.leave(false);
       if (hit(3)) this.randomise();
       this.padPrev = pad.buttons.map((x) => x.pressed);
       this.padPrev[99] = st.u; this.padPrev[98] = st.d; this.padPrev[97] = st.l; this.padPrev[96] = st.r;

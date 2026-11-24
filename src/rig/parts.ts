@@ -25,7 +25,11 @@ export function scmlOf(variant: string): Scml | undefined {
 export async function loadParts(scene: Phaser.Scene, variants: string[]): Promise<Map<string, Scml>> {
   for (const v of variants) {
     const path = Object.keys(scmls).find((p) => variantOf(p) === v);
-    if (path && !parsed.has(v)) parsed.set(v, parseScml((await scmls[path]()) as string));
+    if (!path || parsed.has(v)) continue;
+    const text = (await scmls[path]()) as string;
+    // a pack left out of the shared copy (tools/package.mjs) arrives empty: skip it
+    // rather than crash, and the game falls back to drawing from frames
+    if (text.trim()) parsed.set(v, parseScml(text));
   }
   let queued = 0;
   for (const [path, load] of Object.entries(pngs)) {

@@ -6,7 +6,8 @@
 //
 // Output: release/Fellspire.html and release/Fellspire-<date>.zip (both ignored
 // by git). Only the art the game uses goes in: the first colour variant of each
-// character pack and the hero's parts, not every variant on disk.
+// character pack and the hero's parts (all three Valkyrie sets, which character
+// creation mixes), not every variant on disk.
 import { build } from 'vite';
 import { readFile, writeFile, mkdir, rm, stat } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +20,7 @@ const dist = path.join(out, 'build');
 
 // The art the game shows; anything else under assets/ is left out of the package.
 const KEEP = [/\/assets\/characters\/hero\/Valkyrie_1\//, /\/assets\/characters\/ghoul\/Zombie_Villager_1\//,
-  /\/assets\/characters\/archer\/Skeleton_Warrior_1\//, /\/assets\/parts\/Valkyrie_1\//, /\/assets\/backgrounds\//];
+  /\/assets\/characters\/archer\/Skeleton_Warrior_1\//, /\/assets\/parts\/Valkyrie_[123]\//, /\/assets\/backgrounds\//];
 
 const leaveOut = {
   name: 'leave-out-unused-art',
@@ -86,6 +87,10 @@ Controls
   E                  open the chest when a room is cleared
   Esc                pause menu
 A game controller works too.
+
+New Run asks Solo or Co-op. Co-op is still being built: two players can join
+the lobby (J for the keyboard's left side, Numpad 1 for its right side, A on a
+controller), but for now only player 1 goes into the fight.
 
 Clear the waves in each room, open the chest and pick a reward, step through
 the rune gate. Room 4 holds the Lantern Warden. Good luck.

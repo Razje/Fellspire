@@ -12,6 +12,7 @@ import { RoomScene } from './scenes/RoomScene';
 import { HudScene } from './scenes/HudScene';
 import { RigLabScene } from './scenes/RigLabScene';
 import { CreateScene } from './scenes/CreateScene';
+import { LobbyScene } from './scenes/LobbyScene';
 import { ZOOM } from './ui/view';
 import { installCursor } from './ui/kit';
 
@@ -39,7 +40,7 @@ async function start() {
     backgroundColor: '#05070c',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     input: { gamepad: true },
-    scene: [BootScene, MenuScene, CreateScene, RoomScene, HudScene, RigLabScene],
+    scene: [BootScene, MenuScene, CreateScene, LobbyScene, RoomScene, HudScene, RigLabScene],
   });
   game.events.once(Phaser.Core.Events.READY, () => installCursor(game));
 

@@ -247,11 +247,17 @@ studied for its card and end-screen ideas only; none of its art is used.
    **Shift blocks**; Space is left free for a jump. A hero takes its input from one
    device (`src/input.ts`): solo (WASD or arrows plus the first controller, as before),
    the keyboard's left side (WASD, J K I L, Shift, E), its right side (arrows, numpad
-   1 light, 2 heavy, 3 dodge, 4 skill, 5 block, 0 interact; Num Lock on), or one
-   controller. Only solo is used until 9.2.
-   9.2 Starting a co-op run: New Run asks Solo or Co-op; each player claims a slot by
-   pressing a button on their own device, so keyboard + controller, two controllers
-   and two on one keyboard all work. Player 2 makes a character too (saved apart).
+   1 light, 2 heavy, 3 dodge, 4 skill, 5 block, 0 interact; Num Lock on or off), or
+   one controller.
+   9.2 **built** starting a co-op run (2026-11-24): New Run asks Solo, Co-op or Back
+   (the very first New Run still makes your hero first, then goes in solo). Co-op
+   opens the lobby (`?coop` on the address goes straight there): two slots, joined
+   with J (keyboard left side), Num 1 (right side) or A/Start on a controller, so
+   keyboard + controller, two controllers and two on one keyboard all work. In a slot
+   the player's own keys work it: light attack Ready, skill Change hero, heavy Leave.
+   Player 2's first join opens character creation for them (a random look to start
+   from), saved apart from player 1's. Both ready: into the camp. Until 9.3 the room
+   still holds only player 1's hero, driven by player 1's device.
    9.3 Two heroes in a room: the camera keeps both in view and they cannot walk apart
    off screen; enemies and the Warden go for the nearest living hero; each hero has
    their own weapon, skill and gear; a second unit frame and action bar on the right.
