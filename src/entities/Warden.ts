@@ -86,7 +86,7 @@ export class Warden extends Enemy {
     this.showPlate = false;
     this.body = 1.8;
     this.facing = -1;
-    this.tintColor = 0x8f84ad; // a cold, drowned grey-violet
+    this.tintColor = this.baseTint = 0x8f84ad; // a cold, drowned grey-violet
     this.H = this.visualHeight;
     lanternTexture(scene);
     this.lantern = scene.add.image(x, y, 'boss_lantern').setOrigin(0.5, 0.1).setScale(0.8);
@@ -128,6 +128,10 @@ export class Warden extends Enemy {
     if (heavy && this.resting) this.scene.shake(80, 0.004);
     if (this.phase === 1 && !this.isDead() && this.hp <= this.maxHp * WARDEN.phaseAt) this.breakLantern();
     return dealt;
+  }
+
+  takeDot(dmg: number): number {
+    return this.takeHit(dmg, this.x, 0, false);
   }
 
   die() {

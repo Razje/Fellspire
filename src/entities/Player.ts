@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Fighter } from './Fighter';
 import type { AttackSpec, RoomScene } from '../scenes/RoomScene';
+import type { WeaponKind } from '../loot';
 
 interface Move extends AttackSpec {
   anim: 'attack' | 'heavy';
@@ -9,13 +10,39 @@ interface Move extends AttackSpec {
   lunge: number; // pixels stepped forward before it lands
 }
 
+// Each weapon kind has its own moves: the light combo and the heavy attack.
 // Sizes are in room pixels at the arena scale (characters about 75 px tall).
-const LIGHT: Move[] = [
-  { anim: 'attack', dur: 0.28, hitAt: 0.11, dmg: 9, range: 58, depth: 22, knock: 80, lunge: 24 },
-  { anim: 'attack', dur: 0.28, hitAt: 0.11, dmg: 10, range: 58, depth: 22, knock: 95, lunge: 24 },
-  { anim: 'heavy', dur: 0.42, hitAt: 0.18, dmg: 17, range: 66, depth: 26, knock: 250, lunge: 56, heavy: true },
-];
-const HEAVY: Move = { anim: 'heavy', dur: 0.58, hitAt: 0.33, dmg: 28, range: 74, depth: 28, knock: 320, lunge: 44, heavy: true };
+// Damage here is before the weapon's own power and the gear's bonuses.
+const KITS: Record<WeaponKind, { light: Move[]; heavy: Move }> = {
+  longsword: {
+    light: [
+      { anim: 'attack', dur: 0.28, hitAt: 0.11, dmg: 9, range: 58, depth: 22, knock: 80, lunge: 24 },
+      { anim: 'attack', dur: 0.28, hitAt: 0.11, dmg: 10, range: 58, depth: 22, knock: 95, lunge: 24 },
+      { anim: 'heavy', dur: 0.42, hitAt: 0.18, dmg: 17, range: 66, depth: 26, knock: 250, lunge: 56, heavy: true },
+    ],
+    heavy: { anim: 'heavy', dur: 0.58, hitAt: 0.33, dmg: 28, range: 74, depth: 28, knock: 320, lunge: 44, heavy: true },
+  },
+  // slow and crushing, with reach; the heavy spins and hits both sides
+  greatblade: {
+    light: [
+      { anim: 'attack', dur: 0.38, hitAt: 0.17, dmg: 14, range: 72, depth: 26, knock: 130, lunge: 20 },
+      { anim: 'attack', dur: 0.38, hitAt: 0.17, dmg: 15, range: 72, depth: 26, knock: 140, lunge: 20 },
+      { anim: 'heavy', dur: 0.56, hitAt: 0.26, dmg: 25, range: 80, depth: 30, knock: 300, lunge: 40, heavy: true },
+    ],
+    heavy: { anim: 'heavy', dur: 0.72, hitAt: 0.4, dmg: 34, range: 86, depth: 32, knock: 340, lunge: 8, heavy: true, around: true },
+  },
+  // quick and light, four strikes; the heavy is a long lunge
+  rapier: {
+    light: [
+      { anim: 'attack', dur: 0.2, hitAt: 0.08, dmg: 6, range: 62, depth: 20, knock: 50, lunge: 26 },
+      { anim: 'attack', dur: 0.2, hitAt: 0.08, dmg: 6, range: 62, depth: 20, knock: 50, lunge: 26 },
+      { anim: 'attack', dur: 0.2, hitAt: 0.08, dmg: 7, range: 62, depth: 20, knock: 60, lunge: 26 },
+      { anim: 'heavy', dur: 0.32, hitAt: 0.13, dmg: 12, range: 68, depth: 22, knock: 170, lunge: 44, heavy: true },
+    ],
+    heavy: { anim: 'heavy', dur: 0.48, hitAt: 0.26, dmg: 22, range: 76, depth: 22, knock: 220, lunge: 120, heavy: true },
+  },
+};
+const DODGE_CD = 0.55;
 
 const SPEED = 205; // the same in every direction: the floor is a place, not a lane
 const ACCEL = 16; // how quickly speed follows the stick (higher = snappier)
@@ -23,7 +50,7 @@ const DODGE_TIME = 0.3;
 const DODGE_SPEED = 380;
 const AIM_Y = 0.55; // how much of a lunge goes up or down when aiming that way
 
-interface Input { mx: number; my: number; light: boolean; heavy: boolean; dodge: boolean; block: boolean }
+interface Input { mx: number; my: number; light: boolean; heavy: boolean; dodge: boolean; block: boolean; interact: boolean }
 
 export class Player extends Fighter {
   private keys: Record<string, Phaser.Input.Keyboard.Key>;
@@ -39,19 +66,28 @@ export class Player extends Fighter {
   private vy = 0;
   private dustT = 0;
   private padPrev: boolean[] = [];
+  interact = false; // E pressed this frame (open a chest)
 
   constructor(scene: RoomScene, x: number, y: number) {
-    super(scene, 'hero', x, y, 100);
-    this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,K,L,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
+    this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,K,L,E,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+  }
+
+  private get kit() {
+    return KITS[this.scene.stats.kind];
+  }
+
+  get dodgeCdMax() {
+    return DODGE_CD * (1 - this.scene.stats.fx.dodgeCd);
   }
 
   private readInput(): Input {
-    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, dodge: false, block: false };
+    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, dodge: false, block: false, interact: false };
     const k = this.keys;
     const jd = Phaser.Input.Keyboard.JustDown;
     const mx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
     const my = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    const inp: Input = { mx, my, light: jd(k.J), heavy: jd(k.K), dodge: jd(k.SPACE), block: k.L.isDown || k.SHIFT.isDown };
+    const inp: Input = { mx, my, light: jd(k.J), heavy: jd(k.K), dodge: jd(k.SPACE), block: k.L.isDown || k.SHIFT.isDown, interact: jd(k.E) };
 
     // Controller: stick (analogue) or d-pad, X light, Y heavy, A dodge, RB block.
     const pad = this.scene.input.gamepad?.pad1;
@@ -66,6 +102,7 @@ export class Player extends Fighter {
       inp.heavy ||= pressed(3);
       inp.dodge ||= pressed(0);
       inp.block ||= b(5);
+      inp.interact ||= pressed(1);
       this.padPrev = pad.buttons.map((x) => x.pressed);
     }
     return inp;
@@ -79,6 +116,7 @@ export class Player extends Fighter {
       return;
     }
     const inp = this.readInput();
+    this.interact = inp.interact;
     this.dodgeCd -= dt;
     let moving = false;
 
@@ -90,7 +128,7 @@ export class Player extends Fighter {
         if (this.comboTimer <= 0) this.combo = 0;
         if (inp.dodge && this.dodgeCd <= 0) { this.startDodge(inp); break; }
         if (inp.light) { this.aim(inp); this.startLight(); break; }
-        if (inp.heavy) { this.aim(inp); this.startMove(HEAVY); break; }
+        if (inp.heavy) { this.aim(inp); this.startMove(this.kit.heavy); break; }
         const blocking = inp.block;
         if (inp.mx !== 0 && !blocking) this.facing = Math.sign(inp.mx);
         // ease towards the wanted velocity: quick, but not instant
@@ -131,7 +169,7 @@ export class Player extends Fighter {
           this.buffer = null;
           this.aim(inp);
           if (b === 'light' && this.combo > 0) this.startLight();
-          else if (b === 'heavy') this.startMove(HEAVY);
+          else if (b === 'heavy') this.startMove(this.kit.heavy);
           else { this.state = 'idle'; this.stateT = 0; this.comboTimer = 0.4; }
         }
         break;
@@ -163,8 +201,9 @@ export class Player extends Fighter {
 
   private startLight() {
     this.scene.onPlayerAction('light');
-    const m = LIGHT[this.combo];
-    this.combo = (this.combo + 1) % LIGHT.length;
+    const light = this.kit.light;
+    const m = light[this.combo % light.length];
+    this.combo = (this.combo + 1) % light.length;
     this.comboTimer = 1;
     this.startMove(m);
   }
@@ -176,7 +215,7 @@ export class Player extends Fighter {
     this.state = 'attack';
     this.stateT = 0;
     this.playAnim(m.anim, { duration: m.dur * 1000, force: true });
-    if (m === HEAVY) this.scene.onPlayerAction('heavy');
+    if (m === this.kit.heavy) this.scene.onPlayerAction('heavy');
   }
 
   private startDodge(inp: Input) {
@@ -186,7 +225,7 @@ export class Player extends Fighter {
     this.state = 'dodge';
     this.stateT = 0;
     this.invuln = DODGE_TIME;
-    this.dodgeCd = 0.55;
+    this.dodgeCd = this.dodgeCdMax;
     this.move = null;
     this.combo = 0;
     this.playAnim('dodge', { duration: DODGE_TIME * 1000, force: true });
@@ -197,11 +236,13 @@ export class Player extends Fighter {
   takeHit(dmg: number, fromX: number, knock: number, heavy: boolean): number {
     if (this.isDead() || this.invuln > 0 || this.state === 'dodge') return -1;
     const fromFront = Math.sign(fromX - this.x) === this.facing;
+    const armor = this.scene.stats.fx.armor;
     if (this.state === 'block' && fromFront) {
       this.scene.blockSpark(this.x + this.facing * 18, this.y - this.visualHeight * 0.5);
-      return this.applyDamage(Math.round(dmg * 0.2), fromX, knock * 0.4, 0);
+      return this.applyDamage(Math.round(dmg * 0.2 * (1 - armor)), fromX, knock * 0.4, 0);
     }
-    const d = this.applyDamage(dmg, fromX, knock, heavy ? 0.4 : 0.22);
+    const d = this.applyDamage(Math.max(1, Math.round(dmg * (1 - armor))), fromX, knock, heavy ? 0.4 : 0.22);
+    this.scene.afterPlayerHurt();
     this.invuln = 0.5;
     this.move = null;
     this.combo = 0;

@@ -10,6 +10,8 @@ export abstract class Enemy extends Fighter {
   private readonly hpBar: Phaser.GameObjects.Graphics;
   protected showPlate = true; // the small health plate over the head
   body = 1; // how much floor the enemy takes up, 1 = a normal-sized one
+  slowT = 0; // seconds left of being slowed (frost)
+  protected baseTint: number | null = null;
   private lagFrac = 1;
   private plateAlpha = 0;
   protected speed: number;
@@ -34,6 +36,12 @@ export abstract class Enemy extends Fighter {
     return this.applyDamage(dmg, fromX, knock, heavy ? 0.5 : 0.3);
   }
 
+  // Damage that ticks (burning ground, lightning): no flinch, no knockback.
+  takeDot(dmg: number): number {
+    if (this.isDead()) return -1;
+    return this.applyDamage(dmg, this.x, 0, 0);
+  }
+
   die() {
     super.die();
     this.telegraph.clear();
@@ -51,6 +59,10 @@ export abstract class Enemy extends Fighter {
   update(dt: number) {
     this.physics(dt);
     this.attackCd -= dt;
+    if (this.slowT > 0) {
+      this.slowT -= dt;
+      this.tintColor = this.slowT > 0 ? 0x9fd0ff : this.baseTint;
+    }
     let moving = false;
     if (!this.isDead()) {
       if (this.state === 'hurt') {
@@ -79,7 +91,7 @@ export abstract class Enemy extends Fighter {
       this.playAnim('idle', { loop: true });
       return false;
     }
-    const step = Math.min(len, this.speed * speedMul * dt);
+    const step = Math.min(len, this.speed * speedMul * (this.slowT > 0 ? 0.5 : 1) * dt);
     this.x += (mx / len) * step;
     this.y += (my / len) * step;
     this.playAnim('walk', { loop: true });

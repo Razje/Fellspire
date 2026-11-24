@@ -7,7 +7,11 @@ import type { Fighter } from '../entities/Fighter';
 import { buildBlightwood, type Blightwood } from '../blightwood';
 import { canvas, makeTitleTextures } from '../titleArt';
 import { settings } from '../settings';
-import type { Action, HudScene, RunStats } from './HudScene';
+import type { Action, HudScene } from './HudScene';
+import { newRun, type Run } from '../run';
+import { gearStats, rollChest, type GearStats, type Item } from '../loot';
+import { hi, keycap } from '../ui/kit';
+import type { Breakable } from '../blightwood';
 import { shiftParallax, ZOOM } from '../ui/view';
 import { FONT, RES } from '../ui/theme';
 
@@ -17,6 +21,14 @@ export interface AttackSpec {
   depth: number; // how far up or down the ground strip it still connects
   knock: number;
   heavy?: boolean;
+  around?: boolean; // hits on both sides (a spin)
+}
+
+interface Coin { img: Phaser.GameObjects.Image; x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; value: number; dead: boolean }
+interface Fire { x: number; y: number; left: number; tick: number; dmg: number; objs: Phaser.GameObjects.Image[] }
+interface Chest {
+  img: Phaser.GameObjects.Image; runes: Phaser.GameObjects.Image; x: number; y: number;
+  prompt: Phaser.GameObjects.Container; locked: boolean; opened: boolean; items: Item[];
 }
 
 interface Wave { ghouls: number; throwers: number }
@@ -43,7 +55,13 @@ export class RoomScene extends Phaser.Scene {
   private freeze = 0;
   private startHp?: number;
   slain = 0; // in this room
-  run: RunStats = { rooms: 0, kills: 0, damage: 0, time: 0 };
+  run: Run = newRun();
+  stats!: GearStats; // what the gear carried adds up to
+  private coins: Coin[] = [];
+  private fires: Fire[] = [];
+  private chest: Chest | null = null;
+  private hitCount = 0; // for every-fifth-hit effects
+  private secondWindUsed = false;
   private world!: Blightwood;
   boss: Warden | null = null;
   cutscene = false; // the player cannot act (boss introduction)
@@ -57,7 +75,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // Phaser reuses the scene object on restart, so all state is reset here.
-  init(data: { room?: number; hp?: number; run?: RunStats; intro?: boolean }) {
+  init(data: { room?: number; hp?: number; run?: Run; intro?: boolean }) {
     this.room = data.room ?? 1;
     this.intro = data.intro ?? true;
     this.boss = null;
@@ -66,7 +84,13 @@ export class RoomScene extends Phaser.Scene {
     this.slow = { k: 1, left: 0 };
     this.emberFx = undefined;
     this.startHp = data.hp;
-    this.run = data.run ? { ...data.run } : { rooms: 0, kills: 0, damage: 0, time: 0 };
+    this.run = data.run ? { ...data.run } : newRun();
+    this.stats = gearStats(this.run.gear);
+    this.coins = [];
+    this.fires = [];
+    this.chest = null;
+    this.hitCount = 0;
+    this.secondWindUsed = false;
     this.enemies = [];
     this.projectiles = [];
     this.pickups = [];
@@ -121,6 +145,7 @@ export class RoomScene extends Phaser.Scene {
     cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
     cam.fadeIn(350);
 
+    if (!this.isBossRoom) this.placeChest();
     if (this.isBossRoom) {
       const b = new Warden(this, roomW / 2 + 260, (WORLD.groundTop + WORLD.groundBottom) / 2);
       this.boss = b;
@@ -188,10 +213,13 @@ export class RoomScene extends Phaser.Scene {
     }
 
     this.player.update(dt);
+    this.updateChest();
     for (const e of this.enemies) e.update(dt);
     this.separate();
     this.updateProjectiles(dt);
     this.updatePickups(dt);
+    this.updateCoins(dt);
+    this.updateFires(dt);
     if (!this.isBossRoom) this.updateWaves(dt);
     this.updateDark(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
@@ -201,20 +229,43 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- combat -----------------------------------------------------------
 
+  private inReach(attacker: { x: number; y: number; facing: number }, x: number, y: number, spec: AttackSpec) {
+    const ahead = (x - attacker.x) * attacker.facing;
+    if (spec.around ? Math.abs(x - attacker.x) > spec.range : ahead < -20 || ahead > spec.range) return false;
+    return Math.abs(y - attacker.y) <= spec.depth;
+  }
+
   resolveMelee(attacker: Fighter, spec: AttackSpec, targets: Fighter[]): number {
     let hits = 0;
+    const byPlayer = attacker === this.player;
+    const fx = this.stats.fx;
     for (const t of targets) {
       if (t.isDead()) continue;
-      const ahead = (t.x - attacker.x) * attacker.facing;
-      if (ahead < -20 || ahead > spec.range) continue;
-      if (Math.abs(t.y - attacker.y) > spec.depth) continue;
-      const dealt = t.takeHit(spec.dmg, attacker.x, spec.knock, !!spec.heavy);
+      if (!this.inReach(attacker, t.x, t.y, spec)) continue;
+      let dmg = spec.dmg;
+      let crit = false;
+      if (byPlayer) {
+        dmg *= this.stats.power * (1 + fx.damage);
+        if (t.hp / t.maxHp < 0.3) dmg *= 1 + fx.execute;
+        if (fx.crit > 0 && Math.random() < fx.crit) { dmg *= 2; crit = true; }
+        dmg = Math.max(1, Math.round(dmg));
+      }
+      const dealt = t.takeHit(dmg, attacker.x, spec.knock, !!spec.heavy);
       if (dealt < 0) continue;
       hits++;
-      const byPlayer = attacker === this.player;
-      if (byPlayer) this.run.damage += dealt;
-      this.combatText(t, dealt, byPlayer ? (spec.heavy ? 'heavy' : 'hit') : 'hurt');
+      if (byPlayer) {
+        this.run.damage += dealt;
+        this.onPlayerHit(t as Enemy, dealt);
+      } else if (t === this.player && dealt > 0 && fx.thorns > 0 && attacker instanceof Enemy) {
+        const back = attacker.takeDot(fx.thorns);
+        if (back > 0) this.combatText(attacker, back, 'burn');
+      }
+      this.combatText(t, dealt, byPlayer ? (crit ? 'crit' : spec.heavy ? 'heavy' : 'hit') : 'hurt');
       this.hitSpark(t.x - attacker.facing * 12, t.y - t.visualHeight * 0.5, byPlayer ? 0xfff1c0 : 0xff6b5e);
+    }
+    if (byPlayer) {
+      hits += this.smashProps(attacker, spec);
+      if (hits > 0 && spec.heavy && fx.burn > 0) this.burnGround(attacker.x + attacker.facing * (spec.around ? 0 : 40), attacker.y, fx.burn);
     }
     if (hits > 0) {
       this.hitStop(spec.heavy ? 85 : 45);
@@ -294,6 +345,9 @@ export class RoomScene extends Phaser.Scene {
   onEnemyDied(e: Enemy) {
     this.slain++;
     this.run.kills++;
+    this.spawnCoins(e.x, e.y, e.key === 'ghoul' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(3, 5));
+    const heal = this.stats.fx.lifeOnKill;
+    if (heal > 0) this.healPlayer(heal);
     if (Math.random() < 0.25) {
       const sprite = this.add.image(e.x, e.y - 10, 'ph_orb').setDepth(e.y + 5).setScale(0.8);
       this.pickups.push({ sprite, x: e.x, y: e.y, t: 0, dead: false });
@@ -307,7 +361,7 @@ export class RoomScene extends Phaser.Scene {
       o.sprite.setY(o.y - 10 - Math.sin(o.t * 4) * 3);
       if (!p.isDead() && Math.abs(p.x - o.x) < 24 && Math.abs(p.y - o.y) < 16) {
         o.dead = true;
-        const heal = Math.min(15, p.maxHp - p.hp);
+        const heal = Math.min(Math.round(15 * (1 + this.stats.fx.orbs)), p.maxHp - p.hp);
         p.hp += heal;
         if (heal > 0) this.combatText(p, heal, 'heal');
         o.sprite.destroy();
@@ -353,7 +407,8 @@ export class RoomScene extends Phaser.Scene {
     } else {
       this.gateOpen = true;
       this.world.openExit();
-      this.hud?.banner('good', 'Room Cleared', 'The rune gate has opened');
+      this.hud?.banner('good', 'Room Cleared', 'The chest is unsealed');
+      this.unlockChest();
     }
   }
 
@@ -381,6 +436,376 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
+
+  // ---- gear effects -----------------------------------------------------------
+
+  private healPlayer(n: number) {
+    const p = this.player;
+    if (p.isDead()) return;
+    const heal = Math.min(n, p.maxHp - p.hp);
+    if (heal <= 0) return;
+    p.hp += heal;
+    this.combatText(p, heal, 'heal');
+  }
+
+  private onPlayerHit(t: Enemy, _dealt: number) {
+    const fx = this.stats.fx;
+    if (fx.lifeOnHit > 0) {
+      const p = this.player;
+      p.hp = Math.min(p.maxHp, p.hp + fx.lifeOnHit);
+    }
+    if (fx.frost > 0 && !t.isDead()) t.slowT = Math.max(t.slowT, fx.frost);
+    this.hitCount++;
+    if (fx.storm > 0 && this.hitCount % 5 === 0) this.chainLightning(t, fx.storm);
+  }
+
+  // Called after the player takes a hit: the armor's second wind, once a room.
+  afterPlayerHurt() {
+    const p = this.player, sw = this.stats.fx.secondWind;
+    if (sw > 0 && !this.secondWindUsed && p.hp > 0 && p.hp < p.maxHp * 0.3) {
+      this.secondWindUsed = true;
+      this.healPlayer(sw);
+      const ring = this.add.ellipse(p.x, p.y, 30, 12).setStrokeStyle(3, 0x6dffa0, 1).setDepth(2);
+      this.tweens.add({ targets: ring, scaleX: 3, scaleY: 3, alpha: 0, duration: 500, onComplete: () => ring.destroy() });
+    }
+  }
+
+  private chainLightning(from: Enemy, dmg: number) {
+    const next = this.enemies
+      .filter((e) => e !== from && !e.isDead() && Math.hypot(e.x - from.x, (e.y - from.y) * 1.6) < 220)
+      .sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+    const to = next ?? from;
+    const ax = from.x, ay = from.y - from.visualHeight * 0.6, bx = to.x, by = to.y - to.visualHeight * 0.6 - (next ? 0 : 120);
+    const g = this.add.graphics().setDepth(19000).setBlendMode(Phaser.BlendModes.ADD);
+    for (const [w, c] of [[5, 0x4a8aff], [2, 0xe8f6ff]] as const) {
+      g.lineStyle(w, c, 1);
+      g.beginPath(); g.moveTo(ax, ay);
+      for (let i = 1; i < 6; i++) {
+        const k = i / 6;
+        g.lineTo(ax + (bx - ax) * k + (Math.random() - 0.5) * 18, ay + (by - ay) * k + (Math.random() - 0.5) * 18);
+      }
+      g.lineTo(bx, by); g.strokePath();
+    }
+    this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+    const dealt = to.takeDot(dmg);
+    if (dealt > 0) { this.combatText(to, dealt, 'storm'); this.run.damage += dealt; }
+  }
+
+  // Burning ground where a heavy attack lands: it hurts foes standing in it.
+  private burnGround(x: number, y: number, dmg: number) {
+    const objs: Phaser.GameObjects.Image[] = [];
+    objs.push(this.add.image(x, y, 'fw_pool').setTint(0xff6a20).setBlendMode(Phaser.BlendModes.ADD).setScale(1.1, 0.9).setAlpha(0.6).setDepth(0.5));
+    for (let i = 0; i < 4; i++) {
+      const fl = this.add.image(x + (i - 1.5) * 16 + (Math.random() - 0.5) * 6, y + (Math.random() - 0.5) * 10, 'tt_flame')
+        .setOrigin(0.5, 0.92).setScale(0.12, 0.16).setTint(i % 2 ? 0xffa03a : 0xff5a14).setBlendMode(Phaser.BlendModes.ADD).setDepth(y + 2);
+      this.tweens.add({ targets: fl, scaleY: 0.22, duration: 120 + Math.random() * 80, yoyo: true, repeat: -1 });
+      objs.push(fl);
+    }
+    this.fires.push({ x, y, left: 3, tick: 0.25, dmg, objs });
+  }
+
+  private updateFires(dt: number) {
+    for (const f of this.fires) {
+      f.left -= dt;
+      f.tick -= dt;
+      if (f.tick <= 0) {
+        f.tick = 0.5;
+        for (const e of this.enemies) {
+          if (e.isDead() || ((e.x - f.x) / 46) ** 2 + ((e.y - f.y) / 18) ** 2 > 1) continue;
+          const d = e.takeDot(f.dmg);
+          if (d > 0) { this.combatText(e, d, 'burn'); this.run.damage += d; }
+        }
+      }
+      if (f.left <= 0) {
+        this.tweens.add({ targets: f.objs, alpha: 0, duration: 300, onComplete: () => f.objs.forEach((o) => o.destroy()) });
+      }
+    }
+    this.fires = this.fires.filter((f) => f.left > 0);
+  }
+
+  // ---- gold, barrels and the chest ------------------------------------------------
+
+  private coinTexture() {
+    hi(this, 'coin', 12, 12, (c) => {
+      c.fillStyle = '#3a2204'; c.beginPath(); c.arc(6, 6, 5.6, 0, Math.PI * 2); c.fill();
+      const g = c.createLinearGradient(0, 1, 0, 11);
+      g.addColorStop(0, '#fff3b0'); g.addColorStop(0.5, '#f0b030'); g.addColorStop(1, '#b06a10');
+      c.fillStyle = g; c.beginPath(); c.arc(6, 6, 4.6, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(120,70,8,0.8)'; c.lineWidth = 0.8; c.beginPath(); c.arc(6, 6, 3, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.85)'; c.beginPath(); c.arc(4.4, 4.2, 1.1, 0, Math.PI * 2); c.fill();
+    });
+  }
+
+  // Coins spill out with a bounce, then fly to the hero once close (or once the room is won).
+  spawnCoins(x: number, y: number, n: number, value = 1) {
+    this.coinTexture();
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 70;
+      const img = this.add.image(x, y, 'coin').setScale(0.5);
+      this.coins.push({ img, x, y, z: 14, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.5, vz: 140 + Math.random() * 90, t: 0, value, dead: false });
+    }
+  }
+
+  private updateCoins(dt: number) {
+    const p = this.player;
+    for (const c of this.coins) {
+      c.t += dt;
+      const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
+      const pull = !p.isDead() && c.t > 0.45 && (d < 80 || this.gateOpen || !!this.boss?.isDead());
+      if (pull) {
+        const sp = 260 + c.t * 300;
+        c.x += (dx / (d || 1)) * Math.min(d, sp * dt);
+        c.y += (dy / (d || 1)) * Math.min(d, sp * dt);
+        c.z += (14 - c.z) * Math.min(1, dt * 8);
+        if (d < 8) {
+          c.dead = true;
+          this.run.gold += c.value;
+          if (c.value) this.hud?.goldPulse();
+          c.img.destroy();
+          continue;
+        }
+      } else {
+        c.vz -= 700 * dt;
+        c.z += c.vz * dt;
+        if (c.z <= 0) { c.z = 0; c.vz = Math.abs(c.vz) * 0.4; c.vx *= 0.6; c.vy *= 0.6; if (c.vz < 30) c.vz = 0; }
+        c.x += c.vx * dt; c.y += c.vy * dt;
+        c.y = Phaser.Math.Clamp(c.y, WORLD.groundTop, WORLD.groundBottom);
+      }
+      c.img.setPosition(c.x, c.y - 4 - c.z).setDepth(c.y + 4).setScale(0.5 * Math.max(0.25, Math.abs(Math.cos(c.t * 9))), 0.5);
+    }
+    this.coins = this.coins.filter((c) => !c.dead);
+  }
+
+  // The player's swing also splinters barrels and crates in reach.
+  private smashProps(attacker: Fighter, spec: AttackSpec): number {
+    let n = 0;
+    for (const b of this.world.breakables) {
+      if (b.hp <= 0 || !this.inReach(attacker, b.x, b.y, spec)) continue;
+      n++;
+      b.hp -= spec.heavy ? 2 : 1;
+      this.splinters(b.x, b.y - 14, b.hp <= 0 ? 14 : 5);
+      if (b.hp > 0) {
+        this.tweens.add({ targets: b.img, x: b.x + attacker.facing * 3, duration: 50, yoyo: true, repeat: 1 });
+      } else this.breakProp(b);
+    }
+    return n;
+  }
+
+  private breakProp(b: Breakable) {
+    b.img.destroy();
+    if (b.obstacle) {
+      const i = this.world.obstacles.indexOf(b.obstacle);
+      if (i >= 0) this.world.obstacles.splice(i, 1);
+    }
+    this.dust(b.x, b.y, 5);
+    if (Math.random() < 0.65) this.spawnCoins(b.x, b.y, Phaser.Math.Between(1, 3));
+    if (Math.random() < 0.1) {
+      const sprite = this.add.image(b.x, b.y - 10, 'ph_orb').setDepth(b.y + 5).setScale(0.8);
+      this.pickups.push({ sprite, x: b.x, y: b.y, t: 0, dead: false });
+    }
+  }
+
+  private splinters(x: number, y: number, n: number) {
+    const p = this.add.particles(x, y, 'tt_dot', {
+      speed: { min: 60, max: 170 }, angle: { min: 200, max: 340 }, gravityY: 520, lifespan: { min: 350, max: 700 },
+      scale: { start: 0.22, end: 0.08 }, tint: [0x8a5a2a, 0x6a4018, 0xb07a40], emitting: false,
+    }).setDepth(y + 30);
+    p.explode(n);
+    this.time.delayedCall(900, () => p.destroy());
+  }
+
+  private chestTextures() {
+    const wood = (c: CanvasRenderingContext2D, y0: number, y1: number) => {
+      const g = c.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, '#8a5228'); g.addColorStop(1, '#4a2810');
+      return g;
+    };
+    const gold = (c: CanvasRenderingContext2D, y0: number, y1: number) => {
+      const g = c.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, '#fff1b8'); g.addColorStop(0.4, '#e0b04a'); g.addColorStop(0.7, '#8a5f1a'); g.addColorStop(1, '#f0cf78');
+      return g;
+    };
+    const body = (c: CanvasRenderingContext2D) => {
+      c.fillStyle = '#140a04'; c.beginPath(); c.roundRect(4, 34, 72, 40, 4); c.fill();
+      c.fillStyle = wood(c, 36, 72); c.fillRect(7, 37, 66, 34);
+      c.strokeStyle = 'rgba(30,14,4,0.6)'; c.lineWidth = 1;
+      for (const y of [46, 56, 64]) { c.beginPath(); c.moveTo(8, y); c.lineTo(72, y); c.stroke(); }
+      c.fillStyle = gold(c, 36, 72);
+      for (const x of [12, 64]) c.fillRect(x, 36, 5, 36);
+      c.fillRect(6, 68, 68, 4);
+    };
+    hi(this, 'chest', 80, 76, (c) => {
+      body(c);
+      // the lid, closed
+      c.fillStyle = '#140a04'; c.beginPath(); c.moveTo(4, 38); c.lineTo(4, 22); c.quadraticCurveTo(40, 2, 76, 22); c.lineTo(76, 38); c.closePath(); c.fill();
+      c.fillStyle = wood(c, 8, 36); c.beginPath(); c.moveTo(7, 35); c.lineTo(7, 23); c.quadraticCurveTo(40, 6, 73, 23); c.lineTo(73, 35); c.closePath(); c.fill();
+      c.fillStyle = gold(c, 8, 38);
+      for (const x of [12, 64]) { c.beginPath(); c.moveTo(x, 35); c.lineTo(x, 16 + Math.abs(x - 40) * 0.05); c.lineTo(x + 5, 15 + Math.abs(x - 40) * 0.05); c.lineTo(x + 5, 35); c.closePath(); c.fill(); }
+      c.fillRect(6, 33, 68, 4);
+      // lock plate
+      c.fillStyle = '#140a04'; c.beginPath(); c.roundRect(33, 30, 14, 16, 3); c.fill();
+      c.fillStyle = gold(c, 30, 46); c.beginPath(); c.roundRect(34.5, 31.5, 11, 13, 2); c.fill();
+      c.fillStyle = '#2a1404'; c.beginPath(); c.arc(40, 37, 2, 0, Math.PI * 2); c.fill(); c.fillRect(39.2, 37, 1.6, 4);
+    });
+    hi(this, 'chest_open', 80, 76, (c) => {
+      // the lid thrown back, light pouring out
+      c.fillStyle = '#140a04'; c.beginPath(); c.moveTo(6, 30); c.lineTo(10, 4); c.lineTo(70, 4); c.lineTo(74, 30); c.closePath(); c.fill();
+      c.fillStyle = wood(c, 4, 30); c.beginPath(); c.moveTo(9, 28); c.lineTo(12, 7); c.lineTo(68, 7); c.lineTo(71, 28); c.closePath(); c.fill();
+      c.fillStyle = gold(c, 4, 30); c.fillRect(14, 7, 4, 21); c.fillRect(62, 7, 4, 21);
+      body(c);
+      const g = c.createLinearGradient(0, 30, 0, 44);
+      g.addColorStop(0, '#fff6c8'); g.addColorStop(1, '#e0a020');
+      c.fillStyle = g; c.fillRect(8, 33, 64, 8);
+    });
+  }
+
+  // A stone arch with a gilded crown, the runes on its stones dark until the room is won.
+  private shrineTextures() {
+    const stone = (c: CanvasRenderingContext2D, cx: number, cy: number, w: number, h: number, rot: number, seed: number) => {
+      c.save(); c.translate(cx, cy); c.rotate(rot);
+      const j = (k: number) => ((Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453) % 1) * 2.2;
+      c.beginPath();
+      c.moveTo(-w / 2 + j(1), -h / 2 + j(2)); c.lineTo(w / 2 - j(3), -h / 2 + j(4)); c.lineTo(w / 2 + j(5) * 0.5, h / 2 - j(6)); c.lineTo(-w / 2 - j(7) * 0.5, h / 2 + j(8) * 0.3); c.closePath();
+      c.fillStyle = '#0c1016'; c.lineWidth = 3; c.strokeStyle = '#0c1016'; c.stroke(); c.fill();
+      const g = c.createLinearGradient(0, -h / 2, 0, h / 2);
+      g.addColorStop(0, '#8496a8'); g.addColorStop(0.5, '#56687a'); g.addColorStop(1, '#344250');
+      c.fillStyle = g; c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(-w / 2 + 3, -h / 2 + 2, w - 8, 2);
+      c.restore();
+    };
+    const W = 150, H = 140, cx = W / 2, cy = 74, r = 56;
+    hi(this, 'shrine', W, H, (c) => {
+      // the dark recess inside the arch
+      c.fillStyle = '#05070b';
+      c.beginPath(); c.moveTo(cx - r + 14, H); c.lineTo(cx - r + 14, cy); c.arc(cx, cy, r - 14, Math.PI, 0); c.lineTo(cx + r - 14, H); c.closePath(); c.fill();
+      // pillars and arch stones
+      let k = 1;
+      for (const side of [-1, 1]) for (let i = 0; i < 3; i++) stone(c, cx + side * (r - 3), cy + 14 + i * 19, 24, 18, (i % 2 ? 0.06 : -0.05) * side, k++);
+      for (let i = 0; i <= 6; i++) {
+        const a = Math.PI + (i / 6) * Math.PI;
+        stone(c, cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4), 24, 18, a + Math.PI / 2, k++);
+      }
+      // the crown on top, and two gold shards beside it
+      const gold = c.createLinearGradient(0, 2, 0, 30);
+      gold.addColorStop(0, '#fff1b8'); gold.addColorStop(0.4, '#e0b04a'); gold.addColorStop(0.7, '#8a5f1a'); gold.addColorStop(1, '#f0cf78');
+      const crown = () => { c.beginPath(); c.moveTo(cx - 18, 28); c.lineTo(cx - 20, 10); c.lineTo(cx - 9, 19); c.lineTo(cx, 3); c.lineTo(cx + 9, 19); c.lineTo(cx + 20, 10); c.lineTo(cx + 18, 28); c.closePath(); };
+      c.lineWidth = 4; c.strokeStyle = '#140a04'; crown(); c.stroke();
+      c.fillStyle = gold; crown(); c.fill();
+      for (const s of [-1, 1]) {
+        c.save(); c.translate(cx + s * 34, 24); c.rotate(s * 0.5);
+        c.beginPath(); c.moveTo(0, -9); c.lineTo(6, 0); c.lineTo(0, 9); c.lineTo(-6, 0); c.closePath();
+        c.lineWidth = 3; c.strokeStyle = '#140a04'; c.stroke(); c.fillStyle = gold; c.fill();
+        c.restore();
+      }
+    });
+    hi(this, 'shrine_runes', W, H, (c) => {
+      c.strokeStyle = '#ffffff'; c.lineWidth = 1.6; c.lineCap = 'round';
+      const glyph = (x: number, y: number, n: number) => {
+        c.beginPath();
+        if (n % 3 === 0) { c.moveTo(x - 4, y - 4); c.lineTo(x, y + 4); c.lineTo(x + 4, y - 4); }
+        else if (n % 3 === 1) { c.moveTo(x, y - 5); c.lineTo(x, y + 5); c.moveTo(x - 4, y - 1); c.lineTo(x + 4, y + 2); }
+        else { c.moveTo(x - 4, y); c.lineTo(x, y - 4); c.lineTo(x + 4, y); c.lineTo(x, y + 4); c.closePath(); }
+        c.stroke();
+      };
+      let n = 0;
+      for (const side of [-1, 1]) for (let i = 0; i < 3; i++) glyph(cx + side * (r - 3), cy + 14 + i * 19, n++);
+      for (let i = 1; i <= 5; i += 2) { const a = Math.PI + (i / 6) * Math.PI; glyph(cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4), n++); }
+    });
+  }
+
+  // The chest waits at the back of the room from the start, sealed in its shrine.
+  private placeChest() {
+    this.chestTextures();
+    this.shrineTextures();
+    const x = WORLD.roomW / 2, y = WORLD.groundTop + 30;
+    this.add.image(x, y + 2, 'shrine').setOrigin(0.5, 1).setScale(0.5).setDepth(y - 2);
+    const runes = this.add.image(x, y + 2, 'shrine_runes').setOrigin(0.5, 1).setScale(0.5).setDepth(y - 1)
+      .setTint(0x7ffcf0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12);
+    const img = this.add.image(x, y + 4, 'chest').setOrigin(0.5, 0.94).setScale(0.5).setDepth(y).setTint(0x7a8494);
+    this.world.obstacles.push({ x, y, rx: 48, ry: 12 });
+    const prompt = this.add.container(x, y - 52).setDepth(19500).setAlpha(0);
+    const cap = keycap(this, 0, 0, 'E');
+    const label = this.add.text(16, 0, 'Open', { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 }).setOrigin(0, 0.5);
+    cap.x = -label.width / 2 - 4; label.x = cap.x + 14;
+    prompt.add([cap, label]);
+    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: rollChest(this.room) };
+  }
+
+  // The room is won: light falls on the chest, the runes wake, the seal is gone.
+  private unlockChest() {
+    const c = this.chest;
+    if (!c || !c.locked) return;
+    c.locked = false;
+    const beam = this.add.image(c.x, c.y - 150, 'tt_light').setTint(0xffe6a0).setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.55, 4.2).setAlpha(0).setDepth(c.y + 2);
+    const pool = this.add.image(c.x, c.y + 6, 'fw_pool').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setScale(1.8, 1.4).setAlpha(0).setDepth(0.5);
+    this.tweens.add({ targets: beam, alpha: 0.85, duration: 350, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: beam, alpha: 0.38, duration: 900, delay: 350 });
+    this.tweens.add({ targets: beam, scaleX: 0.5, duration: 1600, delay: 1250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: pool, alpha: 0.55, duration: 600 });
+    this.tweens.add({ targets: c.runes, alpha: 0.9, duration: 700, delay: 200 });
+    this.tweens.add({ targets: c.runes, alpha: 0.55, duration: 1300, delay: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.addCounter({ from: 0, to: 1, duration: 600, onUpdate: (t) => {
+      const v = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(0x7a8494), Phaser.Display.Color.ValueToColor(0xffffff), 1, t.getValue() ?? 0);
+      if (!c.opened) c.img.setTint(Phaser.Display.Color.GetColor(v.r, v.g, v.b));
+    } });
+    // motes drifting up through the light
+    this.add.particles(c.x, c.y - 10, 'tt_dot', {
+      x: { min: -30, max: 30 }, speedY: { min: -40, max: -15 }, lifespan: { min: 1200, max: 2400 },
+      scale: { start: 0.18, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [0xffe08a, 0xffffff], blendMode: 'ADD', frequency: 110,
+    }).setDepth(c.y + 3);
+    this.world.lights.push({ x: c.x, y: c.y + 20, radius: 150, strength: 0.7 });
+    this.shake(120, 0.003);
+  }
+
+  private chestNear() {
+    const c = this.chest, p = this.player;
+    return !!c && !c.locked && !c.opened && !p.isDead() && Math.hypot(p.x - c.x, (p.y - c.y) * 1.6) < 72;
+  }
+
+  private updateChest() {
+    const c = this.chest;
+    if (!c) return;
+    const near = this.chestNear();
+    c.prompt.setAlpha(Phaser.Math.Linear(c.prompt.alpha, near ? 1 : 0, 0.2)).setY(c.y - 52 + Math.sin(this.time.now / 250) * 2);
+    if (near && this.player.interact) this.openChest();
+  }
+
+  // Lid up, light out, then the HUD offers the three cards with the room paused.
+  openChest() {
+    const c = this.chest;
+    if (!c || c.opened) return;
+    c.opened = true;
+    c.img.setTexture('chest_open');
+    const burst = this.add.particles(c.x, c.y - 24, 'tt_dot', {
+      speed: { min: 40, max: 140 }, angle: { min: 220, max: 320 }, lifespan: { min: 500, max: 1000 },
+      scale: { start: 0.3, end: 0 }, tint: [0xffe08a, 0xffffff, 0xffb040], blendMode: 'ADD', emitting: false,
+    }).setDepth(c.y + 20);
+    burst.explode(40);
+    const glow = this.add.image(c.x, c.y - 30, 'tt_light').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setDepth(c.y + 19).setScale(0.3).setAlpha(0.9);
+    this.tweens.add({ targets: glow, scale: 1.4, alpha: 0.35, duration: 500 });
+    this.time.delayedCall(450, () => {
+      const hud = this.hud;
+      if (!hud || this.player.isDead()) return;
+      this.scene.pause();
+      hud.openChest(c.items, this.run.gear, (it) => {
+        this.equip(it);
+        this.scene.resume();
+      });
+    });
+  }
+
+  equip(it: Item) {
+    const g = this.run.gear;
+    if (it.cat === 'weapon') g.weapon = it;
+    else if (it.cat === 'armor') g.armor = it;
+    else g.trinkets.push(it);
+    const p = this.player, before = p.maxHp;
+    this.stats = gearStats(g);
+    p.maxHp = 100 + this.stats.fx.maxHp;
+    if (p.maxHp > before) p.hp += p.maxHp - before;
+    p.hp = Math.min(p.hp, p.maxHp);
+  }
 
   // ---- the boss fight -----------------------------------------------------
 
@@ -527,6 +952,8 @@ export class RoomScene extends Phaser.Scene {
   onBossDied(b: Warden) {
     this.run.rooms++;
     this.run.kills++;
+    this.run.gold += 60; // his hoard, counted at once so the victory screen has it
+    this.spawnCoins(b.x, b.y, 24, 0);
     // the killing blow in slow motion, then the light comes back
     this.slow = { k: 0.25, left: 1.6 };
     this.tweens.timeScale = 0.25;
@@ -555,17 +982,20 @@ export class RoomScene extends Phaser.Scene {
 
   // Floating combat text: your hits in white, heavy hits large and gold, damage
   // you take in red, heals in green. Each pops, then drifts up and away.
-  combatText(on: Fighter, n: number, kind: 'hit' | 'heavy' | 'hurt' | 'heal') {
+  combatText(on: Fighter, n: number, kind: 'hit' | 'heavy' | 'crit' | 'hurt' | 'heal' | 'burn' | 'storm') {
     if (!settings.damageNumbers && kind !== 'heal') return;
     const style = {
       hit: { size: 17, color: '#ffffff', pop: 1.5 },
       heavy: { size: 24, color: '#ffd100', pop: 1.9 },
+      crit: { size: 28, color: '#ffd100', pop: 2.2 },
       hurt: { size: 17, color: '#ff3b2f', pop: 1.4 },
       heal: { size: 17, color: '#3cff3c', pop: 1.3 },
+      burn: { size: 14, color: '#ff9a3a', pop: 1.2 },
+      storm: { size: 18, color: '#9fd8ff', pop: 1.6 },
     }[kind];
     const x = on.x + (Math.random() - 0.5) * 16;
     const y = on.y - on.visualHeight - 4;
-    const t = this.add.text(x, y, kind === 'heal' ? `+${n}` : String(n), {
+    const t = this.add.text(x, y, kind === 'heal' ? `+${n}` : kind === 'crit' ? `${n}!` : String(n), {
       fontFamily: FONT.head, fontSize: `${style.size}px`, fontStyle: '700', color: style.color,
       stroke: '#000000', strokeThickness: 4, resolution: RES * 1.5,
     }).setOrigin(0.5).setDepth(19000).setScale(style.pop);

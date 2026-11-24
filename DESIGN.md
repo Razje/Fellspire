@@ -51,6 +51,21 @@ The Valkyrie pack currently stands in for the hero.
 ## Loot and upgrades
 
 - Rarity colours: grey, white, green, blue, purple, orange.
+- **No loot on the floor** (Martijn, 2026-11-24). A big chest waits from the start
+  in a stone shrine at the top middle of each combat room, sealed and dark; when the
+  room is cleared a shaft of light falls on it and its runes wake (as in Lost Castle
+  2). E opens it and the room pauses for "Choose a weapon / an armor
+  kit / a trinket": three cards of one category, each of a random rarity, after Lost
+  Castle 2's treasure choice. Later rooms lean towards better rarities.
+- Weapons and armor replace what you carry; trinkets are all kept. A weapon cannot
+  change what the hero holds (her sword is in the art), so each kind changes how
+  she fights instead: Longsword (balanced, three strikes), Greatblade (slow,
+  reach, a spinning heavy), Rapier (fast, four strikes, a lunging heavy).
+- Effects: heal on hit or kill, burning ground from heavies, frost slows, chain
+  lightning every fifth hit, damage against the nearly dead, double-damage strikes,
+  thorns, second wind, faster dodge, stronger health orbs, more health.
+- Gold drops from enemies and from smashed barrels and crates (Lost Castle 2 does
+  the same). Nothing spends it yet; that comes with the merchant.
 - Trinkets are passives ("dodging leaves a frost patch"); combinations make runs differ.
 - Shrines offer picks from a small tree per class: three branches of five.
 
@@ -122,7 +137,10 @@ studied for its card and end-screen ideas only; none of its art is used.
    skeleton pack at twice the size, darkened, with a painted lantern) until a pack
    is chosen. Numbers to tune are `WARDEN` in `src/entities/Warden.ts` and `DARK`
    in `src/config.ts`.
-7. Gold and the first weapon drops.
+7. **built** Gold and loot (2026-11-24): coins from enemies and breakable barrels
+   and crates, the room chest in its shrine with three cards (weapons, armor kits or trinkets),
+   gear and trinkets on the HUD with hover tooltips, gold on the end screen.
+   Everything an item can be is in `src/loot.ts`.
 8. A second class, and two-player co-op on one screen.
 9. Hub camp with embers between runs.
 

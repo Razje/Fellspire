@@ -311,7 +311,11 @@ export interface Light { x: number; y: number; radius: number; strength: number 
 // A prop's footprint on the floor, an ellipse characters cannot enter.
 export interface Obstacle { x: number; y: number; rx: number; ry: number }
 
+// A barrel or crate that breaks after a couple of hits.
+export interface Breakable { x: number; y: number; img: Phaser.GameObjects.Image; obstacle?: Obstacle; hp: number }
+
 export interface Blightwood {
+  breakables: Breakable[];
   update(cam: Phaser.Cameras.Scene2D.Camera): void;
   lightAt(x: number, y: number): number;
   pushOut(p: { x: number; y: number }): void;
@@ -341,6 +345,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
   if (!scene.textures.exists('fw_floor')) makeBlightwoodTextures(scene);
   const lights: Light[] = [];
   const torches: (() => void)[] = [];
+  const breakables: Breakable[] = [];
   const obstacles: Obstacle[] = [];
 
   // ---- far background, parallax in both directions
@@ -371,18 +376,23 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
   const put = (name: string, x: number, y: number) => {
     const k = KINDS[name];
     placed.push({ x, y });
-    scene.add.image(x, y, k.key).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
-    if (k.rx) obstacles.push({ x, y, rx: k.rx, ry: k.ry });
+    const img = scene.add.image(x, y, k.key).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
+    const obstacle = k.rx ? { x, y, rx: k.rx, ry: k.ry } : undefined;
+    if (obstacle) obstacles.push(obstacle);
+    if (name === 'barrel' || name === 'crate') breakables.push({ x, y, img, obstacle, hp: 2 });
     if (k.glow) scene.add.image(x, y - 8, 'tt_light').setDepth(y - 1).setScale(0.3).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
     if (k.light) torches.push(addTorchFire(scene, x, y, k.scale, lights));
   };
   const exit = opts.boss ? { x: -9999, y: -9999 } : { x: roomW - 130, y: Math.round((groundTop + groundBottom) / 2) + 10 };
   const mid = (groundTop + groundBottom) / 2;
   const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || Math.hypot(x - exit.x, (y - exit.y) * 1.6) < 150
-    || (!!opts.boss && Math.hypot(x - roomW / 2, (y - mid) * 2.2) < 420);
+    || (!!opts.boss && Math.hypot(x - roomW / 2, (y - mid) * 2.2) < 420)
+    || (!opts.boss && Math.abs(x - roomW / 2) < 130 && y < groundTop + 80);
 
   // torches at fixed beats, back and front, so every room has its pools of light
-  for (const [x, y] of [[300, groundTop + 14], [760, groundTop + 8], [1180, groundTop + 14], [520, groundBottom - 6], [1000, groundBottom - 4]]) put('torch', x, y);
+  // (a combat room keeps the top middle for the chest's shrine, with a torch either side)
+  const backTorches = opts.boss ? [[760, groundTop + 8]] : [[652, groundTop + 12], [848, groundTop + 12]];
+  for (const [x, y] of [[300, groundTop + 14], ...backTorches, [1180, groundTop + 14], [520, groundBottom - 6], [1000, groundBottom - 4]]) put('torch', x, y);
   const backKinds = ['grave', 'grave', 'shroom', 'bones', 'stump', 'rock', 'fence'];
   for (let x = 60; x < roomW - 40; x += rnd.between(70, 140)) {
     const y = groundTop + rnd.between(4, 22);
@@ -431,7 +441,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = 
 
   let drift = 0;
   return {
-    exit, lights, obstacles,
+    exit, lights, obstacles, breakables,
     update() {
       drift += 0.35;
       if (fog) fog.tilePositionX = drift;

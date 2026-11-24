@@ -14,11 +14,14 @@ import { WORLD } from '../config';
 import { firstFrame, loadedAnims } from '../assets';
 import { Bar, Button, FocusList, Frame, Slot, bandTextures, hi, icon, keyHint, pic, CURSOR, CURSOR_HOVER } from '../ui/kit';
 import { openOptions, type Panel } from '../ui/panels';
+import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
+import { RARITY, type Gear, type Item } from '../loot';
+import type { Run } from '../run';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
 
-export interface RunStats { rooms: number; kills: number; damage: number; time: number }
+export type RunStats = Run;
 export type BannerKind = 'zone' | 'warn' | 'good';
 export type Action = 'light' | 'heavy' | 'dodge';
 
@@ -97,6 +100,10 @@ export class HudScene extends Phaser.Scene {
   private padPrev: boolean[] = [];
   private gateShown = false;
   private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
+  private goldText!: Phaser.GameObjects.Text;
+  private gearUi?: Phaser.GameObjects.Container;
+  private tip?: Phaser.GameObjects.Container;
+  private choice?: { cards: ItemCard[]; index: number; busy: boolean; root: Phaser.GameObjects.Container; pick: (i: number) => void };
   endKind: 'death' | 'victory' | null = null;
 
   constructor() {
@@ -116,6 +123,9 @@ export class HudScene extends Phaser.Scene {
     this.gateShown = false;
     this.bossBar = undefined;
     this.endKind = null;
+    this.gearUi = undefined;
+    this.tip = undefined;
+    this.choice = undefined;
   }
 
   create() {
@@ -127,6 +137,7 @@ export class HudScene extends Phaser.Scene {
     this.buildUnitFrame();
     this.buildPlaque();
     this.buildHints();
+    this.refreshGear();
     this.hurt = pic(this, viewW / 2, viewH / 2, 'ui_hurt').setDisplaySize(viewW, viewH).setTint(0x9a0000).setAlpha(0).setDepth(-10);
     this.lastHp = this.room.player?.hp ?? 100;
 
@@ -196,7 +207,11 @@ export class HudScene extends Phaser.Scene {
     this.objective = txt(this, ox + 8, 98, room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
     this.objectiveDone = txt(this, ox + 8, 114, '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
 
-    // kills over the whole run, bottom right
+    // gold and kills over the whole run, bottom right
+    const gf = new Frame(this, 902, 468, 92, 32, 'dark');
+    gf.add(pic(this, -26, 0, itemIcon(this, 'coin', 20)));
+    this.goldText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.gold }).setOrigin(0, 0.5);
+    gf.add(this.goldText);
     const k = new Frame(this, 902, 506, 92, 32, 'dark');
     k.add(pic(this, -26, 0, icon(this, 'skull', 22)));
     this.killText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.ivory }).setOrigin(0, 0.5);
@@ -249,8 +264,145 @@ export class HudScene extends Phaser.Scene {
       this.tweens.add({ targets: this.objectiveDone, alpha: 1, duration: 500 });
     }
     this.killText.setText(String(r.run.kills));
+    this.goldText.setText(String(r.run.gold));
 
     this.pollPad();
+  }
+
+  // ---- what you carry: weapon and armor beside the action bar, trinkets above the name ----
+
+  refreshGear() {
+    this.gearUi?.destroy();
+    this.hideTip();
+    const g = this.room.run.gear;
+    const root = this.add.container(0, 0);
+    this.gearUi = root;
+    const slot = (x: number, y: number, size: number, it: Item | null, emptyIcon: string) => {
+      const c = this.add.container(x, y);
+      c.add(this.add.rectangle(0, 0, size - 4, size - 4, 0x050505));
+      c.add(pic(this, 0, 0, itemIcon(this, it ? it.icon : emptyIcon, size - 6)).setAlpha(it ? 1 : 0.22));
+      c.add(pic(this, 0, 0, 'ui_slot_gloss').setScale((size / 40) * 0.5));
+      c.add(pic(this, 0, 0, 'ui_slot').setScale((size / 40) * 0.5));
+      if (it) {
+        const ring = this.add.rectangle(0, 0, size - 2, size - 2).setStrokeStyle(1.5, RARITY[it.rarity].tint, 0.95);
+        c.add(ring);
+        c.setSize(size, size).setInteractive({ cursor: 'default' });
+        c.on('pointerover', () => this.showTip(it, x, y - size / 2 - 6));
+        c.on('pointerout', () => this.hideTip());
+      }
+      root.add(c);
+      return c;
+    };
+    // a thin divider, then the weapon and the armor
+    root.add(this.add.rectangle(318, 492, 1, 30, 0xb89040, 0.5));
+    slot(342, 492, 40, g.weapon, 'longsword');
+    slot(388, 492, 40, g.armor, 'armor');
+    g.trinkets.forEach((t, i) => slot(128 + i * 27, 408, 24, t, t.icon));
+  }
+
+  private showTip(it: Item, x: number, bottom: number) {
+    this.hideTip();
+    const f = itemTooltip(this, it);
+    const h = f.fh + 24;
+    f.setPosition(Phaser.Math.Clamp(x, f.fw / 2 + 14, WORLD.viewW - f.fw / 2 - 14), Math.max(h / 2 + 4, bottom - h / 2)).setDepth(300).setAlpha(0);
+    this.tweens.add({ targets: f, alpha: 1, duration: 120 });
+    this.tip = f;
+  }
+
+  private hideTip() {
+    this.tip?.destroy();
+    this.tip = undefined;
+  }
+
+  goldPulse() {
+    this.tweens.killTweensOf(this.goldText);
+    this.goldText.setScale(1.25);
+    this.tweens.add({ targets: this.goldText, scale: 1, duration: 180, ease: 'Back.easeOut' });
+  }
+
+  // The chest's three cards, after Lost Castle 2's "Choose a treasure". The room
+  // is paused underneath; choose with keys, stick or mouse.
+  openChest(items: Item[], gear: Gear, onPick: (it: Item) => void) {
+    this.hideTip();
+    this.blurRoom(true);
+    const cx = viewW / 2;
+    const root = this.add.container(0, 0).setDepth(90);
+    const shade = this.add.rectangle(cx, viewH / 2, viewW, viewH, 0x05070c, 0.62).setInteractive();
+    const what = items[0].cat === 'weapon' ? 'Choose a weapon' : items[0].cat === 'armor' ? 'Choose an armor kit' : 'Choose a trinket';
+    const title = txt(this, cx, 42, what.toUpperCase(), 'head', { fontSize: '26px', letterSpacing: 4, strokeThickness: 6, padding: { x: 6, y: 6 } }).setOrigin(0.5);
+    gild(title, GOLD_STOPS);
+    const orn = pic(this, cx, 66, 'ui_ornament');
+    root.add([shade, title, orn]);
+    const cards = items.map((it, i) => new ItemCard(this, cx + (i - 1) * 228, 312, it, gear));
+    root.add(cards);
+    const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, 0xffd100).setStrokeStyle(1.5, 0x3a2000);
+    root.add(arrow);
+    const hint = this.add.container(0, 504);
+    const h1 = keyHint(this, 0, 0, ['A', 'D'], 'Choose');
+    const h2 = keyHint(this, h1.width + 18, 0, ['E'], 'Take');
+    hint.add([h1, h2]);
+    hint.x = cx - (h1.width + 18 + h2.width) / 2;
+    root.add(hint);
+
+    const ch = {
+      cards, index: 1, busy: false, root,
+      pick: (i: number) => {
+        if (ch.busy) return;
+        ch.busy = true;
+        const it = items[i];
+        cards[i].chosen();
+        arrow.setVisible(false);
+        cards.forEach((c, k) => { if (k !== i) this.tweens.add({ targets: c, alpha: 0, y: c.y + 30, duration: 260 }); });
+        this.time.delayedCall(560, () => {
+          this.tweens.add({ targets: root, alpha: 0, duration: 220, onComplete: () => root.destroy() });
+          this.blurRoom(false);
+          this.choice = undefined;
+          onPick(it);
+          this.refreshGear();
+          this.banner('good', it.cat === 'trinket' ? 'Trinket gained' : 'Equipped', it.name);
+        });
+      },
+    };
+    const focus = (i: number) => {
+      ch.index = (i + cards.length) % cards.length;
+      cards.forEach((c, k) => c.setFocus(k === ch.index));
+    };
+    cards.forEach((c, i) => {
+      c.onHover = () => { if (!ch.busy) focus(i); };
+      c.onPick = () => ch.pick(i);
+    });
+    this.choice = ch;
+    (ch as unknown as { focus: (i: number) => void }).focus = focus;
+
+    // in they come: the shade, the title, then the cards turning over one by one
+    shade.setAlpha(0); title.setAlpha(0); orn.setAlpha(0); hint.setAlpha(0); arrow.setAlpha(0);
+    this.tweens.add({ targets: shade, alpha: 1, duration: 250 });
+    this.tweens.add({ targets: [title, orn], alpha: 1, duration: 400, delay: 100 });
+    cards.forEach((c, i) => {
+      c.setAlpha(0).setScale(0.05, 1).setY(c.baseY + 40);
+      this.tweens.add({ targets: c, alpha: 1, scaleX: 1, y: c.baseY, duration: 380, delay: 200 + i * 120, ease: 'Back.easeOut' });
+    });
+    this.tweens.add({ targets: [hint, arrow], alpha: 1, duration: 300, delay: 700 });
+    this.time.delayedCall(640, () => focus(1));
+    const follow = () => {
+      const c = cards[ch.index];
+      if (c && arrow.active) arrow.setPosition(c.x, c.y - 220 + Math.sin(this.time.now / 160) * 4);
+    };
+    this.events.on('update', follow);
+    root.once('destroy', () => this.events.off('update', follow));
+  }
+
+  private chooseNav(left: boolean, right: boolean, ok: boolean) {
+    const ch = this.choice;
+    if (!ch || ch.busy) return;
+    const focus = (ch as unknown as { focus: (i: number) => void }).focus;
+    if (left) focus(ch.index - 1);
+    else if (right) focus(ch.index + 1);
+    else if (ok) ch.pick(ch.index);
+  }
+
+  get choosing() {
+    return !!this.choice;
   }
 
   // ---- the boss ----------------------------------------------------------------------------
@@ -368,7 +520,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   openPause() {
-    if (this.pause || this.end || !this.room.canPause()) return;
+    if (this.pause || this.end || this.choice || !this.room.canPause()) return;
     this.room.scene.pause();
     this.blurRoom(true);
     const root = this.add.container(0, 0).setDepth(100);
@@ -457,11 +609,12 @@ export class HudScene extends Phaser.Scene {
     const stats: [string, number, (v: number) => string][] = [
       ['Rooms cleared', run.rooms, (v) => String(Math.round(v))],
       ['Dead slain', run.kills, (v) => String(Math.round(v))],
+      ['Gold', run.gold, (v) => String(Math.round(v))],
       ['Damage dealt', run.damage, (v) => Math.round(v).toLocaleString('en-US')],
       ['Time', run.time, (v) => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`],
     ];
     const vals = stats.map(([label, , fmt], i) => {
-      const x = cx + (i - 1.5) * 132;
+      const x = cx + (i - (stats.length - 1) / 2) * 128;
       const v = txt(this, x, cy + 6, fmt(0), 'head', { fontSize: '28px', color: C.ivory, strokeThickness: 5 }).setOrigin(0.5);
       const l = txt(this, x, cy + 34, label.toUpperCase(), 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 2 }).setOrigin(0.5);
       root.add([v, l]);
@@ -509,6 +662,7 @@ export class HudScene extends Phaser.Scene {
     const right = code === 'ArrowRight' || code === 'KeyD';
     const ok = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyJ';
     const back = code === 'Escape' || code === 'Backspace';
+    if (this.choice) { this.chooseNav(left, right, ok || code === 'KeyE'); return; }
     if (this.end) {
       if (code === 'KeyR') this.restartRun();
       else if (code === 'Escape') this.toMenu();
@@ -538,7 +692,8 @@ export class HudScene extends Phaser.Scene {
     const down = hit(13) || (sy > 0.5 && !this.padPrev[98]);
     const left = hit(14) || (sx < -0.5 && !this.padPrev[97]);
     const right = hit(15) || (sx > 0.5 && !this.padPrev[96]);
-    if (this.end) this.end.list.nav(up, down, left, right, hit(0));
+    if (this.choice) this.chooseNav(left, right, hit(0));
+    else if (this.end) this.end.list.nav(up, down, left, right, hit(0));
     else if (this.pause || this.options) this.nav(up, down, left, right, hit(0), hit(1) || hit(9), false);
     else if (hit(9)) this.openPause();
     this.padPrev = pad.buttons.map((x) => x.pressed);

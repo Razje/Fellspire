@@ -64,10 +64,13 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
-| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution, projectiles, pickups, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
-| `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`) |
+| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
+| `src/entities/` | `Fighter` (shared body, damage, animation), `Player` (moves per weapon kind in `KITS`), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
+| `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
+| `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
+| `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `shrink.mjs`, `measure-feet.mjs` |
 
