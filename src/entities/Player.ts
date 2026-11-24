@@ -2,9 +2,8 @@ import Phaser from 'phaser';
 import { Fighter } from './Fighter';
 import type { AttackSpec, RoomScene } from '../scenes/RoomScene';
 import type { WeaponKind } from '../loot';
-import { CHARACTERS, HERO_PARTS } from '../config';
-import { Rig } from '../rig/Rig';
-import { scmlOf } from '../rig/parts';
+import { CHARACTERS } from '../config';
+import { heroRig } from '../hero';
 
 interface Move extends AttackSpec {
   anim: 'attack' | 'heavy';
@@ -75,9 +74,9 @@ export class Player extends Fighter {
     super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
     // drawn from parts when they are there: the frames' 900-pixel canvas maps to the
     // configured height, so the two are the same size
-    const scml = scmlOf(HERO_PARTS);
-    if (scml) {
-      this.rig = new Rig(scene, x, y, scml, HERO_PARTS, CHARACTERS.hero.height / 900);
+    const rig = heroRig(scene, x, y, CHARACTERS.hero.height / 900);
+    if (rig) {
+      this.rig = rig;
       this.sprite.setVisible(false);
       this.playAnim('idle', { loop: true, force: true });
     }

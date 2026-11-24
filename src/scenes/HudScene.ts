@@ -17,9 +17,8 @@ import { openOptions, type Panel } from '../ui/panels';
 import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
-import { HERO_PARTS } from '../config';
 import { Rig } from '../rig/Rig';
-import { scmlOf } from '../rig/parts';
+import { heroLook, heroRig } from '../hero';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
@@ -165,11 +164,11 @@ export class HudScene extends Phaser.Scene {
     this.add.circle(cx, cy, 37, 0x142231, 1);
     this.add.circle(cx, cy + 10, 30, 0x070b12, 0.6);
     // the hero's own head and shoulders, from her parts (or from a frame without them)
-    const scml = scmlOf(HERO_PARTS);
+    const size = 0.15;
+    const rig = heroRig(this, cx + 2, cy + 290 * size, size);
     let face: Phaser.GameObjects.Image | Rig;
-    if (scml) {
-      const size = 0.15;
-      face = this.portrait = new Rig(this, cx + 2, cy + 290 * size, scml, HERO_PARTS, size);
+    if (rig) {
+      face = this.portrait = rig;
     } else {
       const img = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero! : 'ph_hero');
       face = img.setScale(art ? 150 / img.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5);
@@ -178,7 +177,7 @@ export class HudScene extends Phaser.Scene {
     face.setMask(mask.createGeometryMask());
     pic(this, cx, cy - 2, 'ui_ring');
 
-    txt(this, 116, 432, 'Valkyrie', 'head', { fontSize: '15px' }).setOrigin(0, 0.5);
+    txt(this, 116, 432, heroLook().name, 'head', { fontSize: '15px' }).setOrigin(0, 0.5);
     this.hp = new Bar(this, 114, 444, 214, 15, 'health');
 
     const keys: [Action | 'block', 'light' | 'heavy' | 'dodge' | 'block', string][] = [
@@ -615,7 +614,7 @@ export class HudScene extends Phaser.Scene {
       : txt(this, cx, cy - 96, 'YOU HAVE FALLEN', 'title', { fontFamily: FONT.logo, fontSize: '46px', fontStyle: '900', strokeThickness: 7, stroke: '#1a0202', padding: { x: 16, y: 10 } }).setOrigin(0.5);
     gild(title, won ? GOLD_STOPS : RED_STOPS);
     if (title.preFX) { title.preFX.padding = 20; title.preFX.addGlow(won ? 0xffa030 : 0xff2a10, 2, 0, false, 0.1, 10); }
-    const sub = txt(this, cx, cy - 56, won ? 'The Lantern Warden falls, and the dead lie still at last.' : 'The Blightwood claims another soul.', 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
+    const sub = txt(this, cx, cy - 56, won ? `The Lantern Warden falls to ${heroLook().name}, and the dead lie still at last.` : `The Blightwood claims ${heroLook().name}.`, 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
     const orn = pic(this, cx, cy - 36, 'ui_ornament');
     root.add([title, sub, orn]);
 

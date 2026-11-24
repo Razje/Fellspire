@@ -70,10 +70,12 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/config.ts` | Tuning knobs: room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
-| `src/scenes/MenuScene.ts` | Title screen and its menu; Options and Credits come from `ui/panels.ts` |
+| `src/scenes/MenuScene.ts` | Title screen and its menu (New Run, Character, Options, Credits); Options and Credits come from `ui/panels.ts`. Shows your hero at the campfire once one is made |
+| `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts room 1 after, `'menu'` returns to the open menu |
+| `src/hero.ts` | The player's character: the saved look (`fellspire.hero` in the browser), the names of the choices, `heroRig()` / `dressRig()` that put the look on a rig |
 | `src/scenes/HudScene.ts` | Runs on top of a room: unit frame, action bar, room plaque, objective, banners, pause menu, end screen. Owns Esc |
 | `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
-| `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `FocusList` (keys, stick and mouse), banner bands, the cursor |
+| `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `ChoiceRow` (◀ value ▶), `TextRow` (a typed name), `FocusList` (keys, stick and mouse), banner bands, the cursor |
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
@@ -84,7 +86,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
 | `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
-| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn bow, staff and dagger |
+| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn bow, staff and dagger, `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
@@ -112,7 +114,8 @@ Decorative, bundled from npm.
 
 ## Things that bite
 
-- **The player is drawn from parts** (`src/rig/`, `HERO_PARTS` in `config.ts`) when
+- **The player is drawn from parts** (`src/rig/`, `HERO_PARTS` in `config.ts`, dressed
+  in the saved look by `hero.ts`, which mixes all three Valkyrie sets) when
   `assets/parts/` holds them; run `python -I tools/unpack-parts.py <zip> x` for each
   pack zip in `assets/packs/` on a new machine. Without them the game falls back to
   the frames. Enemies still use frames. `RIG_ANIMS` maps the game's animation names
@@ -140,6 +143,13 @@ Decorative, bundled from npm.
   `Key.isDown`/`JustDown` in the fight are not affected.
 - **Bash heredocs eat backslashes** in this harness (see `C:\IXON\CLAUDE.md`).
   Write scripts with the Write tool.
+- **A camera fade is ignored while another one runs.** `fadeOut` during the title's
+  1.4 s fade-in did nothing, so `camerafadeoutcomplete` never came and the screen never
+  changed. Leaving a scene uses `cam.fade(ms, 0, 0, 0, true)` (forced). Found by the
+  character creation test, 2026-11-24.
+- **Skin is found by colour** (`rig/skin.ts`): the most common warm, light colour in a
+  part, grown into every connected skin-like pixel, keeping only big areas. Gauntlets and
+  gloves have none and are left alone. A new pack's heads need checking against it.
 - Phaser tweens time themselves by the real clock, so stepping the game by hand
   in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 

@@ -4,7 +4,7 @@ import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
 import { screenCamera } from '../ui/view';
 import { loadParts, partVariants } from '../rig/parts';
-import { HERO_PARTS } from '../config';
+import { HERO_SETS } from '../hero';
 
 export class BootScene extends Phaser.Scene {
   private found: Partial<Record<CharKey, Record<string, string[]>>> = {};
@@ -35,8 +35,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create() {
-    // the hero is drawn from her separate parts (src/rig), if they are unpacked
-    if (partVariants().includes(HERO_PARTS)) await loadParts(this, [HERO_PARTS]);
+    // the hero is drawn from her separate parts (src/rig), if they are unpacked;
+    // all three Valkyrie sets, since character creation mixes them (hero.ts)
+    const sets = HERO_SETS.filter((v) => partVariants().includes(v));
+    if (sets.length) await loadParts(this, sets);
     const report: string[] = [];
     for (const key of Object.keys(CHARACTERS) as CharKey[]) {
       const frames = this.found[key] ?? {};

@@ -755,3 +755,99 @@ export function bandTextures(scene: Phaser.Scene) {
     gem(c, 60, 8, 3.5, 'red');
   });
 }
+
+// ---- choices and text entry, as rows (character creation) ----------------------------
+
+function choiceTextures(scene: Phaser.Scene) {
+  hi(scene, 'ui_arrow', 14, 18, (c) => {
+    c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(3, 2); c.lineTo(12, 9); c.lineTo(3, 16); c.closePath();
+    c.fillStyle = '#0a0603'; c.lineWidth = 3; c.strokeStyle = '#0a0603'; c.stroke(); c.fill();
+    c.beginPath(); c.moveTo(4, 4); c.lineTo(10.5, 9); c.lineTo(4, 14); c.closePath();
+    c.fillStyle = vgrad(c, 4, 14, GOLD); c.fill();
+  });
+  hi(scene, 'ui_field', 170, 24, (c) => {
+    rrect(c, 0.5, 0.5, 169, 23, 3); c.fillStyle = '#050505'; c.fill();
+    rrect(c, 1.5, 1.5, 167, 21, 2); c.fillStyle = vgrad(c, 1, 23, [[0, '#0a0b0d'], [1, '#1d2025']]); c.fill();
+    c.lineWidth = 1; c.strokeStyle = 'rgba(229,178,38,0.55)'; rrect(c, 1.5, 1.5, 167, 21, 2); c.stroke();
+  });
+}
+
+// Label on the left, "<  value  >" on the right; left and right step through the
+// choices, and the arrows can be clicked. swatch, when given, is a colour dot
+// beside the value (skin tones).
+export class ChoiceRow extends Row {
+  private value: Phaser.GameObjects.Text;
+  private dot?: Phaser.GameObjects.Arc;
+  constructor(scene: Phaser.Scene, x: number, y: number, text: string, private names: string[],
+    private get: () => number, private set: (i: number) => void, private swatch?: (i: number) => number) {
+    super(scene, x, y, text);
+    choiceTextures(scene);
+    const l = pic(scene, 20, 0, 'ui_arrow').setFlipX(true).setInteractive({ cursor: CURSOR_HOVER });
+    const r = pic(scene, 160, 0, 'ui_arrow').setInteractive({ cursor: CURSOR_HOVER });
+    l.on('pointerup', () => this.adjust(-1));
+    r.on('pointerup', () => this.adjust(1));
+    this.value = txt(scene, 90, 0, '', 'label', { fontSize: '14px', color: C.title }).setOrigin(0.5);
+    this.add([l, r, this.value]);
+    if (swatch) {
+      this.dot = scene.add.circle(0, 0, 6, 0xffffff).setStrokeStyle(1.5, 0x050505);
+      this.add(this.dot);
+    }
+    this.refresh();
+  }
+  refresh() {
+    const i = this.get();
+    this.value.setText(this.names[i]);
+    if (this.dot && this.swatch) {
+      this.dot.setFillStyle(this.swatch(i));
+      this.value.setX(98);
+      this.dot.setX(98 - this.value.width / 2 - 11);
+    }
+  }
+  activate() { this.adjust(1); }
+  adjust(dir: number) {
+    const n = this.names.length;
+    this.set((((this.get() + dir) % n) + n) % n);
+    this.refresh();
+    this.scene.tweens.add({ targets: this.value, scale: { from: 1.15, to: 1 }, duration: 140, ease: 'Quad.easeOut' });
+  }
+}
+
+// A one-line text field. While it has focus, typing goes into it (typeKey()), so
+// the screen sends it printable keys and Backspace (typeKey) before treating them as moves.
+export class TextRow extends Row {
+  private value: Phaser.GameObjects.Text;
+  private caret: Phaser.GameObjects.Rectangle;
+  focused = false;
+  constructor(scene: Phaser.Scene, x: number, y: number, text: string, private get: () => string, private set: (s: string) => void, private max: number) {
+    super(scene, x, y, text);
+    choiceTextures(scene);
+    this.add(pic(scene, 90, 0, 'ui_field'));
+    this.value = txt(scene, 90, 0, '', 'label', { fontSize: '14px', color: C.title }).setOrigin(0.5);
+    this.caret = scene.add.rectangle(0, 0, 1.5, 14, 0xffea89).setVisible(false);
+    this.add([this.value, this.caret]);
+    scene.tweens.add({ targets: this.caret, alpha: 0, duration: 450, yoyo: true, repeat: -1, ease: 'Stepped' });
+    this.on('pointerup', () => this.onHover?.());
+    this.refresh();
+  }
+  refresh() {
+    this.value.setText(this.get());
+    this.caret.setX(90 + this.value.width / 2 + 2);
+  }
+  setFocus(on: boolean) {
+    super.setFocus(on);
+    this.focused = on;
+    this.caret.setVisible(on);
+  }
+  activate() { /* Enter moves on; the screen handles that */ }
+  // A key while focused: returns true when it was typing.
+  typeKey(key: string): boolean {
+    const s = this.get();
+    if (key === 'Backspace') { this.set(s.slice(0, -1)); this.refresh(); return true; }
+    if (key.length === 1 && /[\p{L}\p{N} '\-]/u.test(key)) {
+      if (s.length < this.max && !(key === ' ' && (s === '' || s.endsWith(' ')))) { this.set(s + key); this.refresh(); }
+      return true;
+    }
+    return false;
+  }
+}

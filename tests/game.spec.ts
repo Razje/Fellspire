@@ -60,15 +60,18 @@ test('menu responds to the keyboard, one step per key', async ({ page }) => {
   await expect.poll(state).toEqual({ mode: 'menu', sel: 0 });
   await press('ArrowDown');
   expect(await state()).toEqual({ mode: 'menu', sel: 1 });
+  await press('ArrowDown');
+  expect(await state()).toEqual({ mode: 'menu', sel: 2 });
   await press('Enter'); // Options
   expect(await state()).toMatchObject({ mode: 'options' });
   await press('Escape');
-  expect(await state()).toEqual({ mode: 'menu', sel: 1 });
+  expect(await state()).toEqual({ mode: 'menu', sel: 2 });
+  await press('ArrowUp');
   await press('ArrowUp');
   expect(await state()).toEqual({ mode: 'menu', sel: 0 });
-  await press('Enter'); // New Run
+  await press('Enter'); // New Run: no hero made yet, so character creation first
   expect(await state()).toMatchObject({ mode: 'leaving' });
-  await waitForScene(page, 'room');
+  await waitForScene(page, 'create');
 });
 
 test('fight scene draws the Blightwood', async ({ page }, info) => {

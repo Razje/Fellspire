@@ -38,6 +38,7 @@ test('title menu and its panels', async ({ page }, info) => {
   await shot(page, info, '1-title-menu');
 
   await press(page, 'ArrowDown');
+  await press(page, 'ArrowDown');
   await press(page, 'Enter'); // Options
   await page.waitForTimeout(300);
   await shot(page, info, '2-options');
@@ -91,6 +92,7 @@ test('HUD, pause menu and end screen', async ({ page }, info) => {
   await page.waitForTimeout(300);
   await shot(page, info, '6-pause');
 
+  await press(page, 'ArrowDown');
   await press(page, 'ArrowDown');
   await press(page, 'Enter'); // Options, over the pause menu
   await page.waitForTimeout(300);

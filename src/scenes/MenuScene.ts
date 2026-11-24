@@ -6,6 +6,8 @@ import { Button, keyHint } from '../ui/kit';
 import { openCredits, openOptions, type Panel } from '../ui/panels';
 import { C, RES, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
+import { hasHero, heroRig } from '../hero';
+import type { Rig } from '../rig/Rig';
 
 const DISPLAY = '"Cinzel Decorative", "Cinzel", Georgia, serif';
 const SERIF = '"Cinzel", Georgia, serif';
@@ -24,12 +26,16 @@ export class MenuScene extends Phaser.Scene {
   private sel = 0;
   private panel?: Panel;
   private padPrev: boolean[] = [];
+  private skipIntro = false;
+  private heroRig: Rig | null = null;
 
   constructor() {
     super('menu');
   }
 
-  init() {
+  init(data?: { skipIntro?: boolean }) {
+    this.skipIntro = !!data?.skipIntro;
+    this.heroRig = null;
     this.mode = 'intro';
     this.layers = [];
     this.buttons = [];
@@ -52,8 +58,15 @@ export class MenuScene extends Phaser.Scene {
     txt(this, 948, 530, 'prototype v0.2', 'small', { color: '#8a9aa6', strokeThickness: 0 })
       .setOrigin(1, 1).setDepth(900).setAlpha(0.6);
 
-    this.cameras.main.fadeIn(1400, 0, 0, 0);
-    this.time.delayedCall(2300, () => this.showPrompt());
+    // back from character creation: straight to the open menu
+    if (this.skipIntro) {
+      this.cameras.main.fadeIn(400, 0, 0, 0);
+      this.openMenu();
+      this.select(1); // still on Character
+    } else {
+      this.cameras.main.fadeIn(1400, 0, 0, 0);
+      this.time.delayedCall(2300, () => this.showPrompt());
+    }
 
     // Phaser sometimes hands the same browser event over twice (seen in tests:
     // identical timestamps), which moved the selection two places. Handle each once.
@@ -114,9 +127,18 @@ export class MenuScene extends Phaser.Scene {
     this.buildCampfire(470, 470);
 
     // the Valkyrie keeping watch, lit by the fire on her right side
-    const hero = this.character('hero', 384, 478, 232, false);
-    hero.setTint(0x8c98bc, 0xffc999, 0x8c98bc, 0xffc999);
-    this.layer(hero, 0.75);
+    // (your own hero once you have made one, drawn from her parts)
+    const rig = hasHero() ? heroRig(this, 384, 478, 232 / 900) : null;
+    if (rig) {
+      this.heroRig = rig.setDepth(50);
+      rig.tintAll(0xd8c0b0);
+      this.add.ellipse(384, 476, 232 * 0.32, 14, 0x000000, 0.45).setDepth(49);
+      this.layer(rig, 0.75);
+    } else {
+      const hero = this.character('hero', 384, 478, 232, false);
+      hero.setTint(0x8c98bc, 0xffc999, 0x8c98bc, 0xffc999);
+      this.layer(hero, 0.75);
+    }
 
     // the dead, creeping in from the dark
     const z = this.character('ghoul', 832, 488, 220, true);
@@ -239,11 +261,12 @@ export class MenuScene extends Phaser.Scene {
 
     const items: [string, () => void][] = [
       ['New Run', () => this.startRun()],
+      ['Character', () => this.toCreate('menu')],
       ['Options', () => this.openOptions()],
       ['Credits', () => this.openCredits()],
     ];
     items.forEach(([label, act], i) => {
-      const b = new Button(this, 172, 262 + i * 62, 236, 44, label, () => { if (this.mode === 'menu') act(); }, 19);
+      const b = new Button(this, 172, 256 + i * 52, 236, 44, label, () => { if (this.mode === 'menu') act(); }, 19);
       b.onHover = () => { if (this.mode === 'menu') this.select(i); };
       this.buttons.push(b);
       this.menu.add(b);
@@ -290,11 +313,21 @@ export class MenuScene extends Phaser.Scene {
 
   private startRun() {
     if (this.mode !== 'menu') return;
+    // the first run starts by making your hero
+    if (!hasHero()) { this.toCreate('run'); return; }
     this.mode = 'leaving';
     const cam = this.cameras.main;
     cam.flash(250, 255, 170, 90);
-    this.time.delayedCall(150, () => cam.fadeOut(700, 0, 0, 0));
+    this.time.delayedCall(150, () => cam.fade(700, 0, 0, 0, true));
     cam.once('camerafadeoutcomplete', () => this.scene.start('room', { room: 1 }));
+  }
+
+  private toCreate(then: 'run' | 'menu') {
+    if (this.mode !== 'menu') return;
+    this.mode = 'leaving';
+    const cam = this.cameras.main;
+    cam.fade(400, 0, 0, 0, true); // forced: a fade-in still running would swallow it
+    cam.once('camerafadeoutcomplete', () => this.scene.start('create', { then }));
   }
 
   // ---- panels -----------------------------------------------------------------
@@ -351,6 +384,7 @@ export class MenuScene extends Phaser.Scene {
     // gentle parallax: nearer layers drift further with the mouse
     this.look += (this.lookTarget - this.look) * Math.min(1, dms / 400);
     for (const l of this.layers) l.obj.x = l.baseX - this.look * 34 * l.depth;
+    this.heroRig?.step(dms);
 
     const pad = this.input.gamepad?.pad1;
     if (pad) {

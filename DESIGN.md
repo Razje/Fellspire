@@ -184,7 +184,11 @@ studied for its card and end-screen ideas only; none of its art is used.
    Everything an item can be is in `src/loot.ts`.
 8. **in progress** Character creation and weapon choice in the hub, in parts:
    8.1 **done** the hero drawn from her parts in the fight (and the HUD portrait);
-   8.2 character creation; 8.3 the hub with weapon rack and portal; 8.4 the weapon
+   8.2 **built** character creation (2026-11-24): name, helmet, eyes, armour set and
+   skin tone (seven tones, recoloured from the art), Randomise; the first New Run opens
+   it, the title menu's Character item reopens it, the hero is remembered in the
+   browser and shown at the title campfire, in the fight, on the HUD and the end screen;
+   8.3 the hub with weapon rack and portal; 8.4 the weapon
    framework, skill key and the first four weapons (sword and shield, two-handed,
    bow, staff); 8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
    Overall: make a character with
