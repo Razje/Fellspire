@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CHARACTERS, LOOPING, type CharKey } from '../config';
+import { CHARACTERS, LOOPING, ZONE, type CharKey } from '../config';
 import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
 import { screenCamera } from '../ui/view';
@@ -54,6 +54,8 @@ export class BootScene extends Phaser.Scene {
     console.info('[fellspire] art found\n' + report.join('\n') + `\nbackground layers: ${this.registry.get('bgCount')}`);
 
     makePlaceholderTextures(this);
-    this.scene.start('menu');
+    // ?boss in the address goes straight to the boss fight, for playtesting it
+    if (new URLSearchParams(location.search).has('boss')) this.scene.start('room', { room: ZONE.bossRoom });
+    else this.scene.start('menu');
   }
 }

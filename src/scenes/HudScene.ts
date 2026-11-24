@@ -96,6 +96,8 @@ export class HudScene extends Phaser.Scene {
   private blur?: Phaser.FX.Blur;
   private padPrev: boolean[] = [];
   private gateShown = false;
+  private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
+  endKind: 'death' | 'victory' | null = null;
 
   constructor() {
     super('hud');
@@ -112,6 +114,8 @@ export class HudScene extends Phaser.Scene {
     this.blur = undefined;
     this.padPrev = [];
     this.gateShown = false;
+    this.bossBar = undefined;
+    this.endKind = null;
   }
 
   create() {
@@ -133,7 +137,8 @@ export class HudScene extends Phaser.Scene {
       this.onKey(e.code);
     });
     this.ready = true;
-    this.banner('zone', 'The Blightwood', `Room ${this.roomNo}`);
+    if (!this.room.boss) this.banner('zone', 'The Blightwood', `Room ${this.roomNo}`);
+    else this.buildBossBar();
   }
 
   // ---- the hero, bottom left ---------------------------------------------------------
@@ -168,7 +173,7 @@ export class HudScene extends Phaser.Scene {
     const total = room.totalFoes;
     const f = new Frame(this, 820, 38, 172, 58, 'dark');
     f.add(txt(this, 0, -15, 'BLIGHTWOOD', 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
-    f.add(txt(this, 0, 2, `Room ${this.roomNo}`, 'head', { fontSize: '17px', color: C.ivory }).setOrigin(0.5));
+    f.add(txt(this, 0, room.boss ? 5 : 2, room.boss ? "Warden's Glade" : `Room ${this.roomNo}`, 'head', { fontSize: room.boss ? '15px' : '17px', color: C.ivory }).setOrigin(0.5));
     const n = room.waveCount;
     for (let i = 0; i < n; i++) {
       const p = pic(this, (i - (n - 1) / 2) * 16, 19, 'ui_pip_off');
@@ -187,8 +192,8 @@ export class HudScene extends Phaser.Scene {
 
     // an objective tracker under the plaque
     const ox = 740;
-    txt(this, ox, 80, 'The Restless Dead', 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
-    this.objective = txt(this, ox + 8, 98, `- Dead laid to rest: 0/${total}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
+    txt(this, ox, 80, room.boss ? 'The Drowned Light' : 'The Restless Dead', 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
+    this.objective = txt(this, ox + 8, 98, room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
     this.objectiveDone = txt(this, ox + 8, 114, '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
 
     // kills over the whole run, bottom right
@@ -236,7 +241,8 @@ export class HudScene extends Phaser.Scene {
     this.pips.forEach((pip, i) => pip.setTexture(r.gateOpen || i < r.wave - 1 ? 'ui_pip' : i === r.wave - 1 ? 'ui_pip' : 'ui_pip_off')
       .setAlpha(r.gateOpen || i < r.wave - 1 ? 1 : i === r.wave - 1 ? 0.55 + 0.45 * Math.sin(this.time.now / 300) ** 2 : 1));
     const total = r.totalFoes;
-    this.objective.setText(`- Dead laid to rest: ${Math.min(r.slain, total)}/${total}`);
+    if (!r.boss) this.objective.setText(`- Dead laid to rest: ${Math.min(r.slain, total)}/${total}`);
+    this.updateBossBar(dt);
     if (r.gateOpen && !this.gateShown) {
       this.gateShown = true;
       this.objective.setColor(C.grey);
@@ -245,6 +251,54 @@ export class HudScene extends Phaser.Scene {
     this.killText.setText(String(r.run.kills));
 
     this.pollPad();
+  }
+
+  // ---- the boss ----------------------------------------------------------------------------
+
+  // A long bar across the top with the boss's name, a mark where the fight
+  // changes, and EXPOSED while he rests. Comes in when his introduction ends.
+  private buildBossBar() {
+    const w = 380;
+    const root = this.add.container(viewW / 2, 30).setAlpha(0);
+    const name = txt(this, 0, -12, 'The Lantern Warden', 'head', { fontSize: '16px', letterSpacing: 1 }).setOrigin(0.5);
+    gild(name, GOLD_STOPS);
+    const bar = new Bar(this, -w / 2, 0, w, 12, 'enemy', false);
+    const tick = pic(this, 0, 6, 'ui_pip').setScale(0.4); // half health: the lantern breaks
+    const exposed = txt(this, w / 2, -12, 'EXPOSED', 'small', { fontSize: '11px', color: C.gold, letterSpacing: 2 }).setOrigin(1, 0.5).setAlpha(0);
+    root.add([pic(this, -w / 2 - 14, 6, 'ui_ornament').setScale(0.35, 0.8), pic(this, w / 2 + 14, 6, 'ui_ornament').setScale(0.35, 0.8)]);
+    root.add([name, bar, tick, exposed]);
+    this.bossBar = { root, bar, exposed };
+  }
+
+  private updateBossBar(dt: number) {
+    const b = this.room.boss, bb = this.bossBar;
+    if (!b || !bb) return;
+    if (b.awake && bb.root.alpha === 0 && !this.tweens.isTweening(bb.root)) {
+      bb.root.y = 18;
+      this.tweens.add({ targets: bb.root, alpha: 1, y: 30, duration: 500, ease: 'Cubic.easeOut' });
+    }
+    bb.bar.set(b.hp, b.maxHp, dt);
+    bb.exposed.setAlpha(b.resting ? 0.6 + 0.4 * Math.sin(this.time.now / 90) : 0);
+    if (b.isDead() && bb.root.alpha === 1 && !this.tweens.isTweening(bb.root)) this.tweens.add({ targets: bb.root, alpha: 0.001, duration: 1200, delay: 600 });
+  }
+
+  // Lost Castle's boss card: a wide band low on the screen, the name in large
+  // gilded letters sliding in from one side, the title from the other.
+  bossIntro(name: string, title: string) {
+    const cy = 356;
+    const band = pic(this, viewW / 2, cy, 'ui_band').setDisplaySize(viewW, 112).setAlpha(0);
+    const l1 = pic(this, viewW / 2, cy - 56, 'ui_line').setTint(0x7fe3d4).setScale(0.2, 0.5).setAlpha(0);
+    const l2 = pic(this, viewW / 2, cy + 56, 'ui_line').setTint(0x7fe3d4).setScale(0.2, 0.5).setAlpha(0);
+    const n = txt(this, viewW / 2 + 60, cy - 10, name.toUpperCase(), 'title', { fontFamily: FONT.head, fontSize: '44px', fontStyle: '700', letterSpacing: 3, strokeThickness: 7, padding: { x: 10, y: 8 } }).setOrigin(0.5).setAlpha(0);
+    gild(n, GOLD_STOPS);
+    if (n.preFX) { n.preFX.padding = 16; n.preFX.addGlow(0x3fe8dc, 2, 0, false, 0.1, 8); }
+    const t = txt(this, viewW / 2 - 60, cy + 30, title, 'label', { fontSize: '16px', color: C.teal, fontStyle: 'italic', letterSpacing: 2 }).setOrigin(0.5).setAlpha(0);
+    const all = [band, l1, l2, n, t];
+    this.tweens.add({ targets: band, alpha: 1, duration: 300 });
+    this.tweens.add({ targets: [l1, l2], alpha: 1, scaleX: 0.75, duration: 700, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: n, alpha: 1, x: viewW / 2, duration: 650, delay: 120, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, alpha: 1, x: viewW / 2, duration: 650, delay: 320, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: all, alpha: 0, duration: 600, delay: 2500, onComplete: () => all.forEach((o) => o.destroy()) });
   }
 
   // ---- events from the room -----------------------------------------------------------------
@@ -366,25 +420,37 @@ export class HudScene extends Phaser.Scene {
 
   showDeath(run: RunStats) {
     if (this.end) return;
+    this.endKind = 'death';
     this.end = { list: new FocusList([{ setFocus() {}, activate() {} }]) };
-    this.time.delayedCall(900, () => this.buildEnd(run));
+    this.time.delayedCall(900, () => this.buildEnd(run, false));
   }
 
-  private buildEnd(run: RunStats) {
+  showVictory(run: RunStats) {
+    if (this.end) return;
+    this.endKind = 'victory';
+    this.end = { list: new FocusList([{ setFocus() {}, activate() {} }]) };
+    this.buildEnd(run, true);
+  }
+
+  // The end of a run, won or lost: a band across the middle in the outcome's
+  // colour, the title, the run's numbers counting up in turn, then the choices.
+  private buildEnd(run: RunStats, won: boolean) {
     this.blurRoom(true);
     const cx = viewW / 2, cy = viewH / 2;
     const root = this.add.container(0, 0).setDepth(100);
     const shade = this.add.rectangle(cx, cy, viewW, viewH, 0x000000, 0.45).setInteractive();
     const dark = pic(this, cx, cy, 'ui_wash').setDisplaySize(viewW, 330).setTint(0x000000).setAlpha(0.85);
-    const red = pic(this, cx, cy, 'ui_wash').setDisplaySize(viewW, 300).setTint(0x6a0804).setAlpha(0.5);
-    const l1 = pic(this, cx, cy - 136, 'ui_line').setTint(0xd8402a).setScale(0.6, 0.5);
-    const l2 = pic(this, cx, cy + 142, 'ui_line').setTint(0xd8402a).setScale(0.6, 0.5);
+    const red = pic(this, cx, cy, 'ui_wash').setDisplaySize(viewW, 300).setTint(won ? 0x5a4010 : 0x6a0804).setAlpha(0.5);
+    const l1 = pic(this, cx, cy - 136, 'ui_line').setTint(won ? 0xf0c060 : 0xd8402a).setScale(0.6, 0.5);
+    const l2 = pic(this, cx, cy + 142, 'ui_line').setTint(won ? 0xf0c060 : 0xd8402a).setScale(0.6, 0.5);
     root.add([shade, dark, red, l1, l2]);
 
-    const title = txt(this, cx, cy - 96, 'YOU HAVE FALLEN', 'title', { fontFamily: FONT.logo, fontSize: '46px', fontStyle: '900', strokeThickness: 7, stroke: '#1a0202', padding: { x: 16, y: 10 } }).setOrigin(0.5);
-    gild(title, RED_STOPS);
-    if (title.preFX) { title.preFX.padding = 20; title.preFX.addGlow(0xff2a10, 2, 0, false, 0.1, 10); }
-    const sub = txt(this, cx, cy - 56, 'The Blightwood claims another soul.', 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
+    const title = won
+      ? txt(this, cx, cy - 96, 'THE BLIGHTWOOD IS CLEANSED', 'title', { fontFamily: FONT.head, fontSize: '38px', fontStyle: '700', letterSpacing: 2, strokeThickness: 7, stroke: '#1a0e02', padding: { x: 16, y: 10 } }).setOrigin(0.5)
+      : txt(this, cx, cy - 96, 'YOU HAVE FALLEN', 'title', { fontFamily: FONT.logo, fontSize: '46px', fontStyle: '900', strokeThickness: 7, stroke: '#1a0202', padding: { x: 16, y: 10 } }).setOrigin(0.5);
+    gild(title, won ? GOLD_STOPS : RED_STOPS);
+    if (title.preFX) { title.preFX.padding = 20; title.preFX.addGlow(won ? 0xffa030 : 0xff2a10, 2, 0, false, 0.1, 10); }
+    const sub = txt(this, cx, cy - 56, won ? 'The Lantern Warden falls, and the dead lie still at last.' : 'The Blightwood claims another soul.', 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
     const orn = pic(this, cx, cy - 36, 'ui_ornament');
     root.add([title, sub, orn]);
 
@@ -403,10 +469,10 @@ export class HudScene extends Phaser.Scene {
       return { v, l };
     });
 
-    const again = new Button(this, cx - 88, cy + 88, 160, 34, 'Try Again', () => this.restartRun());
+    const again = new Button(this, cx - 88, cy + 88, 160, 34, won ? 'New Run' : 'Try Again', () => this.restartRun());
     const menu = new Button(this, cx + 88, cy + 88, 160, 34, 'Main Menu', () => this.toMenu());
     const hint = this.add.container(0, cy + 124);
-    const h1 = keyHint(this, 0, 0, ['R'], 'Try again');
+    const h1 = keyHint(this, 0, 0, ['R'], won ? 'New run' : 'Try again');
     const h2 = keyHint(this, h1.width + 18, 0, ['Esc'], 'Main menu');
     hint.add([h1, h2]);
     hint.x = cx - (h1.width + 18 + h2.width) / 2;

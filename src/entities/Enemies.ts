@@ -8,12 +8,14 @@ export abstract class Enemy extends Fighter {
   protected hitDone = false;
   protected readonly telegraph: Phaser.GameObjects.Graphics;
   private readonly hpBar: Phaser.GameObjects.Graphics;
+  protected showPlate = true; // the small health plate over the head
+  body = 1; // how much floor the enemy takes up, 1 = a normal-sized one
   private lagFrac = 1;
   private plateAlpha = 0;
   protected speed: number;
 
-  constructor(scene: RoomScene, key: CharKey, x: number, y: number, hp: number, speed: number) {
-    super(scene, key, x, y, hp);
+  constructor(scene: RoomScene, key: CharKey, x: number, y: number, hp: number, speed: number, scaleMul = 1) {
+    super(scene, key, x, y, hp, scaleMul);
     this.speed = speed;
     this.attackCd = 0.8 + Math.random() * 1.2;
     this.telegraph = scene.add.graphics().setDepth(2);
@@ -88,7 +90,7 @@ export abstract class Enemy extends Fighter {
   private drawHpBar() {
     const g = this.hpBar;
     g.clear();
-    const want = this.isDead() || this.hp >= this.maxHp ? 0 : 1;
+    const want = !this.showPlate || this.isDead() || this.hp >= this.maxHp ? 0 : 1;
     this.plateAlpha += (want - this.plateAlpha) * 0.2;
     if (this.plateAlpha < 0.02) return;
     const a = this.plateAlpha;

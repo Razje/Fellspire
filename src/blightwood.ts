@@ -316,6 +316,7 @@ export interface Blightwood {
   lightAt(x: number, y: number): number;
   pushOut(p: { x: number; y: number }): void;
   openExit(): void;
+  extinguish(): void; // puts every torch out, for the Warden's second phase
   exit: { x: number; y: number };
   lights: Light[];
   obstacles: Obstacle[];
@@ -336,9 +337,10 @@ const KINDS: Record<string, PropKind> = {
   bones: { key: 'fw_bones', scale: 0.7, rx: 0, ry: 0 },
 };
 
-export function buildBlightwood(scene: Phaser.Scene): Blightwood {
+export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean } = {}): Blightwood {
   if (!scene.textures.exists('fw_floor')) makeBlightwoodTextures(scene);
   const lights: Light[] = [];
+  const torches: (() => void)[] = [];
   const obstacles: Obstacle[] = [];
 
   // ---- far background, parallax in both directions
@@ -363,7 +365,7 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
   scene.add.image(0, FLOOR_Y, 'fw_floor').setOrigin(0).setDepth(-50);
 
   // ---- props: along the back edge, along the front edge, and a few in the open
-  const rnd = new Phaser.Math.RandomDataGenerator(['blightwood-arena']);
+  const rnd = new Phaser.Math.RandomDataGenerator([opts.boss ? 'blightwood-warden' : 'blightwood-arena']);
   const placed: { x: number; y: number }[] = [];
   const free = (x: number, y: number, gap: number) => placed.every((p) => Math.hypot(p.x - x, (p.y - y) * 2) > gap);
   const put = (name: string, x: number, y: number) => {
@@ -372,10 +374,12 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
     scene.add.image(x, y, k.key).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
     if (k.rx) obstacles.push({ x, y, rx: k.rx, ry: k.ry });
     if (k.glow) scene.add.image(x, y - 8, 'tt_light').setDepth(y - 1).setScale(0.3).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
-    if (k.light) addTorchFire(scene, x, y, k.scale, lights);
+    if (k.light) torches.push(addTorchFire(scene, x, y, k.scale, lights));
   };
-  const exit = { x: roomW - 130, y: Math.round((groundTop + groundBottom) / 2) + 10 };
-  const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || Math.hypot(x - exit.x, (y - exit.y) * 1.6) < 150;
+  const exit = opts.boss ? { x: -9999, y: -9999 } : { x: roomW - 130, y: Math.round((groundTop + groundBottom) / 2) + 10 };
+  const mid = (groundTop + groundBottom) / 2;
+  const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || Math.hypot(x - exit.x, (y - exit.y) * 1.6) < 150
+    || (!!opts.boss && Math.hypot(x - roomW / 2, (y - mid) * 2.2) < 420);
 
   // torches at fixed beats, back and front, so every room has its pools of light
   for (const [x, y] of [[300, groundTop + 14], [760, groundTop + 8], [1180, groundTop + 14], [520, groundBottom - 6], [1000, groundBottom - 4]]) put('torch', x, y);
@@ -399,7 +403,7 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
     if (name === 'barrel' && rnd.frac() < 0.6 && free(x + 26, y - 10, 20)) put(rnd.pick(['barrel', 'crate']), x + 26, y - 10);
   }
   // a few out in the open floor, to fight around
-  for (let i = 0, tries = 0; i < 4 && tries < 60; tries++) {
+  for (let i = 0, tries = 0; i < (opts.boss ? 0 : 4) && tries < 60; tries++) {
     const x = rnd.between(320, roomW - 320), y = rnd.between(groundTop + 70, groundBottom - 70);
     if (!free(x, y, 160) || keepClear(x, y) || Math.abs(x - roomW / 2) < 200) continue;
     put(rnd.pick(['rock', 'stump', 'grave', 'shroom']), x, y);
@@ -415,11 +419,11 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
     tint: [0xc8ff8a, 0x9cf7c8], blendMode: 'ADD', frequency: 140,
   }).setDepth(9000).fastForward(6000);
 
-  // ---- the exit: the rune ring, dark until the room is cleared
-  const ring = scene.add.image(exit.x, exit.y, 'tt_portal').setOrigin(0.5, 0.96).setScale(0.55).setDepth(exit.y).setTint(0x4a5866);
+  // ---- the exit: the rune ring, dark until the room is cleared (none in a boss arena)
+  const ring = scene.add.image(exit.x, exit.y, 'tt_portal').setOrigin(0.5, 0.96).setScale(0.55).setDepth(exit.y).setTint(0x4a5866).setVisible(!opts.boss);
   const ringGlow = scene.add.image(exit.x, exit.y - 70, 'tt_light').setScale(0.9).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(exit.y - 1);
   const ringPool = scene.add.image(exit.x, exit.y, 'fw_pool').setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setScale(0.8).setDepth(0.5);
-  obstacles.push({ x: exit.x - 52, y: exit.y - 4, rx: 10, ry: 6 }, { x: exit.x + 52, y: exit.y - 4, rx: 10, ry: 6 });
+  if (!opts.boss) obstacles.push({ x: exit.x - 52, y: exit.y - 4, rx: 10, ry: 6 }, { x: exit.x + 52, y: exit.y - 4, rx: 10, ry: 6 });
 
   // ---- framing: black foliage along the bottom edge, and the vignette
   scene.add.tileSprite(-60, roomH - 108, roomW * 1.12 + 120, 110, 'fw_front').setOrigin(0).setScrollFactor(1.12, 1).setDepth(15000);
@@ -451,7 +455,11 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
         p.y = o.y + uy * o.ry;
       }
     },
+    extinguish() {
+      for (const out of torches) out();
+    },
     openExit() {
+      if (opts.boss) return;
       ring.clearTint();
       scene.tweens.add({ targets: ringGlow, alpha: 0.6, duration: 700 });
       scene.tweens.add({ targets: ringGlow, scale: 0.8, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 700 });
@@ -466,10 +474,14 @@ export function buildBlightwood(scene: Phaser.Scene): Blightwood {
   };
 }
 
+// Returns a function that puts the torch out.
 function addTorchFire(scene: Phaser.Scene, x: number, y: number, s: number, lights: Light[]) {
   const fy = y - 150 * s * 0.92 + 20 * s;
+  const fx: Phaser.GameObjects.Image[] = [];
+  let lit = true;
   for (const [tint, f, dx] of [[0xff5a14, 0.4, 0], [0xffa03a, 0.29, -1], [0xfff0b0, 0.17, 1]] as const) {
     const fl = scene.add.image(x + dx, fy, 'tt_flame').setOrigin(0.5, 0.92).setScale(f * 0.75, f).setTint(tint).setDepth(y + 1).setBlendMode(Phaser.BlendModes.ADD);
+    fx.push(fl);
     scene.tweens.add({ targets: fl, scaleY: f * 1.2, scaleX: f * 0.66, duration: 130 + Math.random() * 120, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     scene.tweens.add({ targets: fl, angle: { from: -6, to: 6 }, duration: 280 + Math.random() * 200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
@@ -477,12 +489,24 @@ function addTorchFire(scene: Phaser.Scene, x: number, y: number, s: number, ligh
   const pool = scene.add.image(x, y + 6, 'fw_pool').setScale(1.9, 1.8).setTint(0xff8a3a).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.45).setDepth(0.5);
   scene.time.addEvent({
     delay: 90, loop: true,
-    callback: () => { const f = Math.random(); halo.setAlpha(0.3 + f * 0.1); pool.setAlpha(0.4 + f * 0.08); },
+    callback: () => { if (!lit) return; const f = Math.random(); halo.setAlpha(0.3 + f * 0.1); pool.setAlpha(0.4 + f * 0.08); },
   });
-  scene.add.particles(x, fy - 8, 'tt_dot', {
+  const sparks = scene.add.particles(x, fy - 8, 'tt_dot', {
     x: { min: -4, max: 4 }, speedY: { min: -55, max: -25 }, speedX: { min: -10, max: 10 },
     lifespan: { min: 800, max: 1500 }, scale: { start: 0.15, end: 0 }, alpha: { start: 1, end: 0 },
     tint: [0xffd27a, 0xff9a3c], blendMode: 'ADD', frequency: 160,
   }).setDepth(y + 2);
-  lights.push({ x, y: y + 6, radius: 170, strength: 0.85 });
+  const light = { x, y: y + 6, radius: 170, strength: 0.85 };
+  lights.push(light);
+  return () => {
+    lit = false;
+    sparks.stop();
+    scene.tweens.add({ targets: [...fx, halo, pool], alpha: 0, duration: 500 + Math.random() * 400 });
+    scene.tweens.add({ targets: light, strength: 0, duration: 700 });
+    // a last wisp of smoke
+    scene.add.particles(x, fy - 10, 'fw_dust', {
+      speedY: { min: -30, max: -14 }, speedX: { min: -6, max: 6 }, lifespan: 1400, scale: { start: 0.4, end: 1.2 },
+      alpha: { start: 0.35, end: 0 }, tint: 0x8a8a9a, quantity: 1, frequency: 90, duration: 900,
+    }).setDepth(y + 2);
+  };
 }

@@ -29,7 +29,8 @@ Its git `origin` is the private GitLab project `martijn.terol/fellspire`, create
 node C:\IXON\fellspire\node_modules\vite\bin\vite.js C:\IXON\fellspire
 ```
 
-Then http://127.0.0.1:5180. In Claude's browser pane, `preview_start` with the name
+Then http://127.0.0.1:5180, or http://127.0.0.1:5180/?boss to go straight to the
+boss fight. In Claude's browser pane, `preview_start` with the name
 `fellspire` (from `C:\IXON\.claude\launch.json`). The pane pauses the game when it is
 hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen frame.
 `window.game` is the Phaser game in development builds, for inspecting state.
@@ -42,7 +43,7 @@ npm --prefix C:\IXON\fellspire test
 
 Playwright drives the real game in the Edge that comes with Windows (no browser
 download), on its own port 5181. `tests/` checks that the title screen comes up
-without errors, the menu responds, and the combat rules hold (hits land, blocking and
+without errors, the menu responds, the combat rules hold (hits land, blocking and
 dodging work, waves clear, the exit leads to the next room). It saves a title-screen
 screenshot under `test-results/` to look at. A new feature gets a test with it, and
 the suite must pass before a change is called done.
@@ -63,8 +64,8 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
-| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution, projectiles, pickups, combat text, run stats; launches the HUD |
-| `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower) |
+| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution, projectiles, pickups, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
+| `src/entities/` | `Fighter` (shared body, damage, animation), `Player`, `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/settings.ts` | Options remembered in the browser |

@@ -46,6 +46,7 @@ export class Player extends Fighter {
   }
 
   private readInput(): Input {
+    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, dodge: false, block: false };
     const k = this.keys;
     const jd = Phaser.Input.Keyboard.JustDown;
     const mx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);

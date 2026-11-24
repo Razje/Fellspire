@@ -29,16 +29,17 @@ export abstract class Fighter {
   private baseScale: number;
   private currentAnim = '';
 
-  constructor(public scene: RoomScene, public key: CharKey, public x: number, public y: number, public maxHp: number) {
+  // scaleMul draws the character larger than its pack's usual size (bosses).
+  constructor(public scene: RoomScene, public key: CharKey, public x: number, public y: number, public maxHp: number, scaleMul = 1) {
     this.cfg = CHARACTERS[key];
     this.hp = maxHp;
     this.animated = loadedAnims[key] ?? new Set();
     const art = this.animated.has('idle');
     this.sprite = scene.add.sprite(x, y, art ? firstFrame[key]! : `ph_${key}`);
     this.sprite.setOrigin(0.5, art ? this.cfg.footY : 0.98);
-    this.baseScale = art ? this.cfg.height / this.sprite.height : (this.cfg.height * 0.62) / PH_H;
+    this.baseScale = (art ? this.cfg.height / this.sprite.height : (this.cfg.height * 0.62) / PH_H) * scaleMul;
     this.sprite.setScale(this.baseScale);
-    this.shadow = scene.add.ellipse(x, y, this.cfg.height * 0.36, this.cfg.height * 0.1, 0x000000, 0.4).setDepth(1);
+    this.shadow = scene.add.ellipse(x, y, this.cfg.height * 0.36 * scaleMul, this.cfg.height * 0.1 * scaleMul, 0x000000, 0.4).setDepth(1);
   }
 
   get hasArt() {

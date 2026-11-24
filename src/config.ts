@@ -14,6 +14,19 @@ export const WORLD = {
   groundBottom: 622,
 };
 
+// A zone is a few combat rooms, then the boss. (DESIGN.md plans 6 to 8 rooms later.)
+export const ZONE = { bossRoom: 4 };
+
+// The circle of light in the Warden's second phase, in room pixels.
+export const DARK = {
+  startRadius: 400,
+  endRadius: 160,
+  shrinkSeconds: 45,
+  squash: 0.55, // the circle lies on a floor seen at an angle: an ellipse this flat
+  damage: 3, // per tick, standing in the dark
+  tick: 0.5,
+};
+
 export type CharKey = 'hero' | 'ghoul' | 'archer';
 
 export interface CharConfig {

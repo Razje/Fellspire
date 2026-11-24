@@ -109,12 +109,25 @@ studied for its card and end-screen ideas only; none of its art is used.
    **done** Interface overhaul (2026-11-24): full-HD rendering, one UI kit for every
    screen, the HUD above, a pause menu on Esc, an end-of-run screen with the run's
    numbers counting up, title menus and Options rebuilt with check boxes and sliders.
-6. **next** The Lantern Warden boss fight.
+6. **done** The Lantern Warden (2026-11-24). Martijn played it: quite hard, and
+   meant to be, so the numbers stay as they are. For now a zone is three
+   combat rooms, then his glade as room 4. An introduction pans to him and shows
+   his name card; a boss bar at the top marks half health. Phase 1: lantern slam
+   (a red circle where you stand), a sweep in front, ghouls summoned from the trees.
+   After every three attacks he rests and takes half again as much damage (EXPOSED
+   on the bar). At half health the lantern shatters, the torches go out, and the
+   fight continues in a shrinking circle of light around its flame in the middle;
+   the dark costs health. He is faster then and adds the ember rush, a charge along
+   a red line. Beating him gives a gold victory screen. Art is a stand-in (the
+   skeleton pack at twice the size, darkened, with a painted lantern) until a pack
+   is chosen. Numbers to tune are `WARDEN` in `src/entities/Warden.ts` and `DARK`
+   in `src/config.ts`.
 7. Gold and the first weapon drops.
 8. A second class, and two-player co-op on one screen.
 9. Hub camp with embers between runs.
 
-After 6, zone 1 is a complete, playable slice.
+After 6, zone 1 is a complete, playable slice. Playtest the boss straight away
+with `?boss` on the address (http://127.0.0.1:5180/?boss).
 
 ## Notes from the Lost Castle 2 reference
 
@@ -141,5 +154,6 @@ detail. Points to carry into Fellspire as the matching steps come up:
 
 - Controls: keep Space as dodge, or follow Lost Castle 2 (Space jump, L dodge)?
 
+- Which pack becomes the Lantern Warden? A reaper or wraith type would suit.
 - Which free or paid pack becomes the Ironguard? (Paladin or Armored Knight, $5.50 each.)
 - Sound and music: not started; needs a source with a licence that fits.
