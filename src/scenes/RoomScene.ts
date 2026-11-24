@@ -13,6 +13,7 @@ import type { Action, HudScene } from './HudScene';
 import { newRun, type Run } from '../run';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
 import { hi, keycap } from '../ui/kit';
+import { Shots } from '../shots';
 import type { Breakable } from '../blightwood';
 import { shiftParallax, ZOOM } from '../ui/view';
 import { FONT, RES } from '../ui/theme';
@@ -24,6 +25,18 @@ export interface AttackSpec {
   knock: number;
   heavy?: boolean;
   around?: boolean; // hits on both sides (a spin)
+  stun?: number; // seconds a foe stands dazed after the hit
+  slow?: number; // seconds a foe is slowed after the hit
+  dot?: boolean; // ticking damage: no flinch, no knockback, no hit-stop
+  quiet?: boolean; // no hit-stop or shake (many small hits at once)
+}
+
+// Where a blow comes from: knockback pushes away from x, sparks sit on its side.
+export interface HitSource { x: number; y: number; facing: number }
+
+export interface StrikeOpts {
+  once?: Set<object>; // skip what is in it, and add what gets hit (a piercing arrow)
+  max?: number; // stop after this many (an arrow that stops at the first)
 }
 
 interface Coin { img: Phaser.GameObjects.Image; x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; value: number; dead: boolean }
@@ -47,6 +60,8 @@ export class RoomScene extends Phaser.Scene {
   player!: Player;
   enemies: Enemy[] = [];
   private projectiles: Projectile[] = [];
+  shots!: Shots; // the player's arrows and bolts
+  private effects: ((dt: number) => boolean)[] = []; // skills playing out
   private pickups: Pickup[] = [];
   private room = 1;
   private waves: Wave[] = [];
@@ -101,6 +116,7 @@ export class RoomScene extends Phaser.Scene {
     this.secondWindUsed = false;
     this.enemies = [];
     this.projectiles = [];
+    this.effects = [];
     this.pickups = [];
     this.wave = 0;
     this.waveDelay = 1.2;
@@ -150,6 +166,7 @@ export class RoomScene extends Phaser.Scene {
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.world = buildBlightwood(this, { boss: this.isBossRoom, camp: this.isCamp, clear: this.isCamp ? CAMP_CLEAR : undefined });
     shiftParallax(this);
+    this.shots = new Shots(this);
 
     const start = this.isCamp ? CAMP.start : { x: 150, y: 470 };
     this.player = new Player(this, start.x, start.y);
@@ -233,11 +250,13 @@ export class RoomScene extends Phaser.Scene {
     }
 
     this.player.update(dt);
+    this.effects = this.effects.filter((f) => f(dt));
     this.updateChest();
     this.updateCamp();
     for (const e of this.enemies) e.update(dt);
     this.separate();
     this.updateProjectiles(dt);
+    this.shots.update(dt);
     this.updatePickups(dt);
     this.updateCoins(dt);
     this.updateFires(dt);
@@ -257,12 +276,25 @@ export class RoomScene extends Phaser.Scene {
   }
 
   resolveMelee(attacker: Fighter, spec: AttackSpec, targets: Fighter[]): number {
+    return this.strike(attacker, attacker === this.player, spec, targets, (x, y) => this.inReach(attacker, x, y, spec));
+  }
+
+  // A skill's effect, run every frame until it returns false.
+  addEffect(f: (dt: number) => boolean) {
+    this.effects.push(f);
+  }
+
+  // Every hit goes through here, whether a swing, a shot or a skill's area: inside
+  // says which floor positions it reaches. The player's hits get the gear's bonuses
+  // and effects and also break barrels and crates.
+  strike(attacker: HitSource, byPlayer: boolean, spec: AttackSpec, targets: Fighter[], inside: (x: number, y: number) => boolean, opts: StrikeOpts = {}): number {
     let hits = 0;
-    const byPlayer = attacker === this.player;
     const fx = this.stats.fx;
+    const { once, max = Infinity } = opts;
     for (const t of targets) {
-      if (t.isDead()) continue;
-      if (!this.inReach(attacker, t.x, t.y, spec)) continue;
+      if (hits >= max) break;
+      if (t.isDead() || once?.has(t)) continue;
+      if (!inside(t.x, t.y)) continue;
       let dmg = spec.dmg;
       let crit = false;
       if (byPlayer) {
@@ -271,9 +303,14 @@ export class RoomScene extends Phaser.Scene {
         if (fx.crit > 0 && Math.random() < fx.crit) { dmg *= 2; crit = true; }
         dmg = Math.max(1, Math.round(dmg));
       }
-      const dealt = t.takeHit(dmg, attacker.x, spec.knock, !!spec.heavy);
+      const dealt = spec.dot && t instanceof Enemy ? t.takeDot(dmg) : t.takeHit(dmg, attacker.x, spec.knock, !!spec.heavy);
       if (dealt < 0) continue;
       hits++;
+      once?.add(t);
+      if (t instanceof Enemy && !t.isDead()) {
+        if (spec.stun) t.stun(spec.stun);
+        if (spec.slow) t.slowT = Math.max(t.slowT, spec.slow);
+      }
       if (byPlayer) {
         this.run.damage += dealt;
         this.onPlayerHit(t as Enemy, dealt);
@@ -284,11 +321,11 @@ export class RoomScene extends Phaser.Scene {
       this.combatText(t, dealt, byPlayer ? (crit ? 'crit' : spec.heavy ? 'heavy' : 'hit') : 'hurt');
       this.hitSpark(t.x - attacker.facing * 12, t.y - t.visualHeight * 0.5, byPlayer ? 0xfff1c0 : 0xff6b5e);
     }
-    if (byPlayer) {
-      hits += this.smashProps(attacker, spec);
+    if (byPlayer && hits < max) {
+      hits += this.smashProps(attacker, spec, inside, once);
       if (hits > 0 && spec.heavy && fx.burn > 0) this.burnGround(attacker.x + attacker.facing * (spec.around ? 0 : 40), attacker.y, fx.burn);
     }
-    if (hits > 0) {
+    if (hits > 0 && !spec.dot && !spec.quiet) {
       this.hitStop(spec.heavy ? 85 : 45);
       if (spec.heavy) this.shake(110, 0.006);
     }
@@ -608,11 +645,12 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // The player's swing also splinters barrels and crates in reach.
-  private smashProps(attacker: Fighter, spec: AttackSpec): number {
+  private smashProps(attacker: HitSource, spec: AttackSpec, inside: (x: number, y: number) => boolean, once?: Set<object>): number {
     let n = 0;
     for (const b of this.world.breakables) {
-      if (b.hp <= 0 || !this.inReach(attacker, b.x, b.y, spec)) continue;
+      if (b.hp <= 0 || once?.has(b) || !inside(b.x, b.y)) continue;
       n++;
+      once?.add(b);
       b.hp -= spec.heavy ? 2 : 1;
       this.splinters(b.x, b.y - 14, b.hp <= 0 ? 14 : 5);
       if (b.hp > 0) {
@@ -836,6 +874,7 @@ export class RoomScene extends Phaser.Scene {
     p.maxHp = 100 + this.stats.fx.maxHp;
     if (p.maxHp > before) p.hp += p.maxHp - before;
     p.hp = Math.min(p.hp, p.maxHp);
+    if (it.cat === 'weapon') p.arm();
   }
 
   // ---- the camp -----------------------------------------------------------

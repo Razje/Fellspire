@@ -36,6 +36,15 @@ export abstract class Enemy extends Fighter {
     return this.applyDamage(dmg, fromX, knock, heavy ? 0.5 : 0.3);
   }
 
+  // Dazed for a while (a shield charge): it stands reeling and does nothing.
+  stun(seconds: number) {
+    if (this.isDead() || this.state === 'hurt' && this.stateT < -seconds) return;
+    this.telegraph.clear();
+    this.state = 'hurt';
+    this.stateT = -seconds;
+    this.playAnim('hurt', { duration: seconds * 1000, force: true });
+  }
+
   // Damage that ticks (burning ground, lightning): no flinch, no knockback.
   takeDot(dmg: number): number {
     if (this.isDead()) return -1;

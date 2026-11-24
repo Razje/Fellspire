@@ -7,7 +7,8 @@
 import Phaser from 'phaser';
 import { WORLD } from './config';
 import { canvas } from './titleArt';
-import { starterWeapon, WEAPON_KINDS, type Item, type WeaponKind } from './loot';
+import { starterWeapon, type Item } from './loot';
+import { KINDS, asKind, type WeaponKind } from './weapons';
 import { keycap } from './ui/kit';
 import { FONT, RES } from './ui/theme';
 import type { ClearSpot, Light, Obstacle } from './blightwood';
@@ -30,18 +31,19 @@ export const CAMP_CLEAR: ClearSpot[] = [
   { x: CAMP.dummy.x, y: CAMP.dummy.y, r: 90 },
 ];
 
-// What the rack offers. 8.4 replaces these with the real weapon types.
-export const RACK_KINDS: WeaponKind[] = ['longsword', 'greatblade', 'rapier'];
+// What the rack offers: one plain weapon of every type.
+export const RACK_KINDS: WeaponKind[] = KINDS;
 
 // The weapon chosen last, remembered in the browser for the next run.
 const KEY = 'fellspire.weapon';
 
 export function savedWeapon(): Item {
   try {
-    const k = localStorage.getItem(KEY) as WeaponKind | null;
-    if (k && k in WEAPON_KINDS) return starterWeapon(k);
+    // a pick from before 8.4 (longsword, greatblade, rapier) maps to its new type
+    const k = asKind(localStorage.getItem(KEY));
+    if (k) return starterWeapon(k);
   } catch { /* storage blocked: fall back */ }
-  return starterWeapon('longsword');
+  return starterWeapon('sword');
 }
 
 export function saveWeapon(kind: WeaponKind) {
@@ -50,10 +52,10 @@ export function saveWeapon(kind: WeaponKind) {
 
 // ---- textures ------------------------------------------------------------------------------
 
-// A wooden rack with the three weapons hanging on it, painted at twice its size.
+// A wooden rack with the four weapon types hanging on it, painted at twice its size.
 function rackTexture(scene: Phaser.Scene) {
   if (scene.textures.exists('camp_rack')) return;
-  canvas(scene, 'camp_rack', 220, 170, (c) => {
+  canvas(scene, 'camp_rack', 300, 180, (c) => {
     const line = (w: number, col: string, x1: number, y1: number, x2: number, y2: number) => {
       c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round';
       c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
@@ -64,12 +66,12 @@ function rackTexture(scene: Phaser.Scene) {
       line(Math.max(1.5, w * 0.3), '#9a6a3a', x1 - 1, y1, x2 - 1, y2);
     };
     // two A-frame legs and two bars
-    wood(9, 22, 164, 38, 40); wood(9, 54, 164, 38, 40);
-    wood(9, 166, 164, 182, 40); wood(9, 198, 164, 182, 40);
-    wood(8, 20, 54, 200, 54);
-    wood(7, 26, 130, 194, 130);
-    // pegs on the top bar
-    for (const x of [62, 110, 158]) { c.fillStyle = INK; c.beginPath(); c.arc(x, 54, 6, 0, Math.PI * 2); c.fill(); c.fillStyle = '#b08a50'; c.beginPath(); c.arc(x, 54, 3.5, 0, Math.PI * 2); c.fill(); }
+    wood(9, 22, 174, 38, 40); wood(9, 54, 174, 38, 40);
+    wood(9, 246, 174, 262, 40); wood(9, 278, 174, 262, 40);
+    wood(8, 20, 54, 280, 54);
+    wood(7, 26, 140, 274, 140);
+    const pegs = [78, 130, 178, 228];
+    for (const x of pegs) { c.fillStyle = INK; c.beginPath(); c.arc(x, 54, 6, 0, Math.PI * 2); c.fill(); c.fillStyle = '#b08a50'; c.beginPath(); c.arc(x, 54, 3.5, 0, Math.PI * 2); c.fill(); }
 
     const steel = (x1: number, y1: number, x2: number, y2: number, w: number) => {
       line(w + 5, INK, x1, y1, x2, y2);
@@ -80,16 +82,26 @@ function rackTexture(scene: Phaser.Scene) {
     };
     const guard = (x: number, y: number, w: number) => { line(8, INK, x - w, y, x + w, y); line(4, '#d8a840', x - w, y, x + w, y); };
     const grip = (x: number, y1: number, y2: number) => { line(8, INK, x, y1, x, y2); line(4, '#4a2a14', x, y1, x, y2); c.fillStyle = '#d8a840'; c.beginPath(); c.arc(x, y1 - 3, 4, 0, Math.PI * 2); c.fill(); };
-    // each blade hangs point down from its peg, hilt up
-    // longsword
-    grip(62, 40, 58); guard(62, 60, 13); steel(62, 63, 62, 138, 7);
-    // greatblade, broad and long
-    grip(110, 30, 56); guard(110, 58, 18); steel(110, 62, 110, 152, 13);
-    // rapier: a basket guard and a thin blade
-    grip(158, 40, 58);
-    c.strokeStyle = INK; c.lineWidth = 6; c.beginPath(); c.arc(158, 62, 10, Math.PI, 0, true); c.stroke();
-    c.strokeStyle = '#d8a840'; c.lineWidth = 3; c.beginPath(); c.arc(158, 62, 10, Math.PI, 0, true); c.stroke();
-    guard(158, 62, 11); steel(158, 64, 158, 146, 3.5);
+    const [px1, px2, px3, px4] = pegs;
+    // sword, point down, with a round shield leaning on it
+    grip(px1, 40, 58); guard(px1, 60, 13); steel(px1, 63, px1, 138, 7);
+    c.fillStyle = INK; c.beginPath(); c.arc(px1 + 4, 118, 22, 0, Math.PI * 2); c.fill();
+    const sg = c.createRadialGradient(px1, 112, 2, px1 + 4, 118, 20); sg.addColorStop(0, '#5a8ad8'); sg.addColorStop(1, '#1a3070');
+    c.fillStyle = sg; c.beginPath(); c.arc(px1 + 4, 118, 18, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#d8a840'; c.lineWidth = 3; c.beginPath(); c.arc(px1 + 4, 118, 16, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = '#d8a840'; c.beginPath(); c.arc(px1 + 4, 118, 5, 0, Math.PI * 2); c.fill();
+    // greatsword, broad and long
+    grip(px2, 28, 56); guard(px2, 58, 18); steel(px2, 62, px2, 162, 13);
+    // bow, hung by its grip, string to the left
+    line(2.5, '#d8d0b8', px3 - 8, 22, px3 - 8, 150);
+    c.beginPath(); c.moveTo(px3 - 8, 22); c.quadraticCurveTo(px3 + 26, 52, px3 + 22, 86); c.quadraticCurveTo(px3 + 26, 120, px3 - 8, 150);
+    c.strokeStyle = INK; c.lineWidth = 11; c.stroke(); c.strokeStyle = '#8a5428'; c.lineWidth = 6; c.stroke();
+    c.fillStyle = INK; c.fillRect(px3 + 14, 74, 16, 24); c.fillStyle = '#3a2212'; c.fillRect(px3 + 17, 77, 10, 18);
+    // staff, crystal up
+    line(9, INK, px4, 34, px4, 172); line(5, '#8a5a2a', px4, 34, px4, 172);
+    c.fillStyle = INK; c.beginPath(); c.moveTo(px4, 8); c.lineTo(px4 + 12, 26); c.lineTo(px4, 44); c.lineTo(px4 - 12, 26); c.closePath(); c.fill();
+    const cg = c.createLinearGradient(px4 - 10, 10, px4 + 10, 42); cg.addColorStop(0, '#e8fff8'); cg.addColorStop(0.5, '#5ae8d0'); cg.addColorStop(1, '#1a7a6a');
+    c.fillStyle = cg; c.beginPath(); c.moveTo(px4, 13); c.lineTo(px4 + 8, 26); c.lineTo(px4, 39); c.lineTo(px4 - 8, 26); c.closePath(); c.fill();
   });
 }
 
@@ -106,7 +118,7 @@ export class Camp {
     const { x, y } = CAMP.rack;
     this.glow = scene.add.image(x, y - 40, 'tt_light').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setScale(0.9, 0.7).setAlpha(0).setDepth(y - 1);
     scene.add.image(x, y + 4, 'camp_rack').setOrigin(0.5, 0.96).setScale(0.5).setDepth(y);
-    obstacles.push({ x, y, rx: 52, ry: 9 });
+    obstacles.push({ x, y, rx: 72, ry: 9 });
     lights.push({ x, y: y + 10, radius: 120, strength: 0.35 });
 
     this.prompt = scene.add.container(x, y - 98).setDepth(19500).setAlpha(0);
@@ -116,7 +128,7 @@ export class Camp {
     this.prompt.add([cap, label]);
   }
 
-  // The rack's three weapons, as cards.
+  // The rack's weapons, as cards.
   rackItems(): Item[] {
     return RACK_KINDS.map(starterWeapon);
   }

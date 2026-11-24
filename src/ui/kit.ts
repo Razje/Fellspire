@@ -517,13 +517,15 @@ export class Slot extends Phaser.GameObjects.Container {
   private glow: Phaser.GameObjects.Image;
   private flashImg: Phaser.GameObjects.Image;
   private cdText: Phaser.GameObjects.Text;
+  private iconImg: Phaser.GameObjects.Image;
 
   constructor(scene: Phaser.Scene, x: number, y: number, name: IconName, key: string) {
     super(scene, x, y);
     slotTextures(scene);
     const s = SLOT;
     this.add(scene.add.rectangle(0, 0, s - 4, s - 4, 0x050505));
-    this.add(pic(scene, 0, 0, icon(scene, name)));
+    this.iconImg = pic(scene, 0, 0, icon(scene, name));
+    this.add(this.iconImg);
     this.flashImg = pic(scene, 0, 0, 'ui_slot_glow').setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.sweep = scene.add.graphics();
     this.add(this.sweep);
@@ -560,6 +562,12 @@ export class Slot extends Phaser.GameObjects.Container {
     g.fillStyle(0x000000, 0.62).fillPoints(pts, true);
     g.lineStyle(1, 0xffe9a0, 0.7).lineBetween(0, 0, pts[1].x, pts[1].y);
     this.cdText.setText(secondsLeft >= 1 ? String(Math.ceil(secondsLeft)) : '');
+  }
+
+  // Another picture in the slot: a texture painted at twice the slot's inner size.
+  setIcon(texture: string) {
+    this.iconImg.setTexture(texture);
+    return this;
   }
 
   // Lit while held, like a toggled stance.

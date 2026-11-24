@@ -84,8 +84,9 @@ The rig already swaps a part for a drawn weapon by its grip (rig lab). Still nee
 for this list: an off-hand weapon (dual blades, dual revolvers), and new animations
 for shooting, casting and firing, written as keyframes in the same format.
 
-Today's Longsword, Greatblade and Rapier are stat-and-move variants of the one
-sword animation the Valkyrie pack has. Real weapon types need character art where the
+Since 8.4 the hero holds the weapon she carries: the pack's sword and shield, or a
+drawn greatsword, bow or staff on the sword's grip (`armRig` in `src/rig/weapons.ts`),
+held upright while the pack's animation would hide its sword. Real weapon types need character art where the
 weapon is separate from the body (see Open questions). The Valkyrie pack stands in
 for the player character until then.
 
@@ -98,9 +99,9 @@ for the player character until then.
   2). E opens it and the room pauses for "Choose a weapon / an armor
   kit / a trinket": three cards of one category, each of a random rarity, after Lost
   Castle 2's treasure choice. Later rooms lean towards better rarities.
-- Weapons and armor replace what you carry; trinkets are all kept. A weapon cannot
-  change what the hero holds (her sword is in the art), so each kind changes how
-  she fights instead: Longsword (balanced, three strikes), Greatblade (slow,
+- Weapons and armor replace what you carry; trinkets are all kept. (Before 8.4 a
+  weapon could not change what the hero held, so there were three sword kinds:
+  Longsword (balanced, three strikes), Greatblade (slow,
   reach, a spinning heavy), Rapier (fast, four strikes, a lunging heavy).
 - Effects: heal on hit or kill, burning ground from heavies, frost slows, chain
   lightning every fifth hit, damage against the nearly dead, double-damage strikes,
@@ -192,9 +193,20 @@ studied for its card and end-screen ideas only; none of its art is used.
    camp in the Blightwood with a campfire, a weapon rack (E offers the three weapons that
    exist today as cards; the pick is remembered for the next run), a training dummy that
    takes every blow, never falls and shows damage per second, and the rune gate, lit from
-   the start, into room 1. `?camp` on the address goes straight there; 8.4 the weapon
-   framework, skill key and the first four weapons (sword and shield, two-handed,
-   bow, staff); 8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
+   the start, into room 1. `?camp` on the address goes straight there;
+   8.4 **built** the weapon framework, skill key and the first four weapons
+   (2026-11-24): sword and shield (the only one that blocks; Shield Charge),
+   greatsword (slow, long reach, a spinning heavy; Leap Slam), bow (arrows, a long
+   draw that pierces a line; Rain of Arrows), staff (bolts, an orb that bursts;
+   Blizzard). The skill is on **I** (LB on a controller) with a cooldown, shown in a
+   fifth action slot; cards and tooltips name a weapon's skill. Each type is one
+   entry in `src/weapons.ts`, the skills play out in `src/skills.ts`, arrows and
+   bolts fly in `src/shots.ts`. The Rapier is gone (dual blades take its place in
+   8.5); a remembered Longsword or Rapier becomes sword and shield, a Greatblade the
+   greatsword. One skill per type so far; the list per type is ready for more.
+   Bow and staff borrow the pack's Throwing animation, so the bow is held at the
+   hip while shooting: a draw-and-shoot and a cast animation are still to make.
+   8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
    Overall: make a character with
    customisation, pick a starting weapon type, each type with its own moves.
    Depends on the art question below.

@@ -4,7 +4,7 @@ import type { Rig } from '../rig/Rig';
 import { firstFrame, loadedAnims } from '../assets';
 import type { RoomScene } from '../scenes/RoomScene';
 
-export type State = 'idle' | 'move' | 'block' | 'windup' | 'attack' | 'hurt' | 'dodge' | 'dead';
+export type State = 'idle' | 'move' | 'block' | 'windup' | 'attack' | 'skill' | 'hurt' | 'dodge' | 'dead';
 
 const PH_H = 84; // placeholder texture height
 
@@ -23,6 +23,7 @@ export abstract class Fighter {
   removed = false;
   protected fading = false;
   appear = 1; // 0..1, rises to 1: lets a newcomer fade in
+  lift = 0; // pixels above the floor (a leap); the shadow stays on the floor
   protected knockVx = 0;
   protected flashT = 0;
   protected tintColor: number | null = null;
@@ -156,7 +157,7 @@ export abstract class Fighter {
     const r = this.rig!;
     r.step(dt * 1000);
     this.sprite.setPosition(this.x, this.y).setFlipX(this.facing < 0);
-    r.setPosition(this.x, this.y).setFacing(this.facing).setDepth(this.y + 10);
+    r.setPosition(this.x, this.y - this.lift).setFacing(this.facing).setDepth(this.y + 10);
     this.shadow.setPosition(this.x, this.y);
     if (this.flashT > 0) {
       this.flashT -= dt;
@@ -192,7 +193,7 @@ export abstract class Fighter {
       this.bobT += dt * 14;
       bob = -Math.abs(Math.sin(this.bobT)) * 5;
     }
-    this.sprite.setPosition(this.x, this.y + bob);
+    this.sprite.setPosition(this.x, this.y + bob - this.lift);
     this.sprite.setFlipX(this.cfg.facesLeft ? this.facing > 0 : this.facing < 0);
     this.sprite.setDepth(this.y + 10);
     this.shadow.setPosition(this.x, this.y);

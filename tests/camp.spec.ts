@@ -51,13 +51,13 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   await waitForScene(page, 'hud');
   await page.waitForTimeout(1500);
 
-  // a camp, no waves, the gate already open, a longsword to start with
+  // a camp, no waves, the gate already open, a sword and shield to start with
   expect(await room(page, `return {
     camp: s.isCamp, waves: s.waveCount, gate: s.gateOpen, dummy: !!s.dummy, weapon: s.run.gear.weapon.kind,
-  };`)).toEqual({ camp: true, waves: 0, gate: true, dummy: true, weapon: 'longsword' });
+  };`)).toEqual({ camp: true, waves: 0, gate: true, dummy: true, weapon: 'sword' });
   await shot(page, info, 'camp-1-arrival');
 
-  // E beside the rack: three cards over the paused camp; D twice and E takes the rapier
+  // E beside the rack: four cards over the paused camp; D once and E takes the bow
   await room(page, 'const p = s.player; p.x = 420; p.y = 360;');
   await page.waitForTimeout(300);
   // held for a few frames: the hero reads E once per frame
@@ -75,8 +75,8 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   await page.waitForTimeout(150);
   await page.keyboard.press('e');
   await expect.poll(() => room(page, 'return [s.run.gear.weapon.kind, s.stats.kind, game.scene.isPaused("room")];'), { timeout: 5000 })
-    .toEqual(['rapier', 'rapier', false]);
-  expect(await page.evaluate(() => localStorage.getItem('fellspire.weapon'))).toBe('rapier');
+    .toEqual(['bow', 'bow', false]);
+  expect(await page.evaluate(() => localStorage.getItem('fellspire.weapon'))).toBe('bow');
 
   // the dummy takes every blow and stays standing, and shows damage per second
   const d = await room<{ dealt: number[]; hp: number; max: number; dead: boolean; total: number; x: number }>(page, `
@@ -95,15 +95,15 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   await page.waitForTimeout(400);
   await shot(page, info, 'camp-3-dummy');
 
-  // into the rune gate: room 1, holding the rapier, the run's numbers fresh
+  // into the rune gate: room 1, holding the bow, the run's numbers fresh
   await room(page, 'const p = s.player; p.x = s.world.exit.x; p.y = s.world.exit.y;');
   await expect.poll(() => room(page, 'return s.room;'), { timeout: 10_000 }).toBe(1);
   await waitForScene(page, 'room');
-  expect(await room(page, 'return [s.run.gear.weapon.kind, s.run.damage, s.run.rooms, !!s.dummy];')).toEqual(['rapier', 0, 0, false]);
+  expect(await room(page, 'return [s.run.gear.weapon.kind, s.run.damage, s.run.rooms, !!s.dummy];')).toEqual(['bow', 0, 0, false]);
 
   // a fresh visit to the camp remembers the pick
   await page.goto('/?camp');
   await waitForScene(page, 'room');
-  expect(await room(page, 'return s.run.gear.weapon.kind;')).toBe('rapier');
+  expect(await room(page, 'return s.run.gear.weapon.kind;')).toBe('bow');
   expect(errors).toEqual([]);
 });

@@ -84,6 +84,9 @@ export class Dummy extends Enemy {
     return 78;
   }
 
+  // it has nothing to be stopped from doing
+  stun() {}
+
   // Every blow lands and is counted; the dummy only rocks, it never loses health.
   protected applyDamage(dmg: number, fromX: number, _knock: number, _stagger: number): number {
     this.flashT = 0.07;

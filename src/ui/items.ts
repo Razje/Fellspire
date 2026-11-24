@@ -53,9 +53,102 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
   c.lineJoin = 'round'; c.lineCap = 'round';
   const disc = (x: number, y: number, r: number, fill: string | CanvasGradient) => { c.fillStyle = fill; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); };
   switch (name) {
-    case 'longsword': back(c, s, '#3a5a7a', '#0a1420'); blade(c, s, 0.055, 0.42, 0.17); break;
-    case 'greatblade': back(c, s, '#6a3a2a', '#160806'); blade(c, s, 0.085, 0.46, 0.24); break;
-    case 'rapier': back(c, s, '#3a6a6a', '#061614'); blade(c, s, 0.025, 0.46, 0.1, true); break;
+    case 'sword': {
+      back(c, s, '#3a5a7a', '#0a1420'); blade(c, s, 0.055, 0.4, 0.16);
+      // a round shield in front, lower left
+      disc(s * 0.32, s * 0.66, s * 0.23, INK);
+      const sg = c.createRadialGradient(s * 0.28, s * 0.6, 0, s * 0.32, s * 0.66, s * 0.2);
+      sg.addColorStop(0, '#5a8ad8'); sg.addColorStop(1, '#1a3070');
+      disc(s * 0.32, s * 0.66, s * 0.19, sg);
+      c.strokeStyle = vg(c, s * 0.46, s * 0.86, GOLD); c.lineWidth = s * 0.04; c.beginPath(); c.arc(s * 0.32, s * 0.66, s * 0.16, 0, Math.PI * 2); c.stroke();
+      disc(s * 0.32, s * 0.66, s * 0.05, vg(c, s * 0.6, s * 0.72, GOLD));
+      break;
+    }
+    case 'greatsword': back(c, s, '#6a3a2a', '#160806'); blade(c, s, 0.085, 0.46, 0.24); break;
+    case 'bow': {
+      back(c, s, '#4a6a3a', '#0c1608');
+      c.save(); c.translate(s * 0.5, s * 0.5); c.rotate(-Math.PI / 4);
+      const limb = () => { c.beginPath(); c.moveTo(-s * 0.12, -s * 0.42); c.quadraticCurveTo(s * 0.28, -s * 0.2, s * 0.2, 0); c.quadraticCurveTo(s * 0.28, s * 0.2, -s * 0.12, s * 0.42); };
+      c.strokeStyle = '#e8e0d0'; c.lineWidth = s * 0.025; c.beginPath(); c.moveTo(-s * 0.12, -s * 0.42); c.lineTo(-s * 0.12, s * 0.42); c.stroke();
+      c.strokeStyle = INK; c.lineWidth = s * 0.12; limb(); c.stroke();
+      c.strokeStyle = vg(c, -s * 0.4, s * 0.4, [[0, '#b07a40'], [1, '#5a3418']]); c.lineWidth = s * 0.07; limb(); c.stroke();
+      // an arrow on the string
+      c.strokeStyle = INK; c.lineWidth = s * 0.05; c.beginPath(); c.moveTo(-s * 0.2, 0); c.lineTo(s * 0.4, 0); c.stroke();
+      c.strokeStyle = '#d8c090'; c.lineWidth = s * 0.025; c.beginPath(); c.moveTo(-s * 0.19, 0); c.lineTo(s * 0.36, 0); c.stroke();
+      c.fillStyle = vg(c, -s * 0.05, s * 0.05, STEEL); c.beginPath(); c.moveTo(s * 0.46, 0); c.lineTo(s * 0.36, -s * 0.05); c.lineTo(s * 0.36, s * 0.05); c.closePath(); c.fill();
+      c.restore();
+      break;
+    }
+    case 'staff': {
+      back(c, s, '#2a5a6a', '#041218');
+      c.save(); c.translate(s * 0.5, s * 0.5); c.rotate(Math.PI / 4);
+      c.strokeStyle = INK; c.lineWidth = s * 0.1; c.beginPath(); c.moveTo(0, -s * 0.24); c.lineTo(0, s * 0.46); c.stroke();
+      c.strokeStyle = vg(c, -s * 0.2, s * 0.4, [[0, '#a87440'], [1, '#4a2a12']]); c.lineWidth = s * 0.055; c.beginPath(); c.moveTo(0, -s * 0.22); c.lineTo(0, s * 0.44); c.stroke();
+      const glow = c.createRadialGradient(0, -s * 0.3, 0, 0, -s * 0.3, s * 0.24);
+      glow.addColorStop(0, 'rgba(160,255,240,0.9)'); glow.addColorStop(1, 'rgba(160,255,240,0)');
+      c.fillStyle = glow; c.fillRect(-s * 0.3, -s * 0.56, s * 0.6, s * 0.52);
+      c.fillStyle = INK; c.beginPath(); c.moveTo(0, -s * 0.46); c.lineTo(s * 0.11, -s * 0.3); c.lineTo(0, -s * 0.14); c.lineTo(-s * 0.11, -s * 0.3); c.closePath(); c.fill();
+      c.fillStyle = vg(c, -s * 0.44, -s * 0.16, [[0, '#e8fff8'], [0.5, '#5ae8d0'], [1, '#1a7a6a']]);
+      c.beginPath(); c.moveTo(0, -s * 0.42); c.lineTo(s * 0.075, -s * 0.3); c.lineTo(0, -s * 0.18); c.lineTo(-s * 0.075, -s * 0.3); c.closePath(); c.fill();
+      c.restore();
+      break;
+    }
+    // the skills, for the action bar's I slot
+    case 'sk_shieldCharge': {
+      back(c, s, '#3a5aa8', '#060c20');
+      c.strokeStyle = 'rgba(190,220,255,0.7)'; c.lineWidth = s * 0.05;
+      for (const y of [0.34, 0.5, 0.66]) { c.beginPath(); c.moveTo(s * 0.08, s * y); c.lineTo(s * 0.4, s * y); c.stroke(); }
+      disc(s * 0.62, s * 0.5, s * 0.3, INK);
+      const sg = c.createRadialGradient(s * 0.56, s * 0.42, 0, s * 0.62, s * 0.5, s * 0.27);
+      sg.addColorStop(0, '#7aa8f0'); sg.addColorStop(1, '#1a3070');
+      disc(s * 0.62, s * 0.5, s * 0.26, sg);
+      c.strokeStyle = vg(c, s * 0.24, s * 0.76, GOLD); c.lineWidth = s * 0.05; c.beginPath(); c.arc(s * 0.62, s * 0.5, s * 0.22, 0, Math.PI * 2); c.stroke();
+      disc(s * 0.62, s * 0.5, s * 0.07, vg(c, s * 0.43, s * 0.57, GOLD));
+      break;
+    }
+    case 'sk_leapSlam': {
+      back(c, s, '#a8601a', '#200a04');
+      // a ring of force on the ground and a blade coming down into it
+      c.strokeStyle = 'rgba(255,210,120,0.9)'; c.lineWidth = s * 0.05;
+      c.beginPath(); c.ellipse(s * 0.5, s * 0.78, s * 0.36, s * 0.1, 0, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = 'rgba(255,240,200,0.6)'; c.lineWidth = s * 0.03;
+      c.beginPath(); c.ellipse(s * 0.5, s * 0.78, s * 0.22, s * 0.06, 0, 0, Math.PI * 2); c.stroke();
+      c.save(); c.translate(s * 0.5, s * 0.42); c.rotate(Math.PI);
+      c.fillStyle = INK; c.fillRect(-s * 0.07, -s * 0.36, s * 0.14, s * 0.5);
+      c.fillStyle = vg(c, -s * 0.34, s * 0.12, STEEL); c.fillRect(-s * 0.045, -s * 0.34, s * 0.09, s * 0.46);
+      c.fillStyle = INK; c.fillRect(-s * 0.18, s * 0.11, s * 0.36, s * 0.08);
+      c.fillStyle = vg(c, s * 0.12, s * 0.18, GOLD); c.fillRect(-s * 0.16, s * 0.12, s * 0.32, s * 0.05);
+      c.restore();
+      break;
+    }
+    case 'sk_rainOfArrows': {
+      back(c, s, '#6a2a2a', '#160606');
+      c.strokeStyle = 'rgba(255,90,60,0.85)'; c.lineWidth = s * 0.04;
+      c.beginPath(); c.ellipse(s * 0.5, s * 0.8, s * 0.34, s * 0.1, 0, 0, Math.PI * 2); c.stroke();
+      for (const [x, y] of [[0.3, 0.2], [0.52, 0.1], [0.72, 0.24], [0.42, 0.36], [0.62, 0.44]]) {
+        c.save(); c.translate(s * x, s * y); c.rotate(Math.PI * 0.42);
+        c.strokeStyle = INK; c.lineWidth = s * 0.05; c.beginPath(); c.moveTo(-s * 0.14, 0); c.lineTo(s * 0.12, 0); c.stroke();
+        c.strokeStyle = '#d8c090'; c.lineWidth = s * 0.025; c.beginPath(); c.moveTo(-s * 0.13, 0); c.lineTo(s * 0.1, 0); c.stroke();
+        c.fillStyle = '#e8eef4'; c.beginPath(); c.moveTo(s * 0.18, 0); c.lineTo(s * 0.1, -s * 0.045); c.lineTo(s * 0.1, s * 0.045); c.closePath(); c.fill();
+        c.restore();
+      }
+      break;
+    }
+    case 'sk_blizzard': {
+      back(c, s, '#4a8ab8', '#061424');
+      // a snowflake over a pale drift
+      disc(s * 0.5, s * 0.84, s * 0.3, 'rgba(220,240,255,0.25)');
+      c.save(); c.translate(s * 0.5, s * 0.44);
+      for (let i = 0; i < 6; i++) {
+        c.rotate(Math.PI / 3);
+        c.strokeStyle = INK; c.lineWidth = s * 0.08; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -s * 0.32); c.stroke();
+        c.strokeStyle = '#e8f6ff'; c.lineWidth = s * 0.04;
+        c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -s * 0.3); c.moveTo(0, -s * 0.18); c.lineTo(s * 0.08, -s * 0.26); c.moveTo(0, -s * 0.18); c.lineTo(-s * 0.08, -s * 0.26); c.stroke();
+      }
+      c.restore();
+      disc(s * 0.5, s * 0.44, s * 0.06, '#ffffff');
+      break;
+    }
     case 'armor': {
       back(c, s, '#4a5060', '#0a0c12');
       const plate = (k: number) => {

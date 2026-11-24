@@ -4,8 +4,8 @@
 // The three Valkyrie colour variants share one rig, so their parts mix freely:
 // the helmet comes from one, the eyes from another, the armour (chest, arms,
 // legs and hands together) from a third. Skin tone recolours whatever skin the
-// chosen parts show (rig/skin.ts). Sword and shield stay Valkyrie_1's until the
-// weapon step.
+// chosen parts show (rig/skin.ts). The weapon in her hand is put there by
+// armRig (rig/weapons.ts) for the weapon carried.
 import Phaser from 'phaser';
 import { HERO_PARTS } from './config';
 import { Rig } from './rig/Rig';

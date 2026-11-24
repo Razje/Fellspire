@@ -71,11 +71,11 @@ test('gold, barrels, the chest and gear', async ({ page }) => {
     s.enemies = [g];
     s.waveDelay = 999;
 
-    // a light hit with the starting longsword, then with a greatblade
+    // a light hit with the starting sword, then with a greatsword
     const hitWith = () => { reset(); g.hp = g.maxHp; g.x = p.x + 40; g.y = p.y; g.attackCd = 9; g.state = 'idle'; g.knockVx = 0; const b = g.hp; press('J'); step(25); return b - g.hp; };
-    out.longsword = hitWith();
-    s.equip(L.makeWeapon('common', Math.random, 'greatblade'));
-    out.greatblade = hitWith();
+    out.sword = hitWith();
+    s.equip(L.makeWeapon('common', Math.random, 'greatsword'));
+    out.greatsword = hitWith();
 
     // armor: more health, less damage from a bone
     s.equip(L.makeArmor('epic'));
@@ -113,7 +113,7 @@ test('gold, barrels, the chest and gear', async ({ page }) => {
     game.loop.wake();
     return out;
   });
-  expect(r.greatblade as number).toBeGreaterThan(r.longsword as number);
+  expect(r.greatsword as number).toBeGreaterThan(r.sword as number);
   expect(r.maxHp).toBe(140);
   expect(r.boneWithArmor).toBe(7); // 8 less 15%
   expect(r.gold as number).toBeGreaterThanOrEqual(2);
@@ -226,7 +226,7 @@ test.describe('screens', () => {
         const s = g.scene.getScene('room'), h = g.scene.getScene('hud');
         // one of each of the better rarities, so the cards show the range
         const r = ['uncommon', 'rare', 'epic'];
-        const items = c === 'weapon' ? r.map((x, i) => L.makeWeapon(x, Math.random, ['longsword', 'greatblade', 'rapier'][i]))
+        const items = c === 'weapon' ? r.map((x, i) => L.makeWeapon(x, Math.random, ['sword', 'bow', 'staff'][i]))
           : c === 'armor' ? r.map((x) => L.makeArmor(x)) : r.map((x, i) => L.makeTrinket(x, Math.random, i ? [] : []));
         s.scene.pause();
         h.openChest(items, s.run.gear, (it: any) => { s.equip(it); s.scene.resume(); });
@@ -249,7 +249,7 @@ test.describe('screens', () => {
       (window as any).game.scene.getScene('hud').refreshGear();
     });
     await page.mouse.move(900, 700);
-    await page.mouse.move(684, 984, { steps: 6 }); // over the weapon slot
+    await page.mouse.move(776, 984, { steps: 6 }); // over the weapon slot
     await page.waitForTimeout(400);
     await shot('5-hud-gear-tooltip');
     expect(errors).toEqual([]);

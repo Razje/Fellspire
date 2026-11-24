@@ -9,7 +9,10 @@ import { evaluate, type SAnim, type Scml } from './scml';
 
 export interface PartSwap {
   texture: string | null; // null hides the part
-  grip?: { from: [number, number]; to: [number, number]; angle?: number; scale?: number };
+  show?: boolean; // shown even where the animation hides the part it replaces
+  // rest: an extra turn (degrees) while the animation hides the part it replaces,
+  // so a weapon the pack never poses at rest is held upright instead of levelled
+  grip?: { from: [number, number]; to: [number, number]; angle?: number; scale?: number; rest?: number };
 }
 
 export class Rig extends Phaser.GameObjects.Container {
@@ -80,13 +83,14 @@ export class Rig extends Phaser.GameObjects.Container {
       }
       seen.add(s.slot);
       if (!key || !this.scene.textures.exists(key)) { img.setVisible(false); return; }
-      img.setVisible(true).setTexture(key).setAlpha(s.a);
+      img.setVisible(true).setTexture(key).setAlpha(swap?.show ? 1 : s.a);
       if (this.flashing) img.setTintFill(0xffffff);
       else img.setTint(this.tint);
       const rad = (s.angle * Math.PI) / 180;
       if (swap?.grip) {
         // where the hand was on the old part, in the part's own space (y up)...
-        const { from, to, angle = 0, scale = 1 } = swap.grip;
+        const { from, to, scale = 1 } = swap.grip;
+        const angle = (swap.grip.angle ?? 0) + (s.a < 0.01 ? swap.grip.rest ?? 0 : 0);
         const lx = from[0] - s.file.px * s.file.w;
         const ly = s.file.h - from[1] - s.file.py * s.file.h;
         const wx = s.x + lx * s.sx * Math.cos(rad) - ly * s.sy * Math.sin(rad);

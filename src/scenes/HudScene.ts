@@ -12,7 +12,8 @@
 import Phaser from 'phaser';
 import { WORLD } from '../config';
 import { firstFrame, loadedAnims } from '../assets';
-import { Bar, Button, FocusList, Frame, Slot, bandTextures, hi, icon, keyHint, pic, CURSOR, CURSOR_HOVER } from '../ui/kit';
+import { Bar, Button, FocusList, Frame, SLOT, Slot, bandTextures, hi, icon, keyHint, pic, CURSOR, CURSOR_HOVER } from '../ui/kit';
+import { WEAPONS } from '../weapons';
 import { openOptions, type Panel } from '../ui/panels';
 import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
 import { RARITY, type Gear, type Item } from '../loot';
@@ -25,7 +26,7 @@ import type { RoomScene } from './RoomScene';
 
 export type RunStats = Run;
 export type BannerKind = 'zone' | 'warn' | 'good';
-export type Action = 'light' | 'heavy' | 'dodge';
+export type Action = 'light' | 'heavy' | 'skill' | 'dodge';
 
 const { viewW, viewH } = WORLD;
 
@@ -182,7 +183,7 @@ export class HudScene extends Phaser.Scene {
     this.hp = new Bar(this, 114, 444, 214, 15, 'health');
 
     const keys: [Action | 'block', 'light' | 'heavy' | 'dodge' | 'block', string][] = [
-      ['light', 'light', 'J'], ['heavy', 'heavy', 'K'], ['dodge', 'dodge', 'Spc'], ['block', 'block', 'L'],
+      ['light', 'light', 'J'], ['heavy', 'heavy', 'K'], ['skill', 'heavy', 'I'], ['dodge', 'dodge', 'Spc'], ['block', 'block', 'L'],
     ];
     const s = {} as Record<Action | 'block', Slot>;
     keys.forEach(([k, ico, key], i) => { s[k] = new Slot(this, 136 + i * 46, 492, ico, key); });
@@ -240,7 +241,7 @@ export class HudScene extends Phaser.Scene {
   private buildHints() {
     const row = this.add.container(0, 522);
     let x = 0;
-    for (const [keys, what] of [[['W', 'A', 'S', 'D'], 'Move'], [['J'], 'Light'], [['K'], 'Heavy'], [['Space'], 'Dodge'], [['L'], 'Block'], [['Esc'], 'Menu']] as const) {
+    for (const [keys, what] of [[['W', 'A', 'S', 'D'], 'Move'], [['J'], 'Light'], [['K'], 'Heavy'], [['I'], 'Skill'], [['Space'], 'Dodge'], [['L'], 'Block'], [['Esc'], 'Menu']] as const) {
       const h = keyHint(this, x, 0, [...keys], what);
       row.add(h);
       x += h.width + 16;
@@ -271,6 +272,7 @@ export class HudScene extends Phaser.Scene {
     this.lastHp = p.hp;
 
     this.slots.dodge.cooldown(Math.max(0, p.dodgeCd) / 0.55);
+    this.slots.skill.cooldown(Math.max(0, p.skillCd) / p.skill.cooldown, Math.max(0, p.skillCd));
     this.slots.block.setActive(p.state === 'block');
 
     this.pips.forEach((pip, i) => pip.setTexture(r.gateOpen || i < r.wave - 1 ? 'ui_pip' : i === r.wave - 1 ? 'ui_pip' : 'ui_pip_off')
@@ -292,7 +294,15 @@ export class HudScene extends Phaser.Scene {
 
   // ---- what you carry: weapon and armor beside the action bar, trinkets above the name ----
 
+  // The skill slot shows the carried weapon's skill; the block slot dims without a shield.
+  private refreshSkill() {
+    const st = this.room.stats;
+    this.slots.skill.setIcon(itemIcon(this, `sk_${st.skill}`, SLOT - 6));
+    this.slots.block.setAlpha(WEAPONS[st.kind].block ? 1 : 0.3);
+  }
+
   refreshGear() {
+    this.refreshSkill();
     this.gearUi?.destroy();
     this.hideTip();
     const g = this.room.run.gear;
@@ -315,9 +325,9 @@ export class HudScene extends Phaser.Scene {
       return c;
     };
     // a thin divider, then the weapon and the armor
-    root.add(this.add.rectangle(318, 492, 1, 30, 0xb89040, 0.5));
-    slot(342, 492, 40, g.weapon, 'longsword');
-    slot(388, 492, 40, g.armor, 'armor');
+    root.add(this.add.rectangle(364, 492, 1, 30, 0xb89040, 0.5));
+    slot(388, 492, 40, g.weapon, 'sword');
+    slot(434, 492, 40, g.armor, 'armor');
     g.trinkets.forEach((t, i) => slot(128 + i * 27, 408, 24, t, t.icon));
   }
 
@@ -354,7 +364,7 @@ export class HudScene extends Phaser.Scene {
     gild(title, GOLD_STOPS);
     const orn = pic(this, cx, 66, 'ui_ornament');
     root.add([shade, title, orn]);
-    const cards = items.map((it, i) => new ItemCard(this, cx + (i - 1) * 228, 312, it, gear));
+    const cards = items.map((it, i) => new ItemCard(this, cx + (i - (items.length - 1) / 2) * 228, 312, it, gear));
     root.add(cards);
     const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, 0xffd100).setStrokeStyle(1.5, 0x3a2000);
     root.add(arrow);

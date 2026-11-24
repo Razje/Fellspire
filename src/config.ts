@@ -34,7 +34,7 @@ export const HERO_PARTS = 'Valkyrie_1';
 // The game's animation names and the Spriter animations that play them.
 export const RIG_ANIMS: Record<string, string> = {
   idle: 'Idle', walk: 'Walking', run: 'Running', attack: 'Slashing', heavy: 'Run Slashing',
-  throw: 'Throwing', dodge: 'Sliding', hurt: 'Hurt', die: 'Dying',
+  throw: 'Throwing', leap: 'Slashing in The Air', dodge: 'Sliding', hurt: 'Hurt', die: 'Dying',
 };
 
 export type CharKey = 'hero' | 'ghoul' | 'archer';

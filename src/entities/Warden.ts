@@ -134,6 +134,9 @@ export class Warden extends Enemy {
     return this.takeHit(dmg, this.x, 0, false);
   }
 
+  // a boss is not dazed
+  stun() {}
+
   die() {
     this.state = 'dead';
     this.stateT = 0;

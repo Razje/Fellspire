@@ -10,7 +10,8 @@
 
 export type Rarity = 'poor' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type Category = 'weapon' | 'armor' | 'trinket';
-export type WeaponKind = 'longsword' | 'greatblade' | 'rapier';
+export type { WeaponKind } from './weapons';
+import { SKILLS, WEAPONS, type SkillId, type WeaponKind } from './weapons';
 
 export const RARITY: Record<Rarity, { label: string; color: string; tint: number; tier: number }> = {
   poor: { label: 'Poor', color: '#9d9d9d', tint: 0x9d9d9d, tier: 0 },
@@ -81,16 +82,14 @@ export interface Item {
   icon: string; // icon name for the UI kit
   kind?: WeaponKind; // weapons
   power?: number; // weapons: damage multiplier
+  skill?: SkillId; // weapons: the skill on the I key
   hp?: number; // armor: more health
   armor?: number; // armor: damage reduction
   effects: Effects;
 }
 
-export const WEAPON_KINDS: Record<WeaponKind, { label: string; speed: string; blurb: string }> = {
-  longsword: { label: 'Longsword', speed: 'Balanced', blurb: 'Three-strike combo; a heavy overhead blow.' },
-  greatblade: { label: 'Greatblade', speed: 'Slow', blurb: 'Slow, crushing blows with long reach; the heavy spins and hits all around.' },
-  rapier: { label: 'Rapier', speed: 'Fast', blurb: 'Quick four-strike combo; the heavy is a long lunge.' },
-};
+// The weapon types themselves (moves, skills, names) are in weapons.ts.
+export const WEAPON_KINDS = WEAPONS;
 
 // Effects a weapon or armor kit can carry, and how strong each is at each tier (1-5).
 const WEAPON_FX: [Effect, (t: number) => number][] = [
@@ -122,14 +121,6 @@ const TRINKETS: TrinketDef[] = [
   { name: 'Frost Pearl', icon: 'pearl', fx: 'frost', v: (t) => 0.8 + t * 0.3 },
 ];
 
-const WEAPON_NAMES: Record<WeaponKind, string[]> = {
-  longsword: ['Gravecut', 'Wardensteel', 'Mossbitten', 'Lanternlight', 'Oathbound'],
-  greatblade: ['Ashen', 'Tombbreaker', 'Hollowed', 'Thornwood', 'Barrowking'],
-  rapier: ['Duskneedle', 'Wisp', 'Mothwing', 'Silvervein', 'Nightglass'],
-};
-const LEGENDARY_WEAPONS: Record<WeaponKind, string> = {
-  longsword: 'Dawnwake, Blade of the First Light', greatblade: 'Fellmourn, the Spire-Cleaver', rapier: 'Whisper of the Drowned',
-};
 const ARMOR_NAMES = ['Leather Jerkin', 'Ringmail Hauberk', 'Graveguard Plate', 'Barrow-Lord Mail', 'Moonwoven Cuirass'];
 const ARMOR_PREFIX = ['Patched', 'Sturdy', 'Warded', 'Gilded', 'Everlit'];
 
@@ -137,10 +128,10 @@ const pick = <T>(a: T[], rnd: () => number) => a[Math.floor(rnd() * a.length)];
 
 // A plain weapon of a kind, as the camp's rack offers them before a run.
 export function starterWeapon(kind: WeaponKind): Item {
-  return { cat: 'weapon', name: `Worn ${WEAPON_KINDS[kind].label}`, rarity: 'poor', icon: kind, kind, power: 1, effects: {} };
+  return { cat: 'weapon', name: `Worn ${WEAPONS[kind].noun}`, rarity: 'poor', icon: kind, kind, power: 1, skill: WEAPONS[kind].skills[0], effects: {} };
 }
 
-export const STARTING_WEAPON: Item = starterWeapon('longsword');
+export const STARTING_WEAPON: Item = starterWeapon('sword');
 
 export function makeWeapon(rarity: Rarity, rnd: () => number = Math.random, kind?: WeaponKind): Item {
   const t = RARITY[rarity].tier;
@@ -152,8 +143,9 @@ export function makeWeapon(rarity: Rarity, rnd: () => number = Math.random, kind
     const [e, f] = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
     effects[e] = round(f(t));
   }
-  const name = rarity === 'legendary' ? LEGENDARY_WEAPONS[k] : `${pick(WEAPON_NAMES[k], rnd)} ${WEAPON_KINDS[k].label}`;
-  return { cat: 'weapon', name, rarity, icon: k, kind: k, power: round(1 + 0.1 * t + rnd() * 0.06), effects };
+  const def = WEAPONS[k];
+  const name = rarity === 'legendary' ? def.legendary : `${pick(def.names, rnd)} ${def.noun}`;
+  return { cat: 'weapon', name, rarity, icon: k, kind: k, power: round(1 + 0.1 * t + rnd() * 0.06), skill: pick(def.skills, rnd), effects };
 }
 
 export function makeArmor(rarity: Rarity, rnd: () => number = Math.random): Item {
@@ -199,6 +191,7 @@ export function newGear(): Gear {
 export interface GearStats {
   power: number; // weapon damage multiplier
   kind: WeaponKind;
+  skill: SkillId;
   fx: Required<Effects>;
 }
 
@@ -212,7 +205,8 @@ export function gearStats(g: Gear): GearStats {
   fx.armor = Math.min(0.6, fx.armor);
   fx.dodgeCd = Math.min(0.6, fx.dodgeCd);
   fx.crit = Math.min(0.6, fx.crit);
-  return { power: g.weapon.power ?? 1, kind: g.weapon.kind ?? 'longsword', fx };
+  const kind = g.weapon.kind ?? 'sword';
+  return { power: g.weapon.power ?? 1, kind, skill: g.weapon.skill ?? WEAPONS[kind].skills[0], fx };
 }
 
 // The lines of a card or tooltip: [label, value, colour]. Compares against what is
@@ -230,7 +224,10 @@ export function itemLines(it: Item, g: Gear | null): Line[] {
     const pct = (x: number) => `${Math.round(x * 100)}%`;
     lines.push({ label: 'Damage', value: cmp(now?.power, it.power!, pct), color: col(now?.power, it.power!) });
     lines.push({ label: 'Speed', value: WEAPON_KINDS[it.kind!].speed });
-    lines.push({ label: WEAPON_KINDS[it.kind!].blurb, color: '#cfc5ae' });
+    lines.push({ label: WEAPONS[it.kind!].blurb, color: '#cfc5ae' });
+    const sk = SKILLS[it.skill ?? WEAPONS[it.kind!].skills[0]];
+    lines.push({ label: 'Skill (I)', value: sk.name, color: '#ffd100' });
+    lines.push({ label: `${sk.blurb} Every ${sk.cooldown} s.`, color: '#cfc5ae' });
   } else if (it.cat === 'armor') {
     const now = g?.armor ?? undefined;
     lines.push({ label: 'Health', value: cmp(now?.hp ?? (g ? 0 : undefined), it.hp!, (x) => `+${x}`), color: col(now?.hp ?? (g ? 0 : undefined), it.hp!) });
