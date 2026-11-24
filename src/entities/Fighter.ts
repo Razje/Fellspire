@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { CHARACTERS, WORLD, type CharConfig, type CharKey } from '../config';
+import { CHARACTERS, RIG_ANIMS, WORLD, type CharConfig, type CharKey } from '../config';
+import type { Rig } from '../rig/Rig';
 import { firstFrame, loadedAnims } from '../assets';
 import type { RoomScene } from '../scenes/RoomScene';
 
@@ -28,6 +29,7 @@ export abstract class Fighter {
   protected bobT = 0;
   private baseScale: number;
   private currentAnim = '';
+  rig?: Rig; // when set, the character is drawn from parts and the sprite is hidden
 
   // scaleMul draws the character larger than its pack's usual size (bosses).
   constructor(public scene: RoomScene, public key: CharKey, public x: number, public y: number, public maxHp: number, scaleMul = 1) {
@@ -56,6 +58,13 @@ export abstract class Fighter {
   }
 
   playAnim(name: string, opts: { duration?: number; loop?: boolean; force?: boolean } = {}) {
+    const r = this.rig;
+    if (r && RIG_ANIMS[name] && r.has(RIG_ANIMS[name])) {
+      if (this.currentAnim === name && !opts.force) return;
+      this.currentAnim = name;
+      r.play(RIG_ANIMS[name], true, { loop: !!opts.loop, duration: opts.duration });
+      return;
+    }
     if (this.hasArt && this.animated.has(name)) {
       const key = `${this.key}_${name}`;
       if (this.currentAnim === key && !opts.force) return;
@@ -127,7 +136,7 @@ export abstract class Fighter {
     this.scene.time.delayedCall(delayMs, () => {
       this.fading = true;
       this.scene.tweens.add({
-        targets: [this.sprite, this.shadow],
+        targets: [this.rig ?? this.sprite, this.shadow],
         alpha: 0,
         duration: 400,
         onComplete: () => this.destroy(),
@@ -136,9 +145,25 @@ export abstract class Fighter {
   }
 
   destroy() {
+    this.rig?.destroy();
     this.sprite.destroy();
     this.shadow.destroy();
     this.removed = true;
+  }
+
+  // The same as sync, for a character drawn from parts.
+  private syncRig(dt: number) {
+    const r = this.rig!;
+    r.step(dt * 1000);
+    this.sprite.setPosition(this.x, this.y).setFlipX(this.facing < 0);
+    r.setPosition(this.x, this.y).setFacing(this.facing).setDepth(this.y + 10);
+    this.shadow.setPosition(this.x, this.y);
+    if (this.flashT > 0) {
+      this.flashT -= dt;
+      r.flash(true);
+    } else r.tintAll(this.tintColor ?? this.scene.lightAt(this.x, this.y));
+    this.appear = Math.min(1, this.appear + dt * 2.5);
+    if (!this.fading) r.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear);
   }
 
   // Knockback, timers and staying on the ground strip.
@@ -161,6 +186,7 @@ export abstract class Fighter {
   }
 
   protected sync(dt: number, moving = false) {
+    if (this.rig) { this.syncRig(dt); return; }
     let bob = 0;
     if (!this.hasArt && moving && !this.isDead()) {
       this.bobT += dt * 14;

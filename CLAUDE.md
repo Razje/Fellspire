@@ -35,6 +35,19 @@ boss fight. In Claude's browser pane, `preview_start` with the name
 hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen frame.
 `window.game` is the Phaser game in development builds, for inspecting state.
 
+## A copy to send someone
+
+```powershell
+node C:\IXONellspire	ools\package.mjs
+```
+
+Builds `release\Fellspire.html`, one self-contained file (art, fonts and code inside,
+about 26 MB) that opens by double-clicking with no install or internet, and zips it
+with a how-to-play note as `release\Fellspire-<date>.zip`. Checked on 2026-11-24 by
+opening it from disk in Edge and playing into room 1. Only the art the game shows
+goes in (`KEEP` in the script); the CraftPix licence allows art inside a game, not
+the source files on their own. `release/` is ignored by git.
+
 ## Testing: after every change
 
 ```powershell
@@ -71,8 +84,10 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
 | `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
+| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn bow, staff and dagger |
+| `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/settings.ts` | Options remembered in the browser |
-| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `shrink.mjs`, `measure-feet.mjs` |
+| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
 
 Keep it that way as it grows: new enemies, weapons and rooms should become data
 (definitions in a list), not more branches in `Player` or `RoomScene`. Large single
@@ -96,6 +111,12 @@ UI: gold bevelled lettering, red buttons with gold trim. Fonts are Cinzel and Ci
 Decorative, bundled from npm.
 
 ## Things that bite
+
+- **The player is drawn from parts** (`src/rig/`, `HERO_PARTS` in `config.ts`) when
+  `assets/parts/` holds them; run `python -I tools/unpack-parts.py <zip> x` for each
+  pack zip in `assets/packs/` on a new machine. Without them the game falls back to
+  the frames. Enemies still use frames. `RIG_ANIMS` maps the game's animation names
+  to the pack's Spriter animations.
 
 - **Depth is drawing order.** Everything on the floor sets its depth to its feet's
   y (characters y + 10, props y), so whoever stands lower on screen is drawn in

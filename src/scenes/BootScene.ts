@@ -3,6 +3,8 @@ import { CHARACTERS, LOOPING, ZONE, type CharKey } from '../config';
 import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
 import { screenCamera } from '../ui/view';
+import { loadParts, partVariants } from '../rig/parts';
+import { HERO_PARTS } from '../config';
 
 export class BootScene extends Phaser.Scene {
   private found: Partial<Record<CharKey, Record<string, string[]>>> = {};
@@ -32,7 +34,9 @@ export class BootScene extends Phaser.Scene {
     this.registry.set('bgCount', bgUrls.length);
   }
 
-  create() {
+  async create() {
+    // the hero is drawn from her separate parts (src/rig), if they are unpacked
+    if (partVariants().includes(HERO_PARTS)) await loadParts(this, [HERO_PARTS]);
     const report: string[] = [];
     for (const key of Object.keys(CHARACTERS) as CharKey[]) {
       const frames = this.found[key] ?? {};
@@ -55,7 +59,9 @@ export class BootScene extends Phaser.Scene {
 
     makePlaceholderTextures(this);
     // ?boss in the address goes straight to the boss fight, for playtesting it
-    if (new URLSearchParams(location.search).has('boss')) this.scene.start('room', { room: ZONE.bossRoom });
+    const q = new URLSearchParams(location.search);
+    if (q.has('rig')) this.scene.start('riglab'); // the rig lab, a test page for characters from parts
+    else if (q.has('boss')) this.scene.start('room', { room: ZONE.bossRoom });
     else this.scene.start('menu');
   }
 }

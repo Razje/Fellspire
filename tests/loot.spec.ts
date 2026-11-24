@@ -164,9 +164,9 @@ test('each effect does what it says', async ({ page }) => {
     clearGear(); trinket({ storm: 20 }); place(); s.hitCount = 4; press('J'); step(20);
     out.stormOnOther = h.maxHp - h.hp;
 
-    clearGear(); trinket({ burn: 5 }); place(); press('K'); step(50);
+    clearGear(); trinket({ burn: 5 }); place(); g.hp = 500; press('K'); step(50);
     out.fires = s.fires.length;
-    g.hp = 200; const afterHeavy = g.hp; g.x = s.fires[0]?.x ?? g.x; g.y = s.fires[0]?.y ?? g.y; step(70);
+    const afterHeavy = g.hp; g.x = s.fires[0]?.x ?? g.x; g.y = s.fires[0]?.y ?? g.y; step(70);
     out.burned = afterHeavy - g.hp;
 
     clearGear(); trinket({ thorns: 6 }); place(); g.attackCd = 0; step(70);

@@ -17,6 +17,9 @@ import { openOptions, type Panel } from '../ui/panels';
 import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
+import { HERO_PARTS } from '../config';
+import { Rig } from '../rig/Rig';
+import { scmlOf } from '../rig/parts';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
@@ -99,6 +102,7 @@ export class HudScene extends Phaser.Scene {
   private blur?: Phaser.FX.Blur;
   private padPrev: boolean[] = [];
   private gateShown = false;
+  private portrait?: Rig;
   private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
   private goldText!: Phaser.GameObjects.Text;
   private gearUi?: Phaser.GameObjects.Container;
@@ -122,6 +126,7 @@ export class HudScene extends Phaser.Scene {
     this.padPrev = [];
     this.gateShown = false;
     this.bossBar = undefined;
+    this.portrait = undefined;
     this.endKind = null;
     this.gearUi = undefined;
     this.tip = undefined;
@@ -159,14 +164,21 @@ export class HudScene extends Phaser.Scene {
     const art = loadedAnims.hero?.has('idle');
     this.add.circle(cx, cy, 37, 0x142231, 1);
     this.add.circle(cx, cy + 10, 30, 0x070b12, 0.6);
-    const face = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero! : 'ph_hero');
-    face.setScale(art ? 150 / face.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5);
+    // the hero's own head and shoulders, from her parts (or from a frame without them)
+    const scml = scmlOf(HERO_PARTS);
+    let face: Phaser.GameObjects.Image | Rig;
+    if (scml) {
+      const size = 0.15;
+      face = this.portrait = new Rig(this, cx + 2, cy + 290 * size, scml, HERO_PARTS, size);
+    } else {
+      const img = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero! : 'ph_hero');
+      face = img.setScale(art ? 150 / img.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5);
+    }
     const mask = this.make.graphics({}, false).fillCircle(cx, cy, 36);
     face.setMask(mask.createGeometryMask());
     pic(this, cx, cy - 2, 'ui_ring');
 
     txt(this, 116, 432, 'Valkyrie', 'head', { fontSize: '15px' }).setOrigin(0, 0.5);
-    txt(this, 196, 433, 'Ironguard', 'small', { fontSize: '11px', color: C.grey }).setOrigin(0, 0.5).setVisible(false);
     this.hp = new Bar(this, 114, 444, 214, 15, 'health');
 
     const keys: [Action | 'block', 'light' | 'heavy' | 'dodge' | 'block', string][] = [
@@ -239,6 +251,7 @@ export class HudScene extends Phaser.Scene {
     const p = r.player;
     if (!p) return;
     this.hp.set(Math.max(0, p.hp), p.maxHp, dt);
+    this.portrait?.step(dms);
 
     // taking damage flashes the edges red; low health keeps them pulsing
     if (p.hp < this.lastHp - 0.5) {

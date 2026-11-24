@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { Fighter } from './Fighter';
 import type { AttackSpec, RoomScene } from '../scenes/RoomScene';
 import type { WeaponKind } from '../loot';
+import { CHARACTERS, HERO_PARTS } from '../config';
+import { Rig } from '../rig/Rig';
+import { scmlOf } from '../rig/parts';
 
 interface Move extends AttackSpec {
   anim: 'attack' | 'heavy';
@@ -70,6 +73,14 @@ export class Player extends Fighter {
 
   constructor(scene: RoomScene, x: number, y: number) {
     super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
+    // drawn from parts when they are there: the frames' 900-pixel canvas maps to the
+    // configured height, so the two are the same size
+    const scml = scmlOf(HERO_PARTS);
+    if (scml) {
+      this.rig = new Rig(scene, x, y, scml, HERO_PARTS, CHARACTERS.hero.height / 900);
+      this.sprite.setVisible(false);
+      this.playAnim('idle', { loop: true, force: true });
+    }
     this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,K,L,E,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
   }
 

@@ -6,3 +6,4 @@ assets/**
 !assets/README.md
 test-results/
 playwright-report/
+release/

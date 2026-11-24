@@ -16,37 +16,78 @@ feel. Original world, original names (see the hard rules in `CLAUDE.md`).
 
 ## The run loop
 
-1. **Hub camp.** Choose a class, spend embers carried back from earlier runs, step
+1. **Hub camp.** Make your character once (customisation), then before each run
+   choose a starting weapon, spend embers carried back from earlier runs, and step
    through the portal.
 2. **Zone.** 6 to 8 rooms in random order, then a boss.
    - Combat room: clear the waves to open the exit.
    - Elite room: one tough enemy, better loot.
    - Treasure room: a chest, sometimes trapped.
    - Merchant: weapons, potions and trinkets for gold.
-   - Shrine: one of three class upgrades, or a curse for a strong reward.
+   - Shrine: one of three weapon upgrades, or a curse for a strong reward.
 3. **Three zones per run**, each harder. Gold and gear are lost on death; embers are kept.
 
 ## Combat
 
 Side-on, with depth to walk in (a belt scroller).
 
-- Light attack (three-hit combo), heavy attack, dodge roll with invulnerability, block.
-- Two class skills on cooldowns and an ultimate that charges from dealing and taking damage.
-- The weapon decides the moveset; each class uses two weapon types.
+- Light attack (a combo), heavy attack, dodge roll with invulnerability; block on shield weapons.
+- **The weapon decides how you play**, as in Lost Castle 2: its moveset, its skills and
+  its resource. Picking up a different weapon in a run changes your playstyle.
 - Enemies telegraph big attacks with a wind-up and a red ground marker. Hitting
   them during the wind-up interrupts it.
 
-## Classes
+## No classes: the weapon is the playstyle
 
-| Class | Role | Weapons | Skills | Ultimate |
-|---|---|---|---|---|
-| Ironguard | Tank | Sword and shield, axe | Shield bash (stun); taunt shout | Bulwark: dome that blocks projectiles |
-| Dawnpriest | Healer and fighter | Mace, holy tome | Smite (heals allies nearby); consecrated ground | Radiance: big heal plus stun |
-| Ashblade | Melee damage | Daggers, curved sword | Shadowstep; poison flurry | Thousand cuts |
-| Frostweaver | Ranged caster | Staff, wand | Frost bolt (slows); blink | Blizzard: large freezing area |
+Decided by Martijn on 2026-11-24, replacing the four classes planned earlier
+(Ironguard, Dawnpriest, Ashblade, Frostweaver). You make **one character** with
+customisation, and **the weapon decides how you play**, as in Lost Castle 2. A starting
+weapon is chosen in the hub before each run; others come from chests during the run.
 
-Later: Hexbinder (damage over time, summoned imp), Wildcaller (bear and ranged forms).
-The Valkyrie pack currently stands in for the hero.
+The weapon types (Martijn's list, 2026-11-24), each with its own moves, skills and
+resource, as in Lost Castle 2:
+
+| Weapon | Plays as | Art and animation needed |
+|---|---|---|
+| Single-handed + shield | Balanced; block, shield bash | Valkyrie's sword and shield fit as they are |
+| Two-handed | Slow, heavy, long reach; charged blows, spin | A greatsword part; heavier swings (adapt Slashing) |
+| Dual blades | Fast combos, mobility, finishers | A blade in each hand: an off-hand attachment; quicker swings |
+| Staff | Ranged magic, elemental bolts, a charged blast | Staff part; a casting animation |
+| Wand | Quick one-handed casting, rapid bolts | Wand part; a short cast (adapt Throwing) |
+| Bow | Ranged; charged and spread shots | Bow part; draw-and-shoot animation; arrows |
+| Blunderbuss | Short-range spread shot, knockback, slow reload | Gun part; firing animation with recoil; muzzle flash, pellets |
+| Dual revolvers | Fast ranged fire, reloads, dodge-shooting | A revolver in each hand; firing animations; bullets |
+
+**Every weapon has a unique skill** on its own key with a cooldown, a big signature
+move (Martijn, 2026-11-24): a staff that calls down a blizzard over an area, a
+greatsword that leaps into the air and slams down with a huge slash. A first draft,
+two or three per type so that individual weapons from chests can carry different
+ones (names are our own, nothing borrowed):
+
+| Weapon | Skills (draft) |
+|---|---|
+| Single-handed + shield | Shield Charge (rush forward, stun what you hit); Bulwark (raise the shield, reflect projectiles) |
+| Two-handed | Leap Slam (jump up, crash down in a ring of force); Cyclone (spin while moving); Earthsplitter (a crack tearing along the floor) |
+| Dual blades | Shadowstep (vanish, strike from behind); Blade Storm (a flurry of quick cuts); Knife Volley (blades thrown all around) |
+| Staff | Blizzard (ice falling over an area, slowing and hurting); Meteor (a marked circle, then a burning impact); Chain Lightning |
+| Wand | Spark Volley (seeking bolts); Frost Ring (a ring of ice that freezes those nearby); Blink (teleport a short way) |
+| Bow | Rain of Arrows (an area peppered from above); Piercing Shot (one arrow through a whole line); Spread Volley |
+| Blunderbuss | Cannon Blast (a huge cone, knocking you back too); Explosive Shell (a lobbed shot that bursts) |
+| Dual revolvers | Fan the Hammer (six fast shots); Ricochet (bullets bouncing between foes); Roll and Fire (a dodge that shoots) |
+
+**Per weapon** (decided by Martijn, 2026-11-24): each weapon found carries one skill
+from its type's list, so two staffs can differ (one calls a Blizzard, another a
+Meteor), as in Lost Castle 2. The skill shows on the chest's card and in the tooltip,
+and is part of what makes a pick interesting.
+
+The rig already swaps a part for a drawn weapon by its grip (rig lab). Still needed
+for this list: an off-hand weapon (dual blades, dual revolvers), and new animations
+for shooting, casting and firing, written as keyframes in the same format.
+
+Today's Longsword, Greatblade and Rapier are stat-and-move variants of the one
+sword animation the Valkyrie pack has. Real weapon types need character art where the
+weapon is separate from the body (see Open questions). The Valkyrie pack stands in
+for the player character until then.
 
 ## Loot and upgrades
 
@@ -67,7 +108,7 @@ The Valkyrie pack currently stands in for the hero.
 - Gold drops from enemies and from smashed barrels and crates (Lost Castle 2 does
   the same). Nothing spends it yet; that comes with the merchant.
 - Trinkets are passives ("dodging leaves a frost patch"); combinations make runs differ.
-- Shrines offer picks from a small tree per class: three branches of five.
+- Shrines offer picks from a small upgrade tree per weapon type.
 
 ## Zones
 
@@ -141,8 +182,16 @@ studied for its card and end-screen ideas only; none of its art is used.
    and crates, the room chest in its shrine with three cards (weapons, armor kits or trinkets),
    gear and trinkets on the HUD with hover tooltips, gold on the end screen.
    Everything an item can be is in `src/loot.ts`.
-8. A second class, and two-player co-op on one screen.
-9. Hub camp with embers between runs.
+8. **in progress** Character creation and weapon choice in the hub, in parts:
+   8.1 **done** the hero drawn from her parts in the fight (and the HUD portrait);
+   8.2 character creation; 8.3 the hub with weapon rack and portal; 8.4 the weapon
+   framework, skill key and the first four weapons (sword and shield, two-handed,
+   bow, staff); 8.5 dual blades and wand; 8.6 blunderbuss and dual revolvers.
+   Overall: make a character with
+   customisation, pick a starting weapon type, each type with its own moves.
+   Depends on the art question below.
+9. Two-player co-op on one screen.
+10. Hub camp with embers between runs.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away
 with `?boss` on the address (http://127.0.0.1:5180/?boss).
@@ -173,5 +222,29 @@ detail. Points to carry into Fellspire as the matching steps come up:
 - Controls: keep Space as dodge, or follow Lost Castle 2 (Space jump, L dodge)?
 
 - Which pack becomes the Lantern Warden? A reaper or wraith type would suit.
-- Which free or paid pack becomes the Ironguard? (Paladin or Armored Knight, $5.50 each.)
+- **Character art for customisation and weapon types.** The CraftPix chibi packs draw
+  the weapon into every frame and offer only a few colour variants, so they cannot
+  give a bow, a staff or a new hairstyle on the same character. Needed: modular art
+  (separate body, hair, armour and weapon layers) in a matching style, or our own
+  weapon sprites attached to a hand point.
+  **Researched 2026-11-24:** the CraftPix packs already downloaded include each
+  character's separate parts (`PNG/Vector Parts`: body, head, three faces, arms,
+  hands, legs, sword, shield) and a Spriter animation file (`Animations.scml`, 18
+  animations). Valkyrie, Skeleton Warrior and Zombie Villager share one rig: the same
+  parts at the same sizes, the same bones (the Valkyrie adds one for her shield), the
+  same animations. So parts from any CraftPix chibi pack fit any other. Plan: play
+  the `.scml` files ourselves in Phaser (an open XML format, no runtime licence), then
+  build characters from mixed parts and swap the weapon part. Bows and staffs need
+  either a CraftPix archer or mage chibi pack (about $5.50 each; check the rig matches)
+  or weapon parts drawn here, plus new animations for shooting and casting.
+  Alternatives looked at: Hippo's Fantasy Heroes editor (a different style, and every
+  combination pre-exported as a sprite sheet), Spine-based packs (Spine licence needed
+  for its runtime), free CC0 modular vector characters (style does not match).
+  **Proof of concept, 2026-11-24 (the rig lab, `?rig`):** our own Spriter player
+  draws the Valkyrie from her parts indistinguishably from the ready-made frames
+  (overlaid, they line up stroke for stroke) and sharper. A Skeleton head on a
+  Valkyrie body and a Valkyrie head on a Zombie body both work. Drawn weapons follow
+  the hand, but the packs' animations are made for a sword (Throwing even hides it),
+  so a bow and a staff need animations of their own (draw and shoot, cast), and a
+  big head can hide a weapon held behind it.
 - Sound and music: not started; needs a source with a licence that fits.

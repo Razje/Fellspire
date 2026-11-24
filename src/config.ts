@@ -27,6 +27,16 @@ export const DARK = {
   tick: 0.5,
 };
 
+// The pack variant whose separate parts draw the player (assets/parts/<this>/).
+// Without it the player falls back to the ready-made frames.
+export const HERO_PARTS = 'Valkyrie_1';
+
+// The game's animation names and the Spriter animations that play them.
+export const RIG_ANIMS: Record<string, string> = {
+  idle: 'Idle', walk: 'Walking', run: 'Running', attack: 'Slashing', heavy: 'Run Slashing',
+  throw: 'Throwing', dodge: 'Sliding', hurt: 'Hurt', die: 'Dying',
+};
+
 export type CharKey = 'hero' | 'ghoul' | 'archer';
 
 export interface CharConfig {
