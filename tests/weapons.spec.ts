@@ -58,7 +58,7 @@ test('every weapon type hits, and its skill fires and cools down', async ({ page
       const o: Record<string, any> = { skill: s.stats.skill };
       reset(gap); o.light = dealt(() => { press('J'); step(60); });
       reset(gap); o.heavy = dealt(() => { press('K'); step(90); });
-      reset(gap); o.blockState = hold('L', 10);
+      reset(gap); o.blockState = hold('SHIFT', 10);
       // the skill: damage on the dummy, the cooldown starts, a second press does nothing
       reset(120); p.skillCd = 0;
       o.skillDealt = dealt(() => {

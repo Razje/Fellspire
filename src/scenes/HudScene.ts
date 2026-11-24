@@ -186,7 +186,7 @@ export class HudScene extends Phaser.Scene {
     this.hp = new Bar(this, 114, 444, 214, 15, 'health');
 
     const keys: [Action | 'block', 'light' | 'heavy' | 'dodge' | 'block', string][] = [
-      ['light', 'light', 'J'], ['heavy', 'heavy', 'K'], ['skill', 'heavy', 'I'], ['dodge', 'dodge', 'Spc'], ['block', 'block', 'L'],
+      ['light', 'light', 'J'], ['heavy', 'heavy', 'K'], ['skill', 'heavy', 'I'], ['dodge', 'dodge', 'L'], ['block', 'block', 'Shft'],
     ];
     const s = {} as Record<Action | 'block', Slot>;
     keys.forEach(([k, ico, key], i) => { s[k] = new Slot(this, 136 + i * 46, 492, ico, key); });
@@ -244,7 +244,7 @@ export class HudScene extends Phaser.Scene {
   private buildHints() {
     const row = this.add.container(0, 522);
     let x = 0;
-    for (const [keys, what] of [[['W', 'A', 'S', 'D'], 'Move'], [['J'], 'Light'], [['K'], 'Heavy'], [['I'], 'Skill'], [['Space'], 'Dodge'], [['L'], 'Block'], [['Esc'], 'Menu']] as const) {
+    for (const [keys, what] of [[['W', 'A', 'S', 'D'], 'Move'], [['J'], 'Light'], [['K'], 'Heavy'], [['I'], 'Skill'], [['L'], 'Dodge'], [['Shift'], 'Block'], [['Esc'], 'Menu']] as const) {
       const h = keyHint(this, x, 0, [...keys], what);
       row.add(h);
       x += h.width + 16;

@@ -1,5 +1,5 @@
-import Phaser from 'phaser';
 import { Fighter } from './Fighter';
+import { Controls, NO_INPUT, type Device, type Input } from '../input';
 import type { RoomScene } from '../scenes/RoomScene';
 import { SKILLS, WEAPONS, type Move } from '../weapons';
 import { startSkill } from '../skills';
@@ -15,13 +15,11 @@ const DODGE_TIME = 0.3;
 const DODGE_SPEED = 380;
 const ATTACK_MOVE = 0.5; // share of walking speed kept while attacking
 
-// light/heavy: pressed this frame; lightHeld/heavyHeld: held down (repeats the attack)
-interface Input { mx: number; my: number; light: boolean; heavy: boolean; lightHeld: boolean; heavyHeld: boolean; skill: boolean; dodge: boolean; block: boolean; interact: boolean }
-
 // The moves of each weapon kind are in weapons.ts; the skills in skills.ts.
+// Keys and controller buttons are in input.ts.
 
 export class Player extends Fighter {
-  private keys: Record<string, Phaser.Input.Keyboard.Key>;
+  readonly controls: Controls;
   private move: Move | null = null;
   private hitDone = false;
   private swept = new Set<object>(); // what a dashing move has already cut
@@ -35,12 +33,11 @@ export class Player extends Fighter {
   private vx = 0;
   private vy = 0;
   private dustT = 0;
-  private padPrev: boolean[] = [];
   interact = false; // E pressed this frame (open a chest)
   ammo = 0; // rounds left in a weapon with a magazine
   reloadT = 0; // seconds until the reload is done
 
-  constructor(scene: RoomScene, x: number, y: number) {
+  constructor(scene: RoomScene, x: number, y: number, device: Device = { kind: 'solo' }) {
     super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
     // drawn from parts when they are there: the frames' 900-pixel canvas maps to the
     // configured height, so the two are the same size
@@ -51,7 +48,12 @@ export class Player extends Fighter {
       this.playAnim('idle', { loop: true, force: true });
     }
     this.arm();
-    this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,J,K,L,I,E,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.controls = new Controls(scene, device);
+  }
+
+  // The keyboard keys this hero listens to, by Phaser name (tests press them).
+  get keys() {
+    return this.controls.keys;
   }
 
   private get kit() {
@@ -89,36 +91,9 @@ export class Player extends Fighter {
   }
 
   private readInput(): Input {
-    if (this.scene.cutscene) return { mx: 0, my: 0, light: false, heavy: false, lightHeld: false, heavyHeld: false, skill: false, dodge: false, block: false, interact: false };
-    const k = this.keys;
-    const jd = Phaser.Input.Keyboard.JustDown;
-    const mx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
-    const my = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    // a press queues one attack; holding J or K keeps attacking once the move ends
-    const inp: Input = {
-      mx, my, light: jd(k.J), heavy: jd(k.K), lightHeld: k.J.isDown, heavyHeld: k.K.isDown,
-      skill: jd(k.I), dodge: jd(k.SPACE), block: k.L.isDown || k.SHIFT.isDown, interact: jd(k.E),
-    };
-
-    // Controller: stick (analogue) or d-pad, X light, Y heavy (both held to repeat), LB skill, A dodge, RB block.
-    const pad = this.scene.input.gamepad?.pad1;
-    if (pad) {
-      const b = (i: number) => !!pad.buttons[i]?.pressed;
-      const pressed = (i: number) => b(i) && !this.padPrev[i];
-      const sx = Math.abs(pad.leftStick.x) > 0.25 ? pad.leftStick.x : 0;
-      const sy = Math.abs(pad.leftStick.y) > 0.25 ? pad.leftStick.y : 0;
-      inp.mx = mx || sx || (b(15) ? 1 : b(14) ? -1 : 0);
-      inp.my = my || sy || (b(13) ? 1 : b(12) ? -1 : 0);
-      inp.light ||= pressed(2);
-      inp.heavy ||= pressed(3);
-      inp.lightHeld ||= b(2);
-      inp.heavyHeld ||= b(3);
-      inp.skill ||= pressed(4);
-      inp.dodge ||= pressed(0);
-      inp.block ||= b(5);
-      inp.interact ||= pressed(1);
-      this.padPrev = pad.buttons.map((x) => x.pressed);
-    }
+    // read every frame, even in a cutscene, so a press made during one does not fire after it
+    const inp = this.controls.read();
+    if (this.scene.cutscene) return { ...NO_INPUT };
     if (!this.kit.block) inp.block = false; // only a shield blocks
     return inp;
   }

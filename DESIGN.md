@@ -242,7 +242,24 @@ studied for its card and end-screen ideas only; none of its art is used.
    Overall: make a character with
    customisation, pick a starting weapon type, each type with its own moves.
    Depends on the art question below.
-9. Two-player co-op on one screen.
+9. **in progress** Two-player co-op on one screen, in parts (planned 2026-11-24):
+   9.1 **built** controls (2026-11-24): Lost Castle 2's keys, so **L dodges** and
+   **Shift blocks**; Space is left free for a jump. A hero takes its input from one
+   device (`src/input.ts`): solo (WASD or arrows plus the first controller, as before),
+   the keyboard's left side (WASD, J K I L, Shift, E), its right side (arrows, numpad
+   1 light, 2 heavy, 3 dodge, 4 skill, 5 block, 0 interact; Num Lock on), or one
+   controller. Only solo is used until 9.2.
+   9.2 Starting a co-op run: New Run asks Solo or Co-op; each player claims a slot by
+   pressing a button on their own device, so keyboard + controller, two controllers
+   and two on one keyboard all work. Player 2 makes a character too (saved apart).
+   9.3 Two heroes in a room: the camera keeps both in view and they cannot walk apart
+   off screen; enemies and the Warden go for the nearest living hero; each hero has
+   their own weapon, skill and gear; a second unit frame and action bar on the right.
+   9.4 Going down: a fallen hero leaves a soul; the other holds interact beside it for
+   about three seconds to revive her at part health. The run ends when both are down.
+   9.5 Camp and loot: each hero has a turn at the weapon rack, gold is one shared
+   purse, a chest offers cards to both and each picks their own, and enemies have 1.5x
+   health with two players.
 10. Hub camp with embers between runs.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away
@@ -267,11 +284,9 @@ detail. Points to carry into Fellspire as the matching steps come up:
 - A healing spring room, and cursed routes that are cleansed there.
 - HUD: HP, plus a gauge under it for the weapon's own resource.
 - Their controls: J attack, K special, **Space jump**, **L dodge**, E interact.
-  Ours: Space dodge, L block, no jump yet. Worth deciding before co-op.
+  Ours since 9.1: the same, with Shift block and I skill; no jump yet.
 
 ## Open questions
-
-- Controls: keep Space as dodge, or follow Lost Castle 2 (Space jump, L dodge)?
 
 - Which pack becomes the Lantern Warden? A reaper or wraith type would suit.
 - **Character art for customisation and weapon types.** The CraftPix chibi packs draw

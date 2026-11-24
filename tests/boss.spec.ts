@@ -51,7 +51,7 @@ test('the Lantern Warden fight works', async ({ page }) => {
     reset(600); b.begin('slam'); until(() => b.mode === 'recover');
     out.slam = 100 - p.hp;
 
-    reset(600); b.begin('slam'); until(() => b.t >= 0.85 - 0.12); press('SPACE'); until(() => b.mode === 'recover');
+    reset(600); b.begin('slam'); until(() => b.t >= 0.85 - 0.12); press('L'); until(() => b.mode === 'recover');
     out.slamDodged = 100 - p.hp;
 
     reset(620); b.begin('sweep'); until(() => b.mode === 'recover');

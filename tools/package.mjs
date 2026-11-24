@@ -80,8 +80,9 @@ Controls
   W A S D / arrows   move
   J                  light attack (press again for a combo)
   K                  heavy attack
-  Space              dodge
-  L                  block
+  L                  dodge
+  Shift              block (sword and shield only)
+  I                  weapon skill
   E                  open the chest when a room is cleared
   Esc                pause menu
 A game controller works too.

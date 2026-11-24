@@ -158,9 +158,9 @@ test('combat rules hold', async ({ page }) => {
     // bones: plain hit, blocked, dodged
     reset(); s.spawnBone(p.x + 200, p.y, -390, 8, 560); step(45);
     out.boneHit = 100 - p.hp;
-    reset(); hold('L', true); step(2); s.spawnBone(p.x + 200, p.y, -390, 8, 560); step(45); hold('L', false); step(2);
+    reset(); hold('SHIFT', true); step(2); s.spawnBone(p.x + 200, p.y, -390, 8, 560); step(45); hold('SHIFT', false); step(2);
     out.boneBlocked = 100 - p.hp;
-    reset(); s.spawnBone(p.x + 60, p.y, -390, 8, 560); press('SPACE'); step(40);
+    reset(); s.spawnBone(p.x + 60, p.y, -390, 8, 560); press('L'); step(40);
     out.boneDodged = 100 - p.hp;
 
     // clear every wave; the exit should open
