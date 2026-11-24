@@ -9,8 +9,30 @@ Martijn is not a programmer. He decides what the game is and how it feels, plays
 each step, and says when it is right. Explain in plain words, build in small steps,
 and show evidence (test results, a screenshot) rather than claiming something works.
 
-Its git `origin` is the private GitLab project `martijn.terol/fellspire`, created
-2026-11-23 by pushing to it. `C:\IXON` (the General repo) ignores this folder.
+Its git `origin` is Martijn's own **private GitHub repository**
+`https://github.com/Razje/Fellspire`, since 2026-11-24. Before that it lived on IXON's
+GitLab (`martijn.terol/fellspire`, created 2026-11-23); that project is kept as the
+remote `gitlab`, a backup that is no longer pushed to, and still holds the old history.
+`C:\IXON` (the General repo) ignores this folder.
+
+**Commits use the GitHub no-reply address** `111313434+Razje@users.noreply.github.com`,
+set in this repo's local git config: this is a personal project, so the work address
+stays out of it. The whole history was rewritten to that address on the move, so
+commit ids before 2026-11-24 differ from GitLab's. A clone on another machine that
+still points at GitLab must be re-cloned from GitHub, not pulled, and needs the
+address set again:
+
+```powershell
+git clone https://github.com/Razje/Fellspire.git C:\IXON\fellspire
+```
+
+```powershell
+git -C C:\IXON\fellspire config --local user.email 111313434+Razje@users.noreply.github.com
+```
+
+```powershell
+git -C C:\IXON\fellspire config --local user.name "Martijn Terol"
+```
 
 ## Hard rules
 
