@@ -1,4 +1,4 @@
-// The player's arrows, bolts and orbs: what a ranged move sends out when it lands
+// The player's arrows, bolts, orbs, pellets and bullets: what a ranged move sends out when it lands
 // (weapons.ts, a move's `shot`). They fly level at chest height, straight ahead,
 // and hit the first foe or barrel in their path; a piercing one goes
 // on through everything, an orb bursts where it stops. A wand's sparks can fan out
@@ -50,6 +50,30 @@ function textures(scene: Phaser.Scene) {
     for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, r = i % 2 ? 3 : 8; c.lineTo(39 + Math.cos(a) * r, 12 + Math.sin(a) * r); }
     c.closePath(); c.fill();
   });
+  // a lead pellet with a hot streak behind it
+  canvas(scene, 'shot_pellet', 28, 12, (c) => {
+    const g = c.createLinearGradient(0, 0, 28, 0);
+    g.addColorStop(0, 'rgba(255,170,80,0)'); g.addColorStop(1, 'rgba(255,200,120,0.7)');
+    c.fillStyle = g; c.beginPath(); c.moveTo(0, 6); c.lineTo(20, 3); c.lineTo(20, 9); c.closePath(); c.fill();
+    c.fillStyle = '#1c1612'; c.beginPath(); c.arc(21, 6, 5.5, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#7a7a80'; c.beginPath(); c.arc(21, 6, 3.6, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#e8e8f0'; c.beginPath(); c.arc(22.5, 4.6, 1.4, 0, Math.PI * 2); c.fill();
+  });
+  // a bullet: a bright, thin streak with a hot tip
+  canvas(scene, 'shot_bullet', 56, 10, (c) => {
+    const g = c.createLinearGradient(0, 0, 56, 0);
+    g.addColorStop(0, 'rgba(255,200,90,0)'); g.addColorStop(0.7, 'rgba(255,220,140,0.85)'); g.addColorStop(1, '#ffffff');
+    c.fillStyle = g; c.beginPath(); c.moveTo(0, 5); c.lineTo(48, 2); c.arc(50, 5, 3, -Math.PI / 2, Math.PI / 2); c.lineTo(0, 5); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(51, 5, 2.4, 0, Math.PI * 2); c.fill();
+  });
+  // a muzzle flash, pointing right
+  canvas(scene, 'shot_flash', 64, 48, (c) => {
+    const g = c.createRadialGradient(10, 24, 0, 10, 24, 40);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, '#fff0a0'); g.addColorStop(0.7, 'rgba(255,140,40,0.7)'); g.addColorStop(1, 'rgba(255,90,20,0)');
+    c.fillStyle = g; c.beginPath();
+    const pts = [[0, 24], [20, 4], [26, 16], [62, 24], [26, 32], [20, 44]];
+    c.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) c.lineTo(x, y); c.closePath(); c.fill();
+  });
   // a swirling orb
   canvas(scene, 'shot_orb', 40, 40, (c) => {
     const g = c.createRadialGradient(20, 20, 0, 20, 20, 19);
@@ -78,10 +102,29 @@ export class Shots {
     const spec = move.shot!;
     const dir = from.facing;
     const n = spec.spread?.count ?? 1;
+    const gun = spec.look === 'pellet' || spec.look === 'bullet';
     for (let i = 0; i < n; i++) {
       const lean = n > 1 ? (i - (n - 1) / 2) * (spec.spread!.lean / ((n - 1) / 2)) : 0;
-      this.launch(from.x + dir * 22, from.y, dir * spec.speed, lean * spec.speed, move);
+      // a pellet's speed varies a little, so the cone looks ragged rather than a fan
+      const k = spec.look === 'pellet' ? 0.85 + Math.random() * 0.3 : 1;
+      this.launch(from.x + dir * (gun ? 30 : 22), from.y, dir * spec.speed * k, lean * spec.speed * k, move);
     }
+    if (gun) this.muzzle(from.x + dir * 30, from.y, dir, spec.look === 'pellet' ? 1.5 : 0.8);
+  }
+
+  // A flash at the muzzle and a puff of smoke drifting up; a big gun shakes the room.
+  muzzle(x: number, y: number, dir: number, size: number) {
+    const s = this.scene, h = y - CHEST;
+    const f = s.add.image(x, h, 'shot_flash').setOrigin(0.1, 0.5).setFlipX(dir < 0).setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.5 * size).setDepth(y + 12);
+    s.tweens.add({ targets: f, alpha: 0, scaleX: 0.7 * size, duration: 90, onComplete: () => f.destroy() });
+    const light = s.add.image(x, h, 'tt_light').setTint(0xffc060).setBlendMode(Phaser.BlendModes.ADD).setScale(0.35 * size).setAlpha(0.8).setDepth(y + 11);
+    s.tweens.add({ targets: light, alpha: 0, duration: 140, onComplete: () => light.destroy() });
+    for (let i = 0; i < Math.round(3 * size); i++) {
+      const p = s.add.circle(x + dir * (4 + Math.random() * 14 * size), h + (Math.random() - 0.5) * 8, 4 + Math.random() * 3 * size, 0xb8b4ac, 0.5).setDepth(y + 12);
+      s.tweens.add({ targets: p, x: p.x + dir * (10 + Math.random() * 20), y: p.y - 14 - Math.random() * 16, scale: 2.2, alpha: 0, duration: 500 + Math.random() * 300, ease: 'Sine.easeOut', onComplete: () => p.destroy() });
+    }
+    if (size > 1) s.shake(70, 0.004);
   }
 
   // One shot from a point with a velocity (floor pixels a second).
@@ -91,12 +134,16 @@ export class Shots {
     const dir = Math.sign(vx) || 1;
     const img = s.add.image(x, y - CHEST, `shot_${spec.look}`).setScale(0.5).setFlipX(dir < 0);
     let glow: Phaser.GameObjects.Image | undefined;
-    if (spec.look !== 'arrow') {
+    if (spec.look === 'pellet') img.setScale(0.55);
+    else if (spec.look === 'bullet') {
+      img.setBlendMode(Phaser.BlendModes.ADD).setScale(0.6);
+      glow = s.add.image(x, y - CHEST, 'tt_light').setTint(0xffc060).setBlendMode(Phaser.BlendModes.ADD).setScale(0.14).setAlpha(0.6);
+    } else if (spec.look !== 'arrow') {
       img.setBlendMode(Phaser.BlendModes.ADD).setScale(spec.look === 'orb' ? 0.8 : 0.6);
       glow = s.add.image(x, y - CHEST, 'tt_light').setTint(spec.look === 'spark' ? 0xb98aff : 0x6fffd8).setBlendMode(Phaser.BlendModes.ADD)
         .setScale(spec.look === 'orb' ? 0.5 : spec.look === 'spark' ? 0.24 : 0.3).setAlpha(0.7);
     }
-    const shadow = s.add.ellipse(x, y, spec.look === 'arrow' ? 18 : 14, 5, 0x000000, 0.25).setDepth(1);
+    const shadow = s.add.ellipse(x, y, spec.look === 'arrow' ? 18 : spec.look === 'pellet' ? 6 : 14, spec.look === 'pellet' ? 3 : 5, 0x000000, 0.25).setDepth(1);
     const b: Shot = { img, glow, shadow, x, y, vx, vy, left: spec.reach, move, speed: Math.hypot(vx, vy), hit: new Set(), dead: false };
     this.turn(b);
     this.list.push(b);
@@ -135,7 +182,7 @@ export class Shots {
       const dir = Math.sign(b.vx);
       // what it touches this frame, a short box around its head
       const inside = (x: number, y: number) => Math.abs(x - b.x) < 18 && Math.abs(y - b.y) <= b.move.depth;
-      const hits = s.strike({ x: b.x - dir * 40, y: b.y, facing: dir }, true, b.move, s.enemies, inside, { once: b.hit, max: spec.pierce ? undefined : 1 });
+      const hits = spec.show ? 0 : s.strike({ x: b.x - dir * 40, y: b.y, facing: dir }, true, b.move, s.enemies, inside, { once: b.hit, max: spec.pierce ? undefined : 1 });
       if ((hits > 0 && !spec.pierce) || b.left <= 0 || off) {
         b.dead = true;
         if (spec.burst) this.burst(b);

@@ -7,21 +7,23 @@
 // one plays out is in skills.ts.
 //
 // A new weapon type is a new entry here, an icon in ui/items.ts and a held part
-// in rig/weapons.ts; Player reads everything else from this list.
+// in rig/weapons.ts; Player reads everything else from this list. A weapon with a
+// magazine (`mag`) reloads by itself once the moves marked `ammo` have spent it.
 import type { AttackSpec } from './scenes/RoomScene';
 
-export type WeaponKind = 'sword' | 'greatsword' | 'blades' | 'bow' | 'staff' | 'wand';
-export type SkillId = 'shieldCharge' | 'leapSlam' | 'bladeStorm' | 'rainOfArrows' | 'blizzard' | 'sparkVolley';
+export type WeaponKind = 'sword' | 'greatsword' | 'blades' | 'bow' | 'staff' | 'wand' | 'blunderbuss' | 'revolvers';
+export type SkillId = 'shieldCharge' | 'leapSlam' | 'bladeStorm' | 'rainOfArrows' | 'blizzard' | 'sparkVolley' | 'cannonBlast' | 'fanTheHammer';
 
 // What a move sends out instead of swinging.
 export interface ShotSpec {
-  look: 'arrow' | 'bolt' | 'orb' | 'spark';
+  look: 'arrow' | 'bolt' | 'orb' | 'spark' | 'pellet' | 'bullet'; // pellet and bullet leave a muzzle flash
   speed: number; // pixels a second
   reach: number; // pixels before it falls or fades
   pierce?: boolean; // goes on through everything in its line
   burst?: { rx: number; ry: number }; // bursts where it stops, hitting all around
   spread?: { count: number; lean: number }; // several at once, fanned out up and down the floor
   homing?: number; // turns towards the nearest foe, radians a second
+  show?: boolean; // only for the look: hits nothing (a skill does its own hitting)
 }
 
 export interface Move extends AttackSpec {
@@ -31,6 +33,9 @@ export interface Move extends AttackSpec {
   lunge: number; // pixels stepped forward before it lands
   shot?: ShotSpec;
   sweep?: boolean; // cuts everything it passes during the lunge, not only at the end (a dash)
+  recoil?: number; // pushed back this hard (pixels a second) when the shot leaves
+  evade?: boolean; // untouchable until it lands (a hop away)
+  ammo?: boolean; // spends a round from the weapon's magazine
 }
 
 export interface WeaponDef {
@@ -39,6 +44,7 @@ export interface WeaponDef {
   speed: string;
   blurb: string;
   block: boolean; // L raises a shield
+  mag?: { size: number; reload: number }; // rounds before a reload, and its seconds
   light: Move[]; // the combo, in order
   heavy: Move;
   skills: SkillId[]; // a weapon found carries one of these
@@ -128,6 +134,31 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     names: ['Duskwillow', 'Sparkthorn', 'Witchbriar', 'Glimmerbone', 'Hexwood'],
     legendary: 'Cinderwisp, the Wand That Remembers',
   },
+  // close and brutal: a cone of pellets that throws foes back, and her with it
+  blunderbuss: {
+    label: 'Blunderbuss', noun: 'Blunderbuss', speed: 'Slow, close range', block: false,
+    blurb: 'A cone of pellets at close range that hurls foes back; slow to reload, and it kicks.',
+    light: [
+      { anim: 'throw', dur: 0.62, hitAt: 0.16, dmg: 5, range: 0, depth: 22, knock: 380, lunge: 0, recoil: 120, shot: { look: 'pellet', speed: 950, reach: 200, spread: { count: 5, lean: 0.16 } } },
+    ],
+    heavy: { anim: 'throw', dur: 0.95, hitAt: 0.42, dmg: 8, range: 0, depth: 24, knock: 520, lunge: 0, heavy: true, recoil: 260, shot: { look: 'pellet', speed: 1000, reach: 230, spread: { count: 7, lean: 0.3 } } },
+    skills: ['cannonBlast'],
+    names: ['Thunderbell', 'Graveboom', 'Rustmaw', 'Powderkeg', 'Hollowpoint'],
+    legendary: 'Doomsayer, the Bell That Tolls Once',
+  },
+  // a revolver in each hand: quick shots, six to a load, a hop back firing both
+  revolvers: {
+    label: 'Dual Revolvers', noun: 'Revolvers', speed: 'Ranged, fast', block: false,
+    blurb: 'Quick shots from a revolver in each hand, six before a reload; the heavy hops back firing both.',
+    mag: { size: 6, reload: 0.75 },
+    light: [
+      { anim: 'throw', dur: 0.2, hitAt: 0.06, dmg: 6, range: 0, depth: 16, knock: 50, lunge: 0, stop: 22, ammo: true, shot: { look: 'bullet', speed: 1150, reach: 560 } },
+    ],
+    heavy: { anim: 'throw', dur: 0.5, hitAt: 0.22, dmg: 12, range: 0, depth: 18, knock: 160, lunge: -90, heavy: true, evade: true, shot: { look: 'bullet', speed: 1150, reach: 560, spread: { count: 2, lean: 0.05 } } },
+    skills: ['fanTheHammer'],
+    names: ['Gravewhisper', 'Twinbark', 'Duskhammer', 'Ironvow', 'Lastlight'],
+    legendary: 'Ember and Ash, the Widowmakers',
+  },
 };
 
 export const KINDS = Object.keys(WEAPONS) as WeaponKind[];
@@ -147,6 +178,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   blizzard: { name: 'Blizzard', blurb: 'Ice falls over an area ahead, hurting and slowing all in it.', cooldown: 12 },
   bladeStorm: { name: 'Blade Storm', blurb: 'A whirl of quick cuts all around you.', cooldown: 7 },
   sparkVolley: { name: 'Spark Volley', blurb: 'Sparks burst out and seek the nearest foes.', cooldown: 8 },
+  cannonBlast: { name: 'Cannon Blast', blurb: 'A huge blast that hurls everything ahead away, and you back with it.', cooldown: 8 },
+  fanTheHammer: { name: 'Fan the Hammer', blurb: 'Six shots in a heartbeat, then the guns are freshly loaded.', cooldown: 7 },
 };
 
 // Weapon kinds from before 8.4, as a browser may still remember them (the rapier's

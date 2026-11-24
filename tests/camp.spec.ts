@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// The camp between runs (DESIGN.md 8.3): New Run lands there, the rack offers
-// the weapons and remembers the pick, the training dummy takes blows and never
+// The camp between runs (DESIGN.md 8.3): New Run lands there, the rack opens as
+// a store with tabs and a comparison (8.6) and remembers the pick, the training dummy takes blows and never
 // falls, and the rune gate starts room 1 with the chosen weapon.
 
 test.use({ viewport: { width: 1920, height: 1080 } });
@@ -57,8 +57,8 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   };`)).toEqual({ camp: true, waves: 0, gate: true, dummy: true, weapon: 'sword' });
   await shot(page, info, 'camp-1-arrival');
 
-  // E beside the rack: six cards over the paused camp, the focused one on top at
-  // full size; D twice and E takes the bow
+  // E beside the rack: the store opens over the paused camp, on the All tab with
+  // the sword in your hand selected and compared with itself
   await room(page, 'const p = s.player; p.x = 420; p.y = 360;');
   await page.waitForTimeout(300);
   // held for a few frames: the hero reads E once per frame
@@ -67,25 +67,62 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   await page.keyboard.up('e');
   await page.waitForFunction(() => (window as any).game.scene.getScene('hud').choosing, null, { timeout: 5000 });
   expect(await page.evaluate(() => (window as any).game.scene.isPaused('room'))).toBe(true);
-  const heading = await page.evaluate(() => (window as any).game.scene.getScene('hud').children.list
-    .flatMap((o: any) => (o.list ?? [o])).some((o: any) => o.type === 'Text' && o.text === 'CHOOSE YOUR WEAPON'));
-  expect(heading).toBe(true);
-  await page.waitForTimeout(900);
-  await shot(page, info, 'camp-2-rack');
-  const cards = await page.evaluate(() => {
-    const ch = (window as any).game.scene.getScene('hud').choice;
-    const vis = ch.cards.map((c: any) => { const b = c.getBounds(); return { l: b.left, r: b.right, scale: c.scale }; });
-    return { n: ch.cards.length, vis, top: ch.root.list.indexOf(ch.cards[ch.index]) > ch.root.list.indexOf(ch.cards[0]) };
+  const shop = () => page.evaluate(() => {
+    const sh = (window as any).game.scene.getScene('hud').shop;
+    if (!sh) return null;
+    const b = sh.root.getBounds();
+    return { tab: sh.tabKey, n: sh.list().length, sel: sh.selected?.kind, slots: sh.slots.length, left: b.left, right: b.right, top: b.top, bottom: b.bottom };
   });
-  expect(cards.n).toBe(6);
-  expect(Math.min(...cards.vis.map((v: any) => v.l))).toBeGreaterThanOrEqual(0); // all on screen (960 wide)
-  expect(Math.max(...cards.vis.map((v: any) => v.r))).toBeLessThanOrEqual(960);
-  expect(Math.max(...cards.vis.map((v: any) => v.scale))).toBeGreaterThanOrEqual(1); // the focused card at full size
-  expect(cards.top).toBe(true);
-  await page.keyboard.press('d');
+  await page.waitForTimeout(500);
+  await shot(page, info, 'camp-2-rack');
+  const first = await shop();
+  expect(first).toMatchObject({ tab: 'all', n: 8, sel: 'sword', slots: 8 });
+  expect(first!.left).toBeGreaterThanOrEqual(0); // all on screen (960 x 540)
+  expect(first!.right).toBeLessThanOrEqual(960);
+  expect(first!.top).toBeGreaterThanOrEqual(0);
+  expect(first!.bottom).toBeLessThanOrEqual(540);
+
+  // R opens the next tab, which holds only that type; Q goes back to All
+  await page.keyboard.press('r');
   await page.waitForTimeout(150);
-  await page.keyboard.press('d');
+  expect(await shop()).toMatchObject({ tab: 'sword', n: 1, sel: 'sword' });
+  await page.keyboard.press('q');
   await page.waitForTimeout(150);
+  await page.keyboard.press('q');
+  await page.waitForTimeout(150);
+  expect(await shop()).toMatchObject({ tab: 'revolvers', n: 1, sel: 'revolvers' });
+  await shot(page, info, 'camp-3-rack-tab');
+  await page.keyboard.press('r');
+  await page.waitForTimeout(150);
+  expect(await shop()).toMatchObject({ tab: 'all' });
+
+  // Esc walks away without changing anything
+  await page.keyboard.press('Escape');
+  await expect.poll(() => room(page, 'return [s.run.gear.weapon.kind, game.scene.isPaused("room"), !!game.scene.getScene("hud").shop];'), { timeout: 5000 })
+    .toEqual(['sword', false, false]);
+
+  // again, and through the grid: D three times is the bow, S goes down a row to the
+  // revolvers' column, W comes back, and E takes the bow
+  await page.waitForTimeout(300);
+  await page.keyboard.down('e');
+  await page.waitForTimeout(120);
+  await page.keyboard.up('e');
+  await page.waitForFunction(() => !!(window as any).game.scene.getScene('hud').shop, null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+  for (const k of ['d', 'd', 'd']) { await page.keyboard.press(k); await page.waitForTimeout(120); }
+  expect((await shop())!.sel).toBe('bow');
+  await page.keyboard.press('s');
+  await page.waitForTimeout(120);
+  expect((await shop())!.sel).toBe('bow'); // nothing below the bow (two in the second row)
+  await page.keyboard.press('a'); await page.waitForTimeout(120);
+  await page.keyboard.press('a'); await page.waitForTimeout(120);
+  await page.keyboard.press('a'); await page.waitForTimeout(120);
+  await page.keyboard.press('s'); await page.waitForTimeout(120);
+  expect((await shop())!.sel).toBe('blunderbuss');
+  await shot(page, info, 'camp-4-rack-compare');
+  await page.keyboard.press('w'); await page.waitForTimeout(120);
+  for (const k of ['d', 'd', 'd']) { await page.keyboard.press(k); await page.waitForTimeout(120); }
+  expect((await shop())!.sel).toBe('bow');
   await page.keyboard.press('e');
   await expect.poll(() => room(page, 'return [s.run.gear.weapon.kind, s.stats.kind, game.scene.isPaused("room")];'), { timeout: 5000 })
     .toEqual(['bow', 'bow', false]);
@@ -106,7 +143,7 @@ test('the camp: rack, dummy and gate', async ({ page }, info) => {
   expect(d.x).toBe(470); // knockback does not move it
   await expect.poll(() => room(page, 'return s.dummy.dps;'), { timeout: 3000 }).toBeGreaterThan(0);
   await page.waitForTimeout(400);
-  await shot(page, info, 'camp-3-dummy');
+  await shot(page, info, 'camp-5-dummy');
 
   // into the rune gate: room 1, holding the bow, the run's numbers fresh
   await room(page, 'const p = s.player; p.x = s.world.exit.x; p.y = s.world.exit.y;');

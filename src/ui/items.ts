@@ -114,6 +114,40 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
       c.restore();
       break;
     }
+    case 'blunderbuss': {
+      back(c, s, '#5a5048', '#100c08');
+      c.save(); c.translate(s * 0.5, s * 0.55); c.rotate(-Math.PI / 5);
+      // a wooden stock, an iron barrel and a wide brass bell
+      const stock = () => { c.beginPath(); c.moveTo(-s * 0.08, -s * 0.05); c.lineTo(-s * 0.3, -s * 0.03); c.quadraticCurveTo(-s * 0.44, 0, -s * 0.46, s * 0.14); c.lineTo(-s * 0.34, s * 0.17); c.quadraticCurveTo(-s * 0.28, s * 0.06, -s * 0.08, s * 0.06); c.closePath(); };
+      c.lineWidth = s * 0.05; c.strokeStyle = INK; stock(); c.stroke();
+      c.fillStyle = vg(c, -s * 0.05, s * 0.17, [[0, '#b07a40'], [1, '#4a2a12']]); stock(); c.fill();
+      c.fillStyle = INK; c.fillRect(-s * 0.1, -s * 0.06, s * 0.36, s * 0.12);
+      c.fillStyle = vg(c, -s * 0.045, s * 0.045, STEEL); c.fillRect(-s * 0.08, -s * 0.035, s * 0.33, s * 0.07);
+      const bell = () => { c.beginPath(); c.moveTo(s * 0.22, -s * 0.045); c.quadraticCurveTo(s * 0.36, -s * 0.06, s * 0.46, -s * 0.17); c.lineTo(s * 0.46, s * 0.17); c.quadraticCurveTo(s * 0.36, s * 0.06, s * 0.22, s * 0.045); c.closePath(); };
+      c.lineWidth = s * 0.05; c.strokeStyle = INK; bell(); c.stroke();
+      c.fillStyle = vg(c, -s * 0.17, s * 0.17, GOLD); bell(); c.fill();
+      c.fillStyle = INK; c.beginPath(); c.ellipse(s * 0.455, 0, s * 0.03, s * 0.14, 0, 0, Math.PI * 2); c.fill();
+      // trigger guard
+      c.strokeStyle = INK; c.lineWidth = s * 0.035; c.beginPath(); c.arc(-s * 0.04, s * 0.07, s * 0.05, 0, Math.PI); c.stroke();
+      c.restore();
+      break;
+    }
+    case 'revolvers': {
+      // two revolvers, crossed, barrels up
+      back(c, s, '#5a3a2a', '#140a06');
+      const gun = (flip: number) => {
+        c.save(); c.translate(s * 0.5, s * 0.5); c.scale(flip, 1); c.rotate(-Math.PI / 3.2);
+        c.fillStyle = INK; c.beginPath(); c.roundRect(-s * 0.16, -s * 0.07, s * 0.5, s * 0.12, s * 0.03); c.fill();
+        c.fillStyle = vg(c, -s * 0.05, s * 0.04, STEEL); c.fillRect(-s * 0.13, -s * 0.045, s * 0.44, s * 0.07);
+        c.fillStyle = INK; c.beginPath(); c.roundRect(-s * 0.1, -s * 0.1, s * 0.17, s * 0.18, s * 0.04); c.fill();
+        c.fillStyle = vg(c, -s * 0.08, s * 0.07, STEEL); c.beginPath(); c.roundRect(-s * 0.08, -s * 0.08, s * 0.13, s * 0.14, s * 0.03); c.fill();
+        c.fillStyle = INK; c.beginPath(); c.moveTo(-s * 0.14, 0); c.lineTo(-s * 0.3, s * 0.2); c.lineTo(-s * 0.2, s * 0.24); c.lineTo(-s * 0.06, s * 0.05); c.closePath(); c.fill();
+        c.fillStyle = vg(c, 0, s * 0.22, [[0, '#a06a36'], [1, '#5a3418']]); c.beginPath(); c.moveTo(-s * 0.13, s * 0.02); c.lineTo(-s * 0.27, s * 0.19); c.lineTo(-s * 0.21, s * 0.21); c.lineTo(-s * 0.08, s * 0.05); c.closePath(); c.fill();
+        c.restore();
+      };
+      gun(1); gun(-1);
+      break;
+    }
     // the skills, for the action bar's I slot
     case 'sk_shieldCharge': {
       back(c, s, '#3a5aa8', '#060c20');
@@ -195,6 +229,27 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
         c.closePath(); c.fill();
       }
       disc(s * 0.2, s * 0.8, s * 0.07, '#d8b8ff');
+      break;
+    }
+    case 'sk_cannonBlast': {
+      back(c, s, '#b8601a', '#200802');
+      // a wide burst of fire and pellets from the lower left
+      const g = c.createRadialGradient(s * 0.18, s * 0.78, 0, s * 0.18, s * 0.78, s * 0.8);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, '#ffe08a'); g.addColorStop(0.6, 'rgba(255,120,30,0.7)'); g.addColorStop(1, 'rgba(255,80,20,0)');
+      c.fillStyle = g; c.beginPath(); c.moveTo(s * 0.12, s * 0.84); c.lineTo(s * 0.5, s * 0.06); c.lineTo(s * 0.96, s * 0.5); c.closePath(); c.fill();
+      for (const [x, y] of [[0.5, 0.2], [0.66, 0.3], [0.78, 0.46], [0.6, 0.48], [0.44, 0.36], [0.84, 0.28]]) { disc(s * x, s * y, s * 0.045, INK); disc(s * x, s * y, s * 0.028, '#c8c8d0'); }
+      break;
+    }
+    case 'sk_fanTheHammer': {
+      back(c, s, '#8a5a2a', '#180c04');
+      // six bullet streaks fanning out
+      for (let i = 0; i < 6; i++) {
+        const a = -0.55 + i * 0.22, x0 = s * 0.14, y0 = s * 0.6;
+        const x1 = x0 + Math.cos(a) * s * 0.8, y1 = y0 + Math.sin(a) * s * 0.8;
+        const lg = c.createLinearGradient(x0, y0, x1, y1); lg.addColorStop(0, 'rgba(255,210,120,0)'); lg.addColorStop(1, '#fff6d8');
+        c.strokeStyle = lg; c.lineWidth = s * 0.05; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      }
+      disc(s * 0.14, s * 0.6, s * 0.1, 'rgba(255,240,180,0.9)');
       break;
     }
     case 'armor': {
@@ -410,7 +465,8 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
 
   // size: the card's scale at rest; with many cards in a row they rest smaller and
   // the focused one grows to full size
-  constructor(scene: Phaser.Scene, x: number, y: number, readonly item: Item, gear: Gear, readonly size = 1) {
+  // foot: the line at the bottom, instead of what it replaces
+  constructor(scene: Phaser.Scene, x: number, y: number, readonly item: Item, gear: Gear, readonly size = 1, foot?: string) {
     super(scene, x, y);
     this.baseY = y;
     this.setScale(size);
@@ -429,7 +485,7 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
     this.add([pill, tag]);
     const body = itemBody(scene, item, gear, -h / 2 + 70, w - 34);
     this.add(body.objs);
-    const foot = item.cat === 'trinket'
+    foot ??= item.cat === 'trinket'
       ? `Kept alongside your ${gear.trinkets.length ? `${gear.trinkets.length} other trinket${gear.trinkets.length > 1 ? 's' : ''}` : 'other gear'}`
       : item.cat === 'weapon' ? `Replaces ${gear.weapon.name}` : gear.armor ? `Replaces ${gear.armor.name}` : 'You wear no armor yet';
     this.add(txt(scene, 0, h / 2 - 22, foot, 'small', { fontSize: '10px', color: C.grey, align: 'center', wordWrap: { width: w - 30 }, strokeThickness: 0 }).setOrigin(0.5));
@@ -456,6 +512,12 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
 
   activate() {
     this.onPick?.();
+  }
+
+  // The glow of a focused card, without it growing (the weapon rack's comparison).
+  shine() {
+    this.glow.setAlpha(0.6);
+    this.scene.tweens.add({ targets: this.glow, alpha: 1, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   // The chosen card flares white.

@@ -225,7 +225,20 @@ studied for its card and end-screen ideas only; none of its art is used.
    away still attacking; a new press turns her to the side held. The training dummy is now elite-sized, about
    twice the hero's height: a round stuffed belly on a post, beam arms, a sack head
    under a dented iron pot, arrows stuck in it.
-   8.6 blunderbuss and dual revolvers.
+   8.6 **built** blunderbuss, dual revolvers and the rack as a store (2026-11-24).
+   Blunderbuss: a cone of five pellets at close range that throws foes back and kicks
+   her back a little, a slow rhythm standing in for the reload; the heavy is a wider
+   cone of seven with a bigger kick; skill Cannon Blast, one huge cone that hurls a
+   crowd away and throws her back a good step. Dual revolvers: quick shots, six to a
+   load, then a 0.75 s reload ("Reload" over her head) in which J does nothing; the
+   heavy hops back out of reach firing both; skill Fan the Hammer, six fast shots and
+   the guns freshly loaded. Both guns are held level whatever the borrowed Throwing
+   animation does with the arm (`level` on a part swap). Muzzle flash, smoke, pellets
+   and bullet streaks. The rack now opens as a store after Lost Castle 2's weapon
+   selection: a panel with tabs (All and one per type, Q and R), a grid of weapons,
+   and on the left the weapon in your hand beside the selected one, each a full card;
+   E equips, Esc walks away unchanged. Each tab holds one plain weapon so far, so
+   the grid is waiting for weapons unlocked between runs (step 10).
    Overall: make a character with
    customisation, pick a starting weapon type, each type with its own moves.
    Depends on the art question below.

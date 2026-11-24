@@ -37,6 +37,8 @@ export class Player extends Fighter {
   private dustT = 0;
   private padPrev: boolean[] = [];
   interact = false; // E pressed this frame (open a chest)
+  ammo = 0; // rounds left in a weapon with a magazine
+  reloadT = 0; // seconds until the reload is done
 
   constructor(scene: RoomScene, x: number, y: number) {
     super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
@@ -63,6 +65,23 @@ export class Player extends Fighter {
   // Puts the carried weapon in the hero's hand (the drawn hero only).
   arm() {
     if (this.rig) armRig(this.rig, this.scene.stats.kind);
+    this.refill();
+  }
+
+  // A full magazine, at once (a new weapon, or Fan the Hammer's fresh load).
+  refill() {
+    this.ammo = this.kit.mag?.size ?? 0;
+    this.reloadT = 0;
+  }
+
+  // Thrown back by her own shot (pixels a second).
+  recoil(v: number) {
+    this.knockVx = -this.facing * v;
+  }
+
+  // A light attack waits while the guns reload.
+  private get canLight() {
+    return !(this.kit.mag && this.kit.light[0].ammo && this.reloadT > 0);
   }
 
   get dodgeCdMax() {
@@ -115,6 +134,10 @@ export class Player extends Fighter {
     this.interact = inp.interact;
     this.dodgeCd -= dt;
     this.skillCd -= dt;
+    if (this.reloadT > 0) {
+      this.reloadT -= dt;
+      if (this.reloadT <= 0) this.refill();
+    }
     let moving = false;
 
     switch (this.state) {
@@ -124,7 +147,7 @@ export class Player extends Fighter {
         this.comboTimer -= dt;
         if (this.comboTimer <= 0) this.combo = 0;
         if (inp.dodge && this.dodgeCd <= 0) { this.startDodge(inp); break; }
-        if (inp.light || inp.lightHeld) { this.aim(inp); this.startLight(); break; }
+        if ((inp.light || inp.lightHeld) && this.canLight) { this.aim(inp); this.startLight(); break; }
         if (inp.heavy || inp.heavyHeld) { this.aim(inp); this.startMove(this.kit.heavy); break; }
         if (inp.skill && this.skillCd <= 0) { this.aim(inp); this.startSkill(); break; }
         const blocking = inp.block;
@@ -167,6 +190,11 @@ export class Player extends Fighter {
         if (!this.hitDone && t >= m.hitAt) {
           this.hitDone = true;
           if (m.shot) this.scene.shots.fire(this, m);
+          if (m.recoil) this.recoil(m.recoil);
+          if (m.ammo && this.kit.mag && --this.ammo <= 0) {
+            this.reloadT = this.kit.mag.reload;
+            this.scene.callout(this, 'Reload');
+          }
           else if (m.sweep) this.sweepCut(m);
           else this.scene.resolveMelee(this, m, this.scene.enemies);
         }
@@ -181,7 +209,7 @@ export class Player extends Fighter {
           if (this.buffer) this.aim(inp);
           const b = this.buffer ?? (inp.lightHeld ? 'light' : inp.heavyHeld ? 'heavy' : null);
           this.buffer = null;
-          if (b === 'light') this.startLight();
+          if (b === 'light' && this.canLight) this.startLight();
           else if (b === 'heavy') this.startMove(this.kit.heavy);
           else { this.state = 'idle'; this.stateT = 0; this.comboTimer = 0.4; }
         }
@@ -236,6 +264,7 @@ export class Player extends Fighter {
     this.hitDone = false;
     this.swept.clear();
     if (m.sweep) { this.invuln = Math.max(this.invuln, m.hitAt); this.scene.dust(this.x, this.y, 3); }
+    if (m.evade) { this.invuln = Math.max(this.invuln, m.hitAt + 0.05); this.scene.dust(this.x, this.y, 2); }
     this.buffer = null;
     this.state = 'attack';
     this.stateT = 0;

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// The weapon types (DESIGN.md 8.4 and 8.5): sword and shield, greatsword, dual
-// blades, bow, staff and wand.
+// The weapon types (DESIGN.md 8.4 to 8.6): sword and shield, greatsword, dual
+// blades, bow, staff, wand, blunderbuss and dual revolvers.
 // Each one's light and heavy attack lands on the camp's training dummy, each
 // skill fires on I and then waits out its cooldown, only the shield blocks, and
-// the rack offers all six. The game is stepped by hand, frame by frame, so the
+// the rack offers all eight. The game is stepped by hand, frame by frame, so the
 // checks do not depend on how fast the test machine is.
 
 test.use({ viewport: { width: 1920, height: 1080 } });
@@ -54,7 +54,7 @@ test('every weapon type hits, and its skill fires and cools down', async ({ page
     for (const kind of W.KINDS) {
       s.equip(L.starterWeapon(kind));
       const ranged = !!W.WEAPONS[kind].heavy.shot;
-      const gap = ranged ? 260 : 40;
+      const gap = kind === 'blunderbuss' ? 100 : ranged ? 260 : 40;
       const o: Record<string, any> = { skill: s.stats.skill };
       reset(gap); o.light = dealt(() => { press('J'); step(60); });
       reset(gap); o.heavy = dealt(() => { press('K'); step(90); });
@@ -79,9 +79,9 @@ test('every weapon type hits, and its skill fires and cools down', async ({ page
   });
 
   expect(r.saved).toBe('blades'); // a "rapier" remembered from before 8.4 becomes the dual blades
-  const all = ['sword', 'greatsword', 'blades', 'bow', 'staff', 'wand'];
+  const all = ['sword', 'greatsword', 'blades', 'bow', 'staff', 'wand', 'blunderbuss', 'revolvers'];
   expect(r.rack).toEqual(all);
-  const skills: Record<string, string> = { sword: 'shieldCharge', greatsword: 'leapSlam', blades: 'bladeStorm', bow: 'rainOfArrows', staff: 'blizzard', wand: 'sparkVolley' };
+  const skills: Record<string, string> = { sword: 'shieldCharge', greatsword: 'leapSlam', blades: 'bladeStorm', bow: 'rainOfArrows', staff: 'blizzard', wand: 'sparkVolley', blunderbuss: 'cannonBlast', revolvers: 'fanTheHammer' };
   for (const kind of all) {
     const o = r[kind];
     expect(o.skill, kind).toBe(skills[kind]);
@@ -203,7 +203,7 @@ test('holding J or K keeps attacking, a press is one attack, she walks while att
   expect(errors).toEqual([]);
 });
 
-test('on real foes: the charge stuns, the blizzard slows, an arrow pierces, the dash cuts through, sparks fan out and seek', async ({ page }) => {
+test('on real foes: the charge stuns, the blizzard slows, an arrow pierces, the dash cuts through, sparks fan out and seek, guns kick and reload', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
@@ -262,6 +262,43 @@ test('on real foes: the charge stuns, the blizzard slows, an arrow pierces, the 
     reset(); foes.forEach((e: any, i: number) => { e.maxHp = e.hp = 999; e.x = 420 - i * 40; e.y = i % 2 ? 400 : 540; });
     press('I'); step(150);
     out.sought = foes.filter((e: any) => e.hp < 999).length;
+    step(60);
+
+    // the blunderbuss: a cone of pellets throws the nearest foe back, and its kick
+    // pushes the hero back too
+    s.equip(L.starterWeapon('blunderbuss'));
+    reset(); foes.forEach((e: any, i: number) => { e.maxHp = e.hp = 999; e.x = 580 + i * 400; });
+    const bx = p.x, fx = foes[0].x;
+    let far = fx; // furthest the foe is thrown, before it walks back
+    press('J');
+    for (let f = 0; f < 30; f++) { step(1); far = Math.max(far, foes[0].x); }
+    out.blunder = { pushed: Math.round(far - fx), kicked: Math.round(bx - p.x), hit: foes[0].hp < 999 };
+    // Cannon Blast hurls a crowd ahead away and throws the hero back further
+    reset(); foes.forEach((e: any, i: number) => { e.maxHp = e.hp = 999; e.x = 570 + i * 30; e.y = 470 + (i % 2 ? 30 : -30); });
+    const cx0 = p.x;
+    press('I'); step(50);
+    out.cannon = { hit: foes.filter((e: any) => e.hp < 999).length, kicked: Math.round(cx0 - p.x) };
+    step(60);
+
+    // the revolvers: six quick shots, then a reload while no shot leaves, then six more
+    s.equip(L.starterWeapon('revolvers'));
+    reset(); foes.forEach((e: any) => { e.maxHp = e.hp = 999; e.x = 900; });
+    const shots: number[] = [];
+    let fired = 0, lastAmmo = p.ammo, reloadSeen = false, shotDuringReload = false;
+    p.keys.J.onDown(ev());
+    for (let f = 0; f < 150; f++) {
+      const reloading = p.reloadT > 0; // before this frame: the sixth shot itself starts the reload
+      step(1);
+      if (p.ammo < lastAmmo) { fired++; shots.push(f); if (reloading) shotDuringReload = true; }
+      if (p.reloadT > 0) reloadSeen = true;
+      lastAmmo = p.ammo;
+    }
+    p.keys.J.onUp(ev());
+    out.revolvers = { firstSix: shots.slice(0, 6).length, reloadSeen, shotDuringReload, gap: shots[6] - shots[5], fired };
+    // Fan the Hammer: six bullets out, and the guns come back full
+    step(60); reset(); p.ammo = 2;
+    press('I'); step(40);
+    out.hammer = { ammo: p.ammo };
     game.loop.wake();
     return out;
   });
@@ -273,13 +310,23 @@ test('on real foes: the charge stuns, the blizzard slows, an arrow pierces, the 
   expect(r.dashed.moved).toBeGreaterThan(100);
   expect(r.fan).toEqual({ count: 3, ups: 1, downs: 1 });
   expect(r.sought).toBe(r.foes);
+  expect(r.blunder.hit).toBe(true);
+  expect(r.blunder.pushed).toBeGreaterThan(20);
+  expect(r.blunder.kicked).toBeGreaterThan(5);
+  expect(r.cannon.hit).toBe(r.foes);
+  expect(r.cannon.kicked).toBeGreaterThan(r.blunder.kicked);
+  expect(r.revolvers.firstSix).toBe(6);
+  expect(r.revolvers.reloadSeen).toBe(true);
+  expect(r.revolvers.shotDuringReload).toBe(false);
+  expect(r.revolvers.gap).toBeGreaterThan(40); // the reload (0.75 s) sits between the sixth and seventh shot
+  expect(r.hammer.ammo).toBe(6);
   expect(errors).toEqual([]);
 });
 
-test('the six weapons in the hand, and the skill slot', async ({ page }, info) => {
+test('the eight weapons in the hand, and the skill slot', async ({ page }, info) => {
   const errors = collectErrors(page);
   await camp(page);
-  for (const kind of ['sword', 'greatsword', 'blades', 'bow', 'staff', 'wand']) {
+  for (const kind of ['sword', 'greatsword', 'blades', 'bow', 'staff', 'wand', 'blunderbuss', 'revolvers']) {
     await page.evaluate(async (k) => {
       const L = await import('/src/loot.ts');
       const g = (window as any).game;
@@ -300,6 +347,7 @@ test('the six weapons in the hand, and the skill slot', async ({ page }, info) =
     ['sword', 'J', 6], ['sword', 'I', 10], ['greatsword', 'K', 20], ['greatsword', 'I', 16],
     ['bow', 'K', 34], ['bow', 'I', 40], ['staff', 'J', 10], ['staff', 'I', 70],
     ['blades', 'J', 4], ['blades', 'K', 8], ['blades', 'I', 20], ['wand', 'K', 18], ['wand', 'I', 14],
+    ['blunderbuss', 'J', 10], ['blunderbuss', 'I', 10], ['revolvers', 'J', 4], ['revolvers', 'K', 12], ['revolvers', 'I', 14],
   ];
   for (const [kind, key, frames] of poses) {
     const at = await page.evaluate(async ([k, key, n]) => {

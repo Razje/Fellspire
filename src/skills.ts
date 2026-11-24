@@ -18,6 +18,8 @@ export const SKILL_TUNING = {
   blizzard: { ahead: 190, rx: 112, ry: 46, last: 3.5, every: 0.35, dmg: 5, slow: 1.2, cast: 0.5 },
   bladeStorm: { time: 0.85, every: 0.085, dmg: 4, rx: 74, ry: 30, knock: 25, drift: 70 },
   sparkVolley: { count: 6, dmg: 7, speed: 430, reach: 560, homing: 7, cast: 0.34 },
+  cannonBlast: { cast: 0.42, fireAt: 0.14, reach: 230, spread: 0.45, dmg: 30, knock: 620, pellets: 10, recoil: 420 },
+  fanTheHammer: { shots: 6, every: 0.07, dmg: 8, speed: 1200, reach: 600, wobble: 0.06, cast: 0.5 },
 };
 
 type Effect = (dt: number) => boolean; // false when done
@@ -41,6 +43,8 @@ export function startSkill(id: SkillId, s: RoomScene, p: Player): number {
     case 'blizzard': return blizzard(s, p);
     case 'bladeStorm': return bladeStorm(s, p);
     case 'sparkVolley': return sparkVolley(s, p);
+    case 'cannonBlast': return cannonBlast(s, p);
+    case 'fanTheHammer': return fanTheHammer(s, p);
   }
 }
 
@@ -219,6 +223,73 @@ function sparkVolley(s: RoomScene, p: Player) {
       s.shots.launch(p.x + p.facing * 18, p.y, Math.cos(a) * T.speed * p.facing, Math.sin(a) * T.speed * 0.6, move);
     }
     s.shockwave(p.x + p.facing * 18, p.y, 0xb98aff);
+    return false;
+  };
+  s.addEffect(run);
+  return T.cast;
+}
+
+// One huge blast: everything in a wide cone ahead is hit hard and hurled away, and
+// the kick throws the hero back a good step.
+function cannonBlast(s: RoomScene, p: Player) {
+  const T = SKILL_TUNING.cannonBlast;
+  p.playAnim('throw', { duration: T.cast * 1000, force: true });
+  const dir = p.facing;
+  const spec: AttackSpec = { dmg: T.dmg, range: 0, depth: 0, knock: T.knock, heavy: true, stop: 110 };
+  const pellets: Move = {
+    anim: 'throw', dur: 0, hitAt: 0, dmg: 0, range: 0, depth: 0, knock: 0, lunge: 0, quiet: true,
+    shot: { look: 'pellet', speed: 1000, reach: T.reach, pierce: true, show: true },
+  };
+  let t = 0;
+  const run: Effect = (dt) => {
+    t += dt;
+    if (t < T.fireAt) return true;
+    const x0 = p.x + dir * 30, y0 = p.y;
+    // the cone: ahead of the muzzle, widening with distance
+    const inside = (x: number, y: number) => {
+      const d = (x - x0) * dir;
+      return d > -20 && d < T.reach && Math.abs(y - y0) <= 22 + Math.max(0, d) * T.spread;
+    };
+    s.strike({ x: x0 - dir * 40, y: y0, facing: dir }, true, spec, s.enemies, inside);
+    for (let i = 0; i < T.pellets; i++) {
+      const lean = (Math.random() - 0.5) * 2 * T.spread, k = 0.8 + Math.random() * 0.4;
+      s.shots.launch(x0, y0, dir * 1000 * k, lean * 1000 * k, pellets);
+    }
+    s.shots.muzzle(x0, y0, dir, 2.6);
+    s.shockwave(x0 + dir * 50, y0, 0xffb060);
+    s.shake(200, 0.012);
+    s.dust(p.x, p.y, 5);
+    p.recoil(T.recoil);
+    return false;
+  };
+  s.addEffect(run);
+  return T.cast;
+}
+
+// Six shots as fast as the hammer can be fanned, a little wild, from both guns in
+// turn; afterwards the guns are freshly loaded.
+function fanTheHammer(s: RoomScene, p: Player) {
+  const T = SKILL_TUNING.fanTheHammer;
+  const dir = p.facing;
+  const move: Move = {
+    anim: 'throw', dur: 0, hitAt: 0, dmg: T.dmg, range: 0, depth: 18, knock: 60, lunge: 0, quiet: true,
+    shot: { look: 'bullet', speed: T.speed, reach: T.reach },
+  };
+  let t = 0, fired = 0;
+  const run: Effect = (dt) => {
+    t += dt;
+    if (p.isDead()) return false;
+    while (fired < T.shots && t >= 0.05 + fired * T.every) {
+      p.facing = dir;
+      p.playAnim('throw', { duration: T.every * 1000 * 1.5, force: true });
+      const lean = (Math.random() - 0.5) * 2 * T.wobble;
+      const hand = fired % 2 ? 4 : -4; // left gun, right gun
+      s.shots.launch(p.x + dir * 30, p.y + hand, dir * T.speed, lean * T.speed, move);
+      s.shots.muzzle(p.x + dir * 30, p.y + hand, dir, 0.8);
+      fired++;
+    }
+    if (fired < T.shots) return true;
+    p.refill();
     return false;
   };
   s.addEffect(run);

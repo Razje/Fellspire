@@ -80,17 +80,18 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
 | `src/hub.ts` | The camp between runs, which is room 0 of `RoomScene`: where things stand (`CAMP`), the campfire, the weapon rack and what it offers (`RACK_KINDS`), the chosen weapon remembered in the browser (`fellspire.weapon`) |
+| `src/ui/armory.ts` | The rack's store (`WeaponShop`): tabs per weapon type, a grid, the equipped and selected weapons compared as cards; opened by `HudScene.openRack` |
 | `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution (`strike`, the one path for swings, shots and skill areas) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
-| `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash) and set its own hit-stop (`stop`). A new weapon type starts here |
+| `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash), set its own hit-stop (`stop`), kick the hero back (`recoil`), make her untouchable until it lands (`evade`) and spend a round (`ammo`, with the weapon's `mag`). A new weapon type starts here |
 | `src/skills.ts` | How each skill plays out (`SKILL_TUNING` holds its numbers): it returns how long the hero is busy and puts an effect on the room that runs each frame |
-| `src/shots.ts` | The player's arrows, bolts, orbs and sparks in flight: first foe or barrel hit, piercing, bursting, a spread fanned up and down the floor, seeking (`homing`); `launch()` sends one with any velocity, for skills |
+| `src/shots.ts` | The player's arrows, bolts, orbs, sparks, pellets and bullets in flight (guns leave a `muzzle()` flash and smoke): first foe or barrel hit, piercing, bursting, a spread fanned up and down the floor, seeking (`homing`); `launch()` sends one with any velocity, for skills |
 | `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (reads its moves and skill from `weapons.ts`; I is the skill key; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
 | `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
-| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger and wand and `armRig()` that puts the carried weapon in the hand (dual blades put the second dagger on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
+| `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
@@ -167,6 +168,14 @@ Decorative, bundled from npm.
 - **Hit-stop costs quick weapons more.** 45 ms per hit nearly matched a dual-blade
   cut's whole length and made the blades barely faster than the sword in a held-J
   test; their light cuts use `stop: 22`.
+- **The borrowed Throwing animation swings the arm overhead**, so a gun on the sword's
+  grip pointed at the sky mid-shot. A part swap with `level` (`rig/Rig.ts`) keeps the
+  hand's position but holds the part at a fixed angle. Found on the blunderbuss, 2026-11-24.
+- **Knockback is set, not added, and fades fast** (1600 px/s per second in
+  `Fighter.physics`): knock 170 moved a foe about 9 px, and a foe walks back while
+  being pushed. A knock meant to be felt needs 350 or more.
+- A screen over the room (the rack) needs a shade of about 0.9: at 0.66 the HUD's
+  bars and key hints show through and clash with its own.
 - Phaser tweens time themselves by the real clock, so stepping the game by hand
   in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 

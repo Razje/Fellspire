@@ -1,4 +1,5 @@
-// Weapon parts drawn here in the CraftPix chibi style (thick dark outline, flat
+// Weapon parts drawn here (greatsword, bow, staff, dagger, wand, blunderbuss,
+// revolver) in the CraftPix chibi style (thick dark outline, flat
 // shading, a light edge), at the same pixel scale as the packs' own parts so they
 // sit in the same hand. Each comes with its grip: the pixel the hand closes on.
 import Phaser from 'phaser';
@@ -112,6 +113,57 @@ export function weaponParts(scene: Phaser.Scene): Record<string, PartSwap> {
     const cg = c.createLinearGradient(240, 20, 285, 70); cg.addColorStop(0, '#f8eaff'); cg.addColorStop(0.5, '#a86af0'); cg.addColorStop(1, '#4a1a8a');
     c.fillStyle = cg; c.beginPath(); c.moveTo(262, 27); c.lineTo(279, 45); c.lineTo(262, 63); c.lineTo(245, 45); c.closePath(); c.fill();
   });
+  // A blunderbuss along the sword's line: wooden stock behind the hand, an iron
+  // barrel bound in brass, and a wide flared brass muzzle.
+  canvas(scene, 'wpn_blunderbuss', 440, 140, (c) => {
+    const brass = (y0: number, y1: number) => { const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, '#fff1b8'); g.addColorStop(0.45, '#e0b04a'); g.addColorStop(1, '#7a4f12'); return g; };
+    // stock: a curved wooden butt down and back from the hand
+    const stock = () => { c.beginPath(); c.moveTo(150, 56); c.lineTo(60, 62); c.quadraticCurveTo(18, 70, 10, 108); c.lineTo(46, 118); c.quadraticCurveTo(70, 92, 150, 86); c.closePath(); };
+    c.lineWidth = 12; c.strokeStyle = OUT; stock(); c.stroke();
+    const wood = c.createLinearGradient(0, 56, 0, 118); wood.addColorStop(0, '#a8743e'); wood.addColorStop(1, '#4a2a12');
+    c.fillStyle = wood; stock(); c.fill();
+    c.strokeStyle = 'rgba(255,230,190,0.3)'; c.lineWidth = 4; c.beginPath(); c.moveTo(146, 62); c.lineTo(66, 68); c.stroke();
+    // barrel, widening into the bell
+    const barrel = () => { c.beginPath(); c.moveTo(140, 50); c.lineTo(350, 52); c.quadraticCurveTo(390, 46, 428, 22); c.lineTo(428, 118); c.quadraticCurveTo(390, 94, 350, 88); c.lineTo(140, 90); c.closePath(); };
+    c.lineWidth = 12; c.strokeStyle = OUT; barrel(); c.stroke();
+    const iron = c.createLinearGradient(0, 50, 0, 90); iron.addColorStop(0, '#8a96a4'); iron.addColorStop(0.4, '#4a525c'); iron.addColorStop(1, '#22262c');
+    c.fillStyle = iron; barrel(); c.fill();
+    // the bell in brass, with a dark mouth
+    c.fillStyle = brass(22, 118); c.beginPath(); c.moveTo(352, 52); c.quadraticCurveTo(390, 46, 428, 22); c.lineTo(428, 118); c.quadraticCurveTo(390, 94, 352, 88); c.closePath(); c.fill();
+    c.fillStyle = OUT; c.beginPath(); c.ellipse(426, 70, 9, 42, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#2a1808'; c.beginPath(); c.ellipse(426, 70, 5, 34, 0, 0, Math.PI * 2); c.fill();
+    // brass bands and a hammer
+    for (const x of [176, 262]) { c.fillStyle = OUT; c.fillRect(x - 9, 42, 18, 56); c.fillStyle = brass(46, 94); c.fillRect(x - 5, 46, 10, 48); }
+    c.fillStyle = OUT; c.beginPath(); c.moveTo(146, 50); c.lineTo(132, 22); c.lineTo(150, 18); c.lineTo(162, 50); c.closePath(); c.fill();
+    c.fillStyle = '#8a96a4'; c.beginPath(); c.moveTo(149, 46); c.lineTo(139, 26); c.lineTo(148, 24); c.lineTo(156, 46); c.closePath(); c.fill();
+    // trigger guard under the hand
+    c.strokeStyle = OUT; c.lineWidth = 9; c.beginPath(); c.arc(150, 92, 16, 0, Math.PI); c.stroke();
+    c.strokeStyle = brass(90, 110); c.lineWidth = 4; c.beginPath(); c.arc(150, 92, 16, 0, Math.PI); c.stroke();
+  });
+  // A revolver along the sword's line: a wooden grip angled down behind the hand,
+  // a fluted cylinder and a long barrel.
+  canvas(scene, 'wpn_revolver', 230, 120, (c) => {
+    const grip = () => { c.beginPath(); c.moveTo(70, 44); c.lineTo(44, 50); c.quadraticCurveTo(22, 86, 26, 108); c.lineTo(56, 110); c.quadraticCurveTo(58, 84, 82, 66); c.closePath(); };
+    c.lineWidth = 10; c.strokeStyle = OUT; grip(); c.stroke();
+    const wood = c.createLinearGradient(20, 0, 80, 0); wood.addColorStop(0, '#5a3418'); wood.addColorStop(1, '#a06a36');
+    c.fillStyle = wood; grip(); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 2;
+    for (let y = 64; y < 104; y += 9) { c.beginPath(); c.moveTo(38, y); c.lineTo(58, y - 6); c.stroke(); }
+    // frame and barrel
+    const steel = c.createLinearGradient(0, 30, 0, 66); steel.addColorStop(0, '#e8eef4'); steel.addColorStop(0.45, '#8a96a4'); steel.addColorStop(1, '#3a424c');
+    c.fillStyle = OUT; c.beginPath(); c.roundRect(60, 30, 168, 26, 8); c.fill();
+    c.fillStyle = steel; c.beginPath(); c.roundRect(64, 34, 160, 18, 6); c.fill();
+    c.fillStyle = OUT; c.fillRect(214, 22, 10, 12); // front sight
+    // the cylinder
+    c.fillStyle = OUT; c.beginPath(); c.roundRect(76, 24, 54, 44, 12); c.fill();
+    c.fillStyle = steel; c.beginPath(); c.roundRect(81, 29, 44, 34, 9); c.fill();
+    c.strokeStyle = 'rgba(30,34,40,0.8)'; c.lineWidth = 3;
+    for (const y of [40, 52]) { c.beginPath(); c.moveTo(84, y); c.lineTo(122, y); c.stroke(); }
+    // hammer and trigger guard
+    c.fillStyle = OUT; c.beginPath(); c.moveTo(66, 34); c.lineTo(52, 16); c.lineTo(64, 12); c.lineTo(76, 32); c.closePath(); c.fill();
+    c.strokeStyle = OUT; c.lineWidth = 7; c.beginPath(); c.arc(84, 70, 12, 0, Math.PI); c.stroke();
+    c.strokeStyle = '#e0b04a'; c.lineWidth = 3; c.beginPath(); c.arc(84, 70, 12, 0, Math.PI); c.stroke();
+  });
   return {
     greatsword: { texture: 'wpn_greatsword', grip: { from: SWORD_GRIP, to: [92, 75], rest: 70 } },
     bow: { texture: 'wpn_bow', grip: { from: SWORD_GRIP, to: [150, 220], scale: 1.2, rest: -35 } },
@@ -120,6 +172,10 @@ export function weaponParts(scene: Phaser.Scene): Record<string, PartSwap> {
     // the second blade sits where the shield was, in the other hand
     offhand: { texture: 'wpn_dagger', grip: { from: SHIELD_GRIP, to: [52, 55], angle: 0 } },
     wand: { texture: 'wpn_wand', grip: { from: SWORD_GRIP, to: [60, 45], scale: 1.15, rest: 15 }, front: 'Right Hand.png' },
+    blunderbuss: { texture: 'wpn_blunderbuss', grip: { from: SWORD_GRIP, to: [150, 76], scale: 1.1, level: 4 }, front: 'Right Hand.png' },
+    revolvers: { texture: 'wpn_revolver', grip: { from: SWORD_GRIP, to: [56, 58], scale: 0.85, level: 0 }, front: 'Right Hand.png' },
+    // the second revolver sits where the shield was, in the other hand
+    offgun: { texture: 'wpn_revolver', grip: { from: SHIELD_GRIP, to: [56, 58], scale: 0.85, level: 0 } },
   };
 }
 
@@ -131,7 +187,8 @@ export function armRig(rig: Rig, kind: WeaponKind) {
   for (const f of ['Sword.png', 'Shield.png', 'SlashFX.png']) rig.skin.delete(f);
   if (kind !== 'sword') {
     rig.skin.set('Sword.png', { ...parts[kind], show: true });
-    rig.skin.set('Shield.png', kind === 'blades' ? { ...parts.offhand, show: true } : { texture: null });
+    const off = kind === 'blades' ? parts.offhand : kind === 'revolvers' ? parts.offgun : null;
+    rig.skin.set('Shield.png', off ? { ...off, show: true } : { texture: null });
     if (kind !== 'greatsword' && kind !== 'blades') rig.skin.set('SlashFX.png', { texture: null });
   }
   rig.step(0);

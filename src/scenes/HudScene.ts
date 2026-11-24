@@ -16,6 +16,7 @@ import { Bar, Button, FocusList, Frame, SLOT, Slot, bandTextures, hi, icon, keyH
 import { WEAPONS } from '../weapons';
 import { openOptions, type Panel } from '../ui/panels';
 import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
+import { WeaponShop } from '../ui/armory';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
 import { Rig } from '../rig/Rig';
@@ -108,6 +109,7 @@ export class HudScene extends Phaser.Scene {
   private gearUi?: Phaser.GameObjects.Container;
   private tip?: Phaser.GameObjects.Container;
   private choice?: { cards: ItemCard[]; index: number; busy: boolean; root: Phaser.GameObjects.Container; pick: (i: number) => void };
+  shop?: WeaponShop; // the camp's weapon rack, while it is open
   endKind: 'death' | 'victory' | null = null;
 
   constructor() {
@@ -131,6 +133,7 @@ export class HudScene extends Phaser.Scene {
     this.gearUi = undefined;
     this.tip = undefined;
     this.choice = undefined;
+    this.shop = undefined;
   }
 
   create() {
@@ -436,7 +439,25 @@ export class HudScene extends Phaser.Scene {
   }
 
   get choosing() {
-    return !!this.choice;
+    return !!this.choice || !!this.shop;
+  }
+
+  // The camp's weapon rack: tabs per weapon type, a grid, and the weapon in your
+  // hand compared with the one selected (ui/armory.ts). The room is paused under it.
+  openRack(items: Item[], gear: Gear, onPick: (it: Item) => void, onClose: () => void) {
+    this.hideTip();
+    this.blurRoom(true);
+    this.shop = new WeaponShop(this, items, gear, (it) => {
+      this.blurRoom(false);
+      this.shop = undefined;
+      onPick(it);
+      this.refreshGear();
+      this.banner('good', 'Equipped', it.name);
+    }, () => {
+      this.blurRoom(false);
+      this.shop = undefined;
+      onClose();
+    });
   }
 
   // ---- the boss ----------------------------------------------------------------------------
@@ -554,7 +575,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   openPause() {
-    if (this.pause || this.end || this.choice || !this.room.canPause()) return;
+    if (this.pause || this.end || this.choice || this.shop || !this.room.canPause()) return;
     this.room.scene.pause();
     this.blurRoom(true);
     const root = this.add.container(0, 0).setDepth(100);
@@ -696,6 +717,7 @@ export class HudScene extends Phaser.Scene {
     const right = code === 'ArrowRight' || code === 'KeyD';
     const ok = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyJ';
     const back = code === 'Escape' || code === 'Backspace';
+    if (this.shop) { this.shop.key(code); return; }
     if (this.choice) { this.chooseNav(left, right, ok || code === 'KeyE'); return; }
     if (this.end) {
       if (code === 'KeyR') this.restartRun();
@@ -726,7 +748,8 @@ export class HudScene extends Phaser.Scene {
     const down = hit(13) || (sy > 0.5 && !this.padPrev[98]);
     const left = hit(14) || (sx < -0.5 && !this.padPrev[97]);
     const right = hit(15) || (sx > 0.5 && !this.padPrev[96]);
-    if (this.choice) this.chooseNav(left, right, hit(0));
+    if (this.shop) this.shop.nav({ left, right, up, down, tabL: hit(4), tabR: hit(5), ok: hit(0), back: hit(1) });
+    else if (this.choice) this.chooseNav(left, right, hit(0));
     else if (this.end) this.end.list.nav(up, down, left, right, hit(0));
     else if (this.pause || this.options) this.nav(up, down, left, right, hit(0), hit(1) || hit(9), false);
     else if (hit(9)) this.openPause();

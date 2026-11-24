@@ -13,7 +13,9 @@ export interface PartSwap {
   front?: string; // drawn just below this part ("Right Hand.png"), over the body, whatever the pose
   // rest: an extra turn (degrees) while the animation hides the part it replaces,
   // so a weapon the pack never poses at rest is held upright instead of levelled
-  grip?: { from: [number, number]; to: [number, number]; angle?: number; scale?: number; rest?: number };
+  // level: always held at this angle (degrees, 0 = straight ahead) whatever the hand
+  // does, so a gun stays aimed while the borrowed throwing animation swings the arm
+  grip?: { from: [number, number]; to: [number, number]; angle?: number; scale?: number; rest?: number; level?: number };
 }
 
 export class Rig extends Phaser.GameObjects.Container {
@@ -98,7 +100,8 @@ export class Rig extends Phaser.GameObjects.Container {
         const wy = s.y + lx * s.sx * Math.sin(rad) + ly * s.sy * Math.cos(rad);
         // ...is where the new part's grip goes
         img.setOrigin(to[0] / img.width, to[1] / img.height).setPosition(wx, -wy)
-          .setRotation(-rad - (angle * Math.PI) / 180).setScale(s.sx * scale, s.sy * scale);
+          .setRotation(swap.grip.level !== undefined ? -(swap.grip.level * Math.PI) / 180 : -rad - (angle * Math.PI) / 180)
+          .setScale(s.sx * scale, s.sy * scale);
       } else {
         img.setOrigin(s.file.px, 1 - s.file.py).setPosition(s.x, -s.y).setRotation(-rad).setScale(s.sx, s.sy);
       }

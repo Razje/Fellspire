@@ -892,17 +892,18 @@ export class RoomScene extends Phaser.Scene {
     if (near && this.player.interact) this.openRack();
   }
 
-  // The rack's weapons come up as cards over the paused camp; the pick is remembered.
+  // The rack opens as a store over the paused camp (HudScene.openRack); the pick
+  // is remembered, and Esc walks away without changing anything.
   openRack() {
     const hud = this.hud, camp = this.camp;
     if (!hud || !camp || hud.choosing) return;
     this.scene.pause();
-    hud.openChest(camp.rackItems(), this.run.gear, (it) => {
+    hud.openRack(camp.rackItems(), this.run.gear, (it) => {
       this.equip(it);
       if (it.kind) saveWeapon(it.kind);
       camp.chosen = true;
       this.scene.resume();
-    }, 'Choose your weapon');
+    }, () => this.scene.resume());
   }
 
   // ---- the boss fight -----------------------------------------------------
@@ -1102,6 +1103,15 @@ export class RoomScene extends Phaser.Scene {
     this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, x: x + drift, y: y - (kind === 'heavy' ? 46 : 36), duration: 900, delay: 120, ease: 'Sine.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, duration: 350, delay: kind === 'heavy' ? 760 : 620, onComplete: () => t.destroy() });
+  }
+
+  // A word over someone's head that rises and fades ("Reload").
+  callout(on: Fighter, text: string, color = '#e8eef4') {
+    const t = this.add.text(on.x, on.y - on.visualHeight - 8, text.toUpperCase(), {
+      fontFamily: FONT.head, fontSize: '12px', fontStyle: '700', color, stroke: '#000000', strokeThickness: 3, resolution: RES * 1.5,
+    }).setOrigin(0.5).setDepth(19000).setLetterSpacing(2);
+    this.tweens.add({ targets: t, y: t.y - 22, duration: 700, ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, duration: 250, delay: 550, onComplete: () => t.destroy() });
   }
 
   private hitSpark(x: number, y: number, color: number) {
