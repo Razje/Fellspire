@@ -10,7 +10,8 @@ import type { Rig } from '../rig/Rig';
 import { makeTitleTextures } from '../titleArt';
 import { Button, ChoiceRow, FocusList, Frame, TextRow, bandTextures, keyHint, pic, type Focusable } from '../ui/kit';
 import { C, txt } from '../ui/theme';
-import { screenCamera } from '../ui/view';
+import { screenCamera, STAGE_W } from '../ui/view';
+import { WORLD } from '../config';
 
 export interface CreateData {
   // 'run': made on the way into a run, which starts after; 'menu': back to the title;
@@ -52,7 +53,7 @@ export class CreateScene extends Phaser.Scene {
   }
 
   create() {
-    screenCamera(this);
+    screenCamera(this, true);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.buildBackdrop();
     this.buildHero();
@@ -71,11 +72,11 @@ export class CreateScene extends Phaser.Scene {
 
   private buildBackdrop() {
     const add = this.add;
-    add.image(0, 0, 'tt_sky').setOrigin(0).setDepth(0);
+    add.image(STAGE_W / 2, 0, 'tt_sky').setOrigin(0.5, 0).setDepth(0);
     add.image(480, 0, 'tt_far').setOrigin(0.5, 0).setDepth(1);
     add.image(480, 0, 'tt_mid').setOrigin(0.5, 0).setDepth(2);
     add.image(480, 0, 'tt_ground').setOrigin(0.5, 0).setDepth(3);
-    add.rectangle(480, 270, 960, 540, 0x02040a, 0.35).setDepth(4);
+    add.rectangle(480, 270, WORLD.viewW, 540, 0x02040a, 0.35).setDepth(4);
     // a pool of warm light where she stands
     const pool = add.image(270, 478, 'tt_light').setDepth(5).setScale(3.2, 0.9).setTint(0xff9a3c).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
     const halo = add.image(270, 330, 'tt_light').setDepth(5).setScale(3.4).setTint(0xffb060).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.18);
@@ -87,7 +88,7 @@ export class CreateScene extends Phaser.Scene {
       tint: [0xffd27a, 0xff9a3c], blendMode: 'ADD', frequency: 260,
     }).setDepth(6);
     motes.fastForward(4000);
-    add.image(0, 0, 'tt_vignette').setOrigin(0).setDepth(90);
+    add.image(STAGE_W / 2, 0, 'tt_vignette').setOrigin(0.5, 0).setDepth(90);
   }
 
   private buildHero() {

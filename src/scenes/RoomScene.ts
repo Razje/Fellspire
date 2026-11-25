@@ -64,8 +64,8 @@ interface Projectile {
 interface Pickup { sprite: Phaser.GameObjects.Image; x: number; y: number; t: number; dead: boolean }
 
 // The farthest apart two heroes may stand, side to side, so both stay in view
-// (the view is 960 wide; this leaves each a margin at the edge).
-export const LEASH = 820;
+// (the view's width less 140, 820 at 16:9: this leaves each a margin at the edge).
+export const LEASH = WORLD.viewW - 140;
 // A hero who fell comes back in the next room with this share of their health.
 const REJOIN = 0.3;
 

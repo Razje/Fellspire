@@ -9,9 +9,9 @@ import Phaser from 'phaser';
 import { loadParts } from '../rig/parts';
 import { Rig, type PartSwap } from '../rig/Rig';
 import { weaponParts } from '../rig/weapons';
-import { screenCamera } from '../ui/view';
+import { screenCamera, STAGE_LEFT } from '../ui/view';
 import { C, txt } from '../ui/theme';
-import { CHARACTERS } from '../config';
+import { CHARACTERS, WORLD } from '../config';
 import { firstFrame, loadedAnims } from '../assets';
 
 const ANIMS: [string, string][] = [
@@ -31,10 +31,10 @@ export class RigLabScene extends Phaser.Scene {
   }
 
   async create() {
-    screenCamera(this);
+    screenCamera(this, true);
     const g = this.add.graphics();
-    g.fillGradientStyle(0x16283a, 0x16283a, 0x070b12, 0x070b12, 1).fillRect(0, 0, 960, 540);
-    g.fillStyle(0x0c141c, 1).fillRect(0, 440, 960, 100);
+    g.fillGradientStyle(0x16283a, 0x16283a, 0x070b12, 0x070b12, 1).fillRect(STAGE_LEFT, 0, WORLD.viewW, 540);
+    g.fillStyle(0x0c141c, 1).fillRect(STAGE_LEFT, 440, WORLD.viewW, 100);
     txt(this, 480, 30, 'RIG LAB', 'head', { fontSize: '20px', letterSpacing: 4 }).setOrigin(0.5);
     this.label = txt(this, 480, 56, '', 'label', { fontSize: '14px' }).setOrigin(0.5);
     txt(this, 480, 520, 'Keys 1-9: animation', 'small', { fontSize: '12px', color: C.grey }).setOrigin(0.5);

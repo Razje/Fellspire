@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { makeTitleTextures } from '../titleArt';
 import { firstFrame, loadedAnims } from '../assets';
-import { CHARACTERS, type CharKey } from '../config';
+import { CHARACTERS, WORLD, type CharKey } from '../config';
 import { Button, keyHint } from '../ui/kit';
 import { openCredits, openOptions, openPanel, type Panel } from '../ui/panels';
 import { setParty } from '../input';
 import { C, RES, txt } from '../ui/theme';
-import { screenCamera } from '../ui/view';
+import { screenCamera, STAGE_RIGHT, STAGE_W } from '../ui/view';
 import { hasHero, heroRig } from '../hero';
 import type { Rig } from '../rig/Rig';
 
@@ -47,7 +47,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
-    screenCamera(this);
+    screenCamera(this, true);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     this.buildScene();
     this.buildLogo();
@@ -56,7 +56,7 @@ export class MenuScene extends Phaser.Scene {
     this.prompt = txt(this, 480, 498, 'Press any key to begin', 'head', { fontSize: '20px', color: '#f6e7c4', strokeThickness: 5 })
       .setOrigin(0.5).setDepth(900).setAlpha(0).setShadow(0, 2, '#000', 6, true, true);
 
-    txt(this, 948, 530, 'prototype v0.2', 'small', { color: '#8a9aa6', strokeThickness: 0 })
+    txt(this, STAGE_RIGHT - 12, 530, 'prototype v0.2', 'small', { color: '#8a9aa6', strokeThickness: 0 })
       .setOrigin(1, 1).setDepth(900).setAlpha(0.6);
 
     // back from character creation: straight to the open menu
@@ -90,12 +90,12 @@ export class MenuScene extends Phaser.Scene {
 
   private buildScene() {
     const add = this.add;
-    add.image(0, 0, 'tt_sky').setOrigin(0).setDepth(0);
+    add.image(STAGE_W / 2, 0, 'tt_sky').setOrigin(0.5, 0).setDepth(0);
     this.layer(add.image(480, 0, 'tt_far').setOrigin(0.5, 0).setDepth(10), 0.15);
 
     // drifting mist between the tree rows
     for (const [y, dur, a] of [[330, 60000, 0.55], [372, 45000, 0.45]] as const) {
-      const fog = add.tileSprite(480, y, 1200, 160, 'tt_fog').setDepth(15).setAlpha(a).setBlendMode(Phaser.BlendModes.SCREEN);
+      const fog = add.tileSprite(480, y, WORLD.viewW + 240, 160, 'tt_fog').setDepth(15).setAlpha(a).setBlendMode(Phaser.BlendModes.SCREEN);
       this.tweens.add({ targets: fog, tilePositionX: 640, duration: dur, repeat: -1 });
       this.layer(fog, 0.25);
     }
@@ -163,7 +163,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.layer(add.image(480, 0, 'tt_vines').setOrigin(0.5, 0).setDepth(70), 0.9);
     this.layer(add.image(480, 0, 'tt_front').setOrigin(0.5, 0).setDepth(80), 1.1);
-    add.image(0, 0, 'tt_vignette').setOrigin(0).setDepth(90);
+    add.image(STAGE_W / 2, 0, 'tt_vignette').setOrigin(0.5, 0).setDepth(90);
   }
 
   private character(key: CharKey, x: number, y: number, height: number, flip: boolean) {

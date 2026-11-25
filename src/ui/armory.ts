@@ -7,6 +7,7 @@
 // change tab, E (or Enter, A on a controller) equips, Esc (B) closes without
 // changing anything. The mouse works on tabs and slots.
 import Phaser from 'phaser';
+import { WORLD } from '../config';
 import { RARITY, type Gear, type Item } from '../loot';
 import { KINDS, WEAPONS, type WeaponKind } from '../weapons';
 import { CURSOR_HOVER, Frame, hi, keyHint, keycap, pic, rrect } from './kit';
@@ -101,7 +102,7 @@ export class WeaponShop {
     // in co-op: whose turn it is, shown over the panel, and their device's keys
     turn?: { name: string; device: Device }) {
     const keys = menuLabels(turn?.device ?? { kind: 'solo' });
-    const s = scene, { viewW, viewH } = { viewW: 960, viewH: 540 };
+    const s = scene, { viewW, viewH } = WORLD;
     this.tabs = ['all', ...KINDS.filter((k) => items.some((it) => it.kind === k))];
     this.root = s.add.container(0, 0).setDepth(90);
     const shade = s.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, 0x05070c, 0.9).setInteractive(); // dark enough to hide the HUD's own bars and keys

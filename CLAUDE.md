@@ -166,7 +166,12 @@ Decorative, bundled from npm.
   front. Floor-level effects (light pools 0.5, shadows 1, attack markers 2) sit
   just above the floor (-50), combat text 19000, foreground framing 15000. The HUD
   is a separate scene drawn over the room.
-- **The canvas is 1920 x 1080, the game is laid out in 960 x 540.** Every camera is
+- **The canvas is 1920 x 1080, the game is laid out in 960 x 540**, at 16:9. On a
+  wider window `WORLD.viewW` grows (worked out once at load, up to the room's 1500), so
+  the room and HUD show more; use `WORLD.viewW`, never 960, for the screen's width there.
+  The title, character and lobby screens keep a 960 stage in the middle
+  (`screenCamera(scene, true)`, `STAGE_LEFT`/`STAGE_RIGHT`) and `titleArt.ts` paints
+  their scenery wide enough for the sides. `tests/wide.spec.ts` covers it. Every camera is
   zoomed 2x (`ui/view.ts`). Phaser zooms around the camera's middle, so a screen
   scene calls `screenCamera()`, the room uses `worldView.x` (not `scrollX`) for the
   left edge of the view, and anything in the room with a scroll factor other than 1

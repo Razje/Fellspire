@@ -2,6 +2,7 @@
 // Palette after Lost Castle 2's night forests: deep blue-teal darkness, warm
 // pools of fire light, cyan and violet magic, black foliage framing the edges.
 import Phaser from 'phaser';
+import { WORLD } from './config';
 
 export type Ctx = CanvasRenderingContext2D;
 
@@ -57,33 +58,41 @@ function lights(scene: Phaser.Scene) {
       c.fill();
     }
   });
-  canvas(scene, 'tt_vignette', 960, 540, (c) => {
-    const g = c.createRadialGradient(480, 300, 180, 480, 300, 620);
+  canvas(scene, 'tt_vignette', SW, 540, (c) => {
+    const g = c.createRadialGradient(SW / 2, 300, 180, SW / 2, 300, 620 + SOX);
     g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(0.6, 'rgba(2,4,10,0.35)');
     g.addColorStop(1, 'rgba(2,4,10,0.92)');
     c.fillStyle = g;
-    c.fillRect(0, 0, 960, 540);
+    c.fillRect(0, 0, SW, 540);
   });
 }
 
 // ---- scenery layers ----------------------------------------------------------
 
-const W = 1120; // wider than the screen so the layers can drift with the mouse
+// The sky and vignette are as wide as the view (960 at 16:9, more on a wider
+// screen). The scenery layers are 160 wider than that so they can drift with the
+// mouse. Each is drawn as it was designed at 960 / 1120 wide, shifted right by
+// SOX / OX so that design sits in the middle, with the extra width filled at the sides.
+const SW = WORLD.viewW;
+const SOX = (SW - 960) / 2;
+const W = Math.max(1120, SW + 160);
+const OX = (W - 1120) / 2;
 
 function sky(scene: Phaser.Scene) {
-  canvas(scene, 'tt_sky', 960, 540, (c) => {
+  canvas(scene, 'tt_sky', SW, 540, (c) => {
     const g = c.createLinearGradient(0, 0, 0, 540);
     g.addColorStop(0, '#060a18');
     g.addColorStop(0.45, '#0f2033');
     g.addColorStop(0.75, '#16343c');
     g.addColorStop(1, '#0d1c22');
     c.fillStyle = g;
-    c.fillRect(0, 0, 960, 540);
+    c.fillRect(0, 0, SW, 540);
+    c.translate(SOX, 0);
     const r = rng(3);
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < Math.round(90 * SW / 960); i++) {
       c.fillStyle = `rgba(220,235,255,${0.2 + r() * 0.6})`;
-      c.fillRect(r() * 960, r() * 260, r() < 0.9 ? 1 : 2, r() < 0.9 ? 1 : 2);
+      c.fillRect(-SOX + r() * SW, r() * 260, r() < 0.9 ? 1 : 2, r() < 0.9 ? 1 : 2);
     }
     // moon, high on the right
     radial(c, 872, 74, 150, [[0, 'rgba(190,230,235,0.35)'], [0.3, 'rgba(120,180,200,0.12)'], [1, 'rgba(0,0,0,0)']]);
@@ -126,8 +135,12 @@ function forest(scene: Phaser.Scene, key: string, seed: number, n: number, color
     c.filter = blur ? `blur(${blur}px)` : 'none';
     c.fillStyle = color;
     c.strokeStyle = color;
-    for (let i = 0; i < n; i++) {
-      const x = (i + 0.2 + r() * 0.6) * (W / n);
+    // the 1120 design in the middle; as many trees again per 1120 at the sides
+    c.translate(OX, 0);
+    const extra = Math.ceil((OX / 1120) * n);
+    for (let i = -extra; i < n + extra; i++) {
+      const x = (i + 0.2 + r() * 0.6) * (1120 / n);
+      if (x < -OX - 60 || x > 1120 + OX + 60) continue;
       const w = wMin + r() * (wMax - wMin);
       if (x + w * 2 > avoid[0] && x - w * 2 < avoid[1]) continue;
       trunk(c, x, base + r() * 14, -20, w, (r() - 0.5) * 30, r);
@@ -145,7 +158,7 @@ function forest(scene: Phaser.Scene, key: string, seed: number, n: number, color
       }
     }
     // a band of ground under the trees
-    c.fillRect(0, base, W, 540 - base);
+    c.fillRect(-OX, base, W, 540 - base);
   });
 }
 
@@ -154,7 +167,7 @@ function vines(scene: Phaser.Scene) {
     const r = rng(11);
     c.strokeStyle = '#071019';
     c.lineCap = 'round';
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < Math.round(9 * W / 1120); i++) {
       const x1 = r() * W, x2 = x1 + 80 + r() * 160, sag = 60 + r() * 90;
       c.lineWidth = 3 + r() * 3;
       c.beginPath();
@@ -176,32 +189,37 @@ function ground(scene: Phaser.Scene) {
   canvas(scene, 'tt_ground', W, 540, (c) => {
     const r = rng(21);
     const top = 408;
+    c.translate(OX, 0);
     let g = c.createLinearGradient(0, top, 0, 540);
     g.addColorStop(0, '#132522');
     g.addColorStop(1, '#0a1413');
     c.fillStyle = g;
-    c.fillRect(0, top, W, 540 - top);
-    // the winding dirt path
+    c.fillRect(-OX, top, W, 540 - top);
+    // the winding dirt path, running on straight past the design's ends
     g = c.createLinearGradient(0, top, 0, 540);
     g.addColorStop(0, '#3a3129');
     g.addColorStop(1, '#241d18');
     c.fillStyle = g;
     c.beginPath();
-    c.moveTo(0, 452);
+    c.moveTo(-OX, 452);
+    c.lineTo(0, 452);
     c.bezierCurveTo(300, 420, 520, 470, 760, 440);
-    c.bezierCurveTo(900, 424, 1020, 430, W, 446);
-    c.lineTo(W, 520);
+    c.bezierCurveTo(900, 424, 1020, 430, 1120, 446);
+    c.lineTo(1120 + OX, 446);
+    c.lineTo(1120 + OX, 520);
+    c.lineTo(1120, 520);
     c.bezierCurveTo(900, 512, 700, 530, 480, 512);
     c.bezierCurveTo(300, 500, 120, 520, 0, 510);
+    c.lineTo(-OX, 510);
     c.closePath();
     c.fill();
     // pebbles and grass tufts
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < Math.round(70 * W / 1120); i++) {
       c.fillStyle = r() < 0.5 ? '#4a4036' : '#2c2620';
-      c.beginPath(); c.ellipse(r() * W, 445 + r() * 70, 2 + r() * 4, 1.5 + r() * 2, 0, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.ellipse(-OX + r() * W, 445 + r() * 70, 2 + r() * 4, 1.5 + r() * 2, 0, 0, Math.PI * 2); c.fill();
     }
-    for (let i = 0; i < 160; i++) {
-      const x = r() * W, y = top + 4 + r() * 130;
+    for (let i = 0; i < Math.round(160 * W / 1120); i++) {
+      const x = -OX + r() * W, y = top + 4 + r() * 130;
       c.strokeStyle = r() < 0.5 ? '#24402f' : '#2f523a';
       c.lineWidth = 2;
       c.beginPath();

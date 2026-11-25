@@ -20,10 +20,13 @@ export function openPanel(
 ): Panel {
   const { viewW, viewH } = WORLD;
   bandTextures(scene);
+  // the middle of what this scene's camera shows: the 960 stage on the title
+  // screen, the whole view in the HUD (they differ on a wide screen, ui/view.ts)
+  const cam = scene.cameras.main, cx = cam.scrollX + cam.width / 2;
   const root = scene.add.container(0, 0).setDepth(depth);
-  const shade = scene.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, 0x000000, dim).setInteractive();
+  const shade = scene.add.rectangle(cx, viewH / 2, viewW, viewH, 0x000000, dim).setInteractive();
   root.add(shade);
-  const frame = new Frame(scene, viewW / 2, viewH / 2, w, h, 'gold', title);
+  const frame = new Frame(scene, cx, viewH / 2, w, h, 'gold', title);
   root.add(frame);
   let closed = false;
   const close = () => {

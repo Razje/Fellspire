@@ -11,10 +11,19 @@ import { WORLD } from '../config';
 
 export const ZOOM = 2;
 
-export function screenCamera(scene: Phaser.Scene) {
+// The title, character and lobby screens are laid out on a 960 wide stage. On a
+// wider view the stage sits in the middle and their scenery is painted wide enough
+// to fill the sides: x runs from STAGE_LEFT to STAGE_RIGHT there.
+export const STAGE_W = 960;
+export const STAGE_LEFT = STAGE_W / 2 - WORLD.viewW / 2;
+export const STAGE_RIGHT = STAGE_W / 2 + WORLD.viewW / 2;
+
+// `stage`: centre on the 960 stage (title screens). Without it the camera shows
+// 0..viewW, which is what the HUD lays itself out on.
+export function screenCamera(scene: Phaser.Scene, stage = false) {
   const cam = scene.cameras.main;
   cam.setZoom(ZOOM);
-  cam.centerOn(WORLD.viewW / 2, WORLD.viewH / 2);
+  cam.centerOn(stage ? STAGE_W / 2 : WORLD.viewW / 2, WORLD.viewH / 2);
   return cam;
 }
 

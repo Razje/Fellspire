@@ -3,10 +3,22 @@
 // A room is an arena seen from above at an angle, as in Lost Castle 2: a deep
 // floor taking most of the screen, small characters, a tree line behind. The
 // room is a little larger than the screen, so the camera follows both ways.
+//
+// The view is always 540 high; its width follows the window's shape when the game
+// loads, so a wide or ultrawide screen sees more of the room instead of black bars.
+// 16:9 (or narrower) gives 960, the layout everything was designed at; the most is
+// the room's own width, 1500 (about 25:9). Changing shape later letterboxes until a reload.
+const ROOM_W = 1500;
+function viewWidth(): number {
+  const aspect = typeof window === 'undefined' || !window.innerHeight ? 16 / 9 : window.innerWidth / window.innerHeight;
+  const w = Math.round((540 * aspect) / 2) * 2; // even, so the middle is a whole pixel
+  return Math.min(ROOM_W, Math.max(960, w));
+}
+
 export const WORLD = {
-  viewW: 960,
+  viewW: viewWidth(),
   viewH: 540,
-  roomW: 1500,
+  roomW: ROOM_W,
   roomH: 660,
   // The walkable floor, in room pixels from the top: groundTop is the tree
   // line at the back, groundBottom the front edge.

@@ -11,7 +11,8 @@ import type { Rig } from '../rig/Rig';
 import { makeTitleTextures } from '../titleArt';
 import { Frame, bandTextures, keyHint, pic } from '../ui/kit';
 import { C, txt } from '../ui/theme';
-import { screenCamera } from '../ui/view';
+import { screenCamera, STAGE_W } from '../ui/view';
+import { WORLD } from '../config';
 
 interface Slot {
   device: Device | null;
@@ -48,16 +49,16 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create() {
-    screenCamera(this);
+    screenCamera(this, true);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
     bandTextures(this);
     const add = this.add;
-    add.image(0, 0, 'tt_sky').setOrigin(0).setDepth(0);
+    add.image(STAGE_W / 2, 0, 'tt_sky').setOrigin(0.5, 0).setDepth(0);
     add.image(480, 0, 'tt_far').setOrigin(0.5, 0).setDepth(1);
     add.image(480, 0, 'tt_mid').setOrigin(0.5, 0).setDepth(2);
     add.image(480, 0, 'tt_ground').setOrigin(0.5, 0).setDepth(3);
-    add.rectangle(480, 270, 960, 540, 0x02040a, 0.45).setDepth(4);
-    add.image(0, 0, 'tt_vignette').setOrigin(0).setDepth(90);
+    add.rectangle(480, 270, WORLD.viewW, 540, 0x02040a, 0.45).setDepth(4);
+    add.image(STAGE_W / 2, 0, 'tt_vignette').setOrigin(0.5, 0).setDepth(90);
 
     txt(this, 480, 34, 'Co-op', 'title', { fontSize: '30px' }).setOrigin(0.5).setDepth(100);
     this.status = txt(this, 480, 470, '', 'body', { fontSize: '14px', color: C.body }).setOrigin(0.5).setDepth(100);

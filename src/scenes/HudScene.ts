@@ -254,7 +254,9 @@ export class HudScene extends Phaser.Scene {
   private buildPlaque() {
     const room = this.room;
     const total = room.totalFoes;
-    const f = new Frame(this, 820, 38, 172, 58, 'dark');
+    // laid out for a 960 wide screen; R moves it to the right edge of a wider one
+    const R = viewW - 960;
+    const f = new Frame(this, R + 820, 38, 172, 58, 'dark');
     f.add(txt(this, 0, -15, 'BLIGHTWOOD', 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
     const where = room.isCamp ? 'Camp' : room.boss ? "Warden's Glade" : `Room ${this.roomNo}`;
     f.add(txt(this, 0, room.boss || room.isCamp ? 5 : 2, where, 'head', { fontSize: room.boss ? '15px' : '17px', color: C.ivory }).setOrigin(0.5));
@@ -266,16 +268,16 @@ export class HudScene extends Phaser.Scene {
     }
 
     // the round menu button, Esc
-    const mb = this.add.container(930, 34);
+    const mb = this.add.container(R + 930, 34);
     mb.add([pic(this, 0, 0, 'ui_roundbtn'), pic(this, 0, 0, icon(this, 'menu', 22))]);
     mb.setSize(34, 34).setInteractive({ cursor: CURSOR_HOVER });
     mb.on('pointerover', () => this.tweens.add({ targets: mb, scale: 1.08, duration: 100 }));
     mb.on('pointerout', () => this.tweens.add({ targets: mb, scale: 1, duration: 100 }));
     mb.on('pointerup', () => this.openPause());
-    txt(this, 930, 60, 'Esc', 'small', { fontSize: '10px', color: C.body }).setOrigin(0.5);
+    txt(this, R + 930, 60, 'Esc', 'small', { fontSize: '10px', color: C.body }).setOrigin(0.5);
 
     // an objective tracker under the plaque
-    const ox = 740;
+    const ox = R + 740;
     const heading = room.isCamp ? 'Before the Run' : room.boss ? 'The Drowned Light' : 'The Restless Dead';
     const first = room.isCamp ? '- Choose a weapon at the rack' : room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`;
     txt(this, ox, 80, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
@@ -288,7 +290,7 @@ export class HudScene extends Phaser.Scene {
 
     // gold and kills over the whole run, bottom right; in co-op that corner is
     // player 2's, so they sit under the objective instead
-    const [gx, gy, kx, ky] = this.coop ? [796, 146, 894, 146] : [902, 468, 902, 506];
+    const [gx, gy, kx, ky] = this.coop ? [R + 796, 146, R + 894, 146] : [R + 902, 468, R + 902, 506];
     const gf = new Frame(this, gx, gy, 92, 32, 'dark');
     gf.add(pic(this, -26, 0, itemIcon(this, 'coin', 20)));
     this.goldText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.gold }).setOrigin(0, 0.5);

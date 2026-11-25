@@ -14,7 +14,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    screenCamera(this);
+    screenCamera(this, true);
     const label = this.add.text(480, 270, 'Loading...', { fontFamily: '"Cinzel", Georgia, serif', fontSize: '22px', color: '#d8c79a', resolution: 2 }).setOrigin(0.5);
     this.load.on('progress', (p: number) => label.setText(`Loading... ${Math.round(p * 100)}%`));
 
