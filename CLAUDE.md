@@ -99,14 +99,14 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 
 | Path | What |
 |---|---|
-| `src/config.ts` | Tuning knobs: room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
+| `src/config.ts` | Tuning knobs: foes' extra health in co-op (`COOP`), room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
 | `src/scenes/MenuScene.ts` | Title screen and its menu (New Run, Character, Options, Credits); Options and Credits come from `ui/panels.ts`. Shows your hero at the campfire once one is made |
 | `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts the camp after, `'menu'` returns to the open menu, `'lobby'` to the co-op lobby; `who` is the player (0 or 1) |
 | `src/scenes/LobbyScene.ts` | The co-op lobby (`?coop`): two slots joined from any device, Ready / Change hero / Leave on each player's own keys; both ready sets the party and opens the camp |
 | `src/hero.ts` | The players' characters: the saved look per player (`fellspire.hero`, and `fellspire.hero2` for co-op's player 2), the names of the choices, `heroRig()` / `dressRig()` that put the look on a rig |
-| `src/scenes/HudScene.ts` | Runs on top of a room: a unit frame and action bar per hero (player 1 bottom left, player 2 bottom right, mirrored), room plaque, objective, banners, pause menu, end screen. Owns Esc |
+| `src/scenes/HudScene.ts` | Runs on top of a room: a unit frame and action bar per hero (player 1 bottom left, player 2 bottom right, mirrored), room plaque, objective, banners, pause menu, end screen, the chest's cards (`openChoice`: one side per player in co-op, each answering only its own device's keys) and the rack (`openRack`, the opener's turn). Owns Esc |
 | `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
 | `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `ChoiceRow` (◀ value ▶), `TextRow` (a typed name), `FocusList` (keys, stick and mouse), banner bands, the cursor |
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
@@ -127,7 +127,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
-| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show. Tests press `p.keys[...]`, the Phaser names of that device's keys |
+| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show; `menuKey()` / `menuPad()` / `menuLabels()` which keys and controller work a menu for a device. Tests press `p.keys[...]`, the Phaser names of that device's keys |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
 

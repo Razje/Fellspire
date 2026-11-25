@@ -265,13 +265,12 @@ studied for its card and end-screen ideas only; none of its art is used.
    nearer; a claw, a bone, the Warden's slam, sweep and rush and the darkness hurt
    whichever hero they reach. Each hero carries their own weapon, armor, trinkets and
    skill (`run.gear` and `run.gear2`), and their gear's bonuses apply to their own
-   blows; the rack remembers each player's weapon (`fellspire.weapon2`). Until 9.5
-   whoever presses interact at a chest or the rack chooses; gold is one purse and
-   coins fly to the nearer hero. Player 2's unit frame and action bar sit bottom right,
+   blows; the rack remembers each player's weapon (`fellspire.weapon2`). Gold is one
+   purse and coins fly to the nearer hero. Player 2's unit frame and action bar sit bottom right,
    mirrored, with their own keys (N1..N5 on the numpad, X Y LB A RB on a controller);
    gold and kills move under the objective in co-op. A fallen hero's frame
    dims and they stay down for the room, out of the leash, while the other fights on;
-   either hero at the gate takes both through, and the fallen one gets back up with
+   the living hero at the gate takes both through, and the fallen one gets back up with
    30% of their health. The run ends when both are down.
    9.4 **built** going down (2026-11-25): a fallen hero's body fades and a soul floats
    over it, lighting the floor, with a key hint for the other player (`src/revive.ts`,
@@ -282,9 +281,18 @@ studied for its card and end-screen ideas only; none of its art is used.
    knocks 0.6 s off and flashes the ring red; an attack, dodge or skill breaks off the
    hold. She gets up untouchable for 1.5 s. If nobody revives her she still gets up in
    the next room with 30%, and the run ends when both are down.
-   9.5 Camp and loot: each hero has a turn at the weapon rack, gold is one shared
-   purse, a chest offers cards to both and each picks their own, and enemies have 1.5x
-   health with two players.
+   9.5 **built** camp and loot (2026-11-25): the weapon rack is the turn of whoever
+   opened it, says so over the panel ("Brynja's turn"), shows their keys and answers
+   only them (right side: arrows, Num 7 / Num 9 for the tabs, Num 1 equip, Num 2 back;
+   left side K for back). A chest puts up one screen with a side for each player:
+   each has their own three random cards (rolled apart, so possibly a different kind),
+   compared with their own gear, their own cursor (gold for player 1, teal for player
+   2) and keys; whoever takes first waits for the other, and the room carries on once
+   both have. A fallen hero chooses too. Every foe, the Warden and his minions
+   included, has 1.5x health with two players (`COOP.foeHp` in `config.ts`). Gold
+   was already one purse (9.3). After Martijn played it: the gate takes the party
+   through only when every living hero stands in it, and says "Waiting for <name>"
+   over the gate until then; a fallen hero does not hold it up.
 10. Hub camp with embers between runs.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away

@@ -46,7 +46,54 @@ export function deviceName(d: Device): string {
   }
 }
 
-export const sameDevice = (a: Device, b: Device) => a.kind === b.kind && (a.kind !== 'pad' || a.index === (b as { index: number }).index);
+// ---- menus (the chest's cards, the weapon rack) --------------------------------------------
+
+// One step through a menu.
+export interface MenuStep { left?: boolean; right?: boolean; up?: boolean; down?: boolean; ok?: boolean; back?: boolean; tabL?: boolean; tabR?: boolean }
+type MenuAction = keyof MenuStep;
+
+// The keys that work a menu, by device (KeyboardEvent.code). In co-op each player
+// works their own part of a screen with their own side of the keyboard: back is the
+// heavy attack key, as in the lobby, and the right side changes tab with Num 7 and 9.
+const MENU: Record<'solo' | 'left' | 'right', Record<MenuAction, string[]>> = {
+  solo: {
+    up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
+    ok: ['KeyE', 'Enter', 'NumpadEnter', 'Space', 'KeyJ', 'Numpad1', 'Numpad0'], back: ['Escape', 'Backspace'], tabL: ['KeyQ'], tabR: ['KeyR'],
+  },
+  left: {
+    up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
+    ok: ['KeyE', 'KeyJ', 'Space'], back: ['Escape', 'KeyK'], tabL: ['KeyQ'], tabR: ['KeyR'],
+  },
+  right: {
+    up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
+    ok: ['Numpad1', 'Numpad0', 'NumpadEnter', 'Enter'], back: ['Escape', 'Numpad2'], tabL: ['Numpad7'], tabR: ['Numpad9'],
+  },
+};
+
+// What a key does in a menu for this device, or null when it is not one of its keys.
+export function menuKey(d: Device, code: string): MenuStep | null {
+  if (d.kind === 'pad') return code === 'Escape' ? { back: true } : null;
+  const m = MENU[d.kind];
+  const step: MenuStep = {};
+  let any = false;
+  for (const a of Object.keys(m) as MenuAction[]) if (m[a].includes(code)) { step[a] = true; any = true; }
+  return any ? step : null;
+}
+
+// Whether a controller works this device's menus: the solo player takes any of them.
+export function menuPad(d: Device, padIndex: number) {
+  return d.kind === 'solo' || (d.kind === 'pad' && d.index === padIndex);
+}
+
+// The keys to show for a device's menus.
+export function menuLabels(d: Device) {
+  if (d.kind === 'right') return { move: ['←', '→'], move4: ['↑', '←', '↓', '→'], ok: 'Num 1', back: 'Num 2', tabs: ['Num 7', 'Num 9'] };
+  if (d.kind === 'pad') return { move: ['Stick'], move4: ['Stick'], ok: 'A', back: 'B', tabs: ['LB', 'RB'] };
+  if (d.kind === 'left') return { move: ['A', 'D'], move4: ['A', 'D', 'W', 'S'], ok: 'E', back: 'K', tabs: ['Q', 'R'] };
+  return { move: ['A', 'D'], move4: ['A', 'D', 'W', 'S'], ok: 'E', back: 'Esc', tabs: ['Q', 'R'] };
+}
+
+export const sameDevice =(a: Device, b: Device) => a.kind === b.kind && (a.kind !== 'pad' || a.index === (b as { index: number }).index);
 
 // Who is playing and on what: one device for solo, two for co-op. Kept here, not in
 // the run, so Try Again and Restart Run keep the same players.

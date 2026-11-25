@@ -21,7 +21,7 @@ import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
 import { Rig } from '../rig/Rig';
 import { heroLook, heroRig, type Who } from '../hero';
-import { getParty, keyLabels } from '../input';
+import { getParty, keyLabels, menuKey, menuLabels, menuPad, type Device } from '../input';
 import { gearOf } from '../run';
 import type { Player } from '../entities/Player';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
@@ -33,6 +33,19 @@ export type BannerKind = 'zone' | 'warn' | 'good';
 export type Action = 'light' | 'heavy' | 'skill' | 'dodge';
 
 const { viewW, viewH } = WORLD;
+
+// One player's cards on the chest screen: what they are offered and what taking
+// one does; device and name only in co-op, where each player has a side.
+export interface ChoiceSpec { items: Item[]; gear: Gear; onPick: (it: Item) => void; heading?: string; device?: Device; name?: string }
+interface ChoiceSide {
+  cards: ItemCard[];
+  index: number;
+  taken: Item | null;
+  device?: Device;
+  waitText?: Phaser.GameObjects.Text;
+  focus: (i: number) => void;
+  pick: (i: number) => void;
+}
 
 // One hero's corner of the screen: player 1 bottom left, player 2 (co-op) bottom
 // right, mirrored. objs is everything in it, so a fallen hero's frame can dim.
@@ -124,8 +137,9 @@ export class HudScene extends Phaser.Scene {
   private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
   private goldText!: Phaser.GameObjects.Text;
   private tip?: Phaser.GameObjects.Container;
-  private choice?: { cards: ItemCard[]; index: number; busy: boolean; root: Phaser.GameObjects.Container; pick: (i: number) => void };
+  private choice?: { sides: ChoiceSide[]; root: Phaser.GameObjects.Container };
   shop?: WeaponShop; // the camp's weapon rack, while it is open
+  private shopDevice: Device = { kind: 'solo' }; // whose turn it is at the rack
   endKind: 'death' | 'victory' | null = null;
 
   constructor() {
@@ -266,7 +280,7 @@ export class HudScene extends Phaser.Scene {
     const first = room.isCamp ? '- Choose a weapon at the rack' : room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`;
     txt(this, ox, 80, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
     this.objective = txt(this, ox + 8, 98, first, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
-    this.objectiveDone = txt(this, ox + 8, 114, '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
+    this.objectiveDone = txt(this, ox + 8, 114, this.coop ? '- Both through the rune gate' : '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
     if (room.isCamp) {
       this.gateShown = true; // the gate is open from the start: both lines show
       this.objectiveDone.setAlpha(1);
@@ -416,85 +430,129 @@ export class HudScene extends Phaser.Scene {
   // The chest's three cards, after Lost Castle 2's "Choose a treasure". The room
   // is paused underneath; choose with keys, stick or mouse.
   openChest(items: Item[], gear: Gear, onPick: (it: Item) => void, heading?: string) {
-    this.hideTip();
-    this.blurRoom(true);
-    const cx = viewW / 2;
-    const root = this.add.container(0, 0).setDepth(90);
-    const shade = this.add.rectangle(cx, viewH / 2, viewW, viewH, 0x05070c, 0.62).setInteractive();
-    const what = heading ?? (items[0].cat === 'weapon' ? 'Choose a weapon' : items[0].cat === 'armor' ? 'Choose an armor kit' : 'Choose a trinket');
-    const title = txt(this, cx, 42, what.toUpperCase(), 'head', { fontSize: '26px', letterSpacing: 4, strokeThickness: 6, padding: { x: 6, y: 6 } }).setOrigin(0.5);
-    gild(title, GOLD_STOPS);
-    const orn = pic(this, cx, 66, 'ui_ornament');
-    root.add([shade, title, orn]);
-    // up to four cards side by side; more (the camp's rack) rest smaller and overlap a little
-    const many = items.length > 4;
-    const gap = many ? Math.min(228, 740 / (items.length - 1)) : 228, size = many ? 0.74 : 1;
-    const cards = items.map((it, i) => new ItemCard(this, cx + (i - (items.length - 1) / 2) * gap, 312, it, gear, size));
-    root.add(cards);
-    const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, 0xffd100).setStrokeStyle(1.5, 0x3a2000);
-    root.add(arrow);
-    const hint = this.add.container(0, 504);
-    const h1 = keyHint(this, 0, 0, ['A', 'D'], 'Choose');
-    const h2 = keyHint(this, h1.width + 18, 0, ['E'], 'Take');
-    hint.add([h1, h2]);
-    hint.x = cx - (h1.width + 18 + h2.width) / 2;
-    root.add(hint);
-
-    const ch = {
-      cards, index: 1, busy: false, root,
-      pick: (i: number) => {
-        if (ch.busy) return;
-        ch.busy = true;
-        const it = items[i];
-        cards[i].chosen();
-        arrow.setVisible(false);
-        cards.forEach((c, k) => { if (k !== i) this.tweens.add({ targets: c, alpha: 0, y: c.y + 30, duration: 260 }); });
-        this.time.delayedCall(560, () => {
-          this.tweens.add({ targets: root, alpha: 0, duration: 220, onComplete: () => root.destroy() });
-          this.blurRoom(false);
-          this.choice = undefined;
-          onPick(it);
-          this.refreshGear();
-          this.banner('good', it.cat === 'trinket' ? 'Trinket gained' : 'Equipped', it.name);
-        });
-      },
-    };
-    const focus = (i: number) => {
-      ch.index = (i + cards.length) % cards.length;
-      cards.forEach((c, k) => c.setFocus(k === ch.index));
-    };
-    cards.forEach((c, i) => {
-      c.onHover = () => { if (!ch.busy) focus(i); };
-      c.onPick = () => ch.pick(i);
-    });
-    this.choice = ch;
-    (ch as unknown as { focus: (i: number) => void }).focus = focus;
-
-    // in they come: the shade, the title, then the cards turning over one by one
-    shade.setAlpha(0); title.setAlpha(0); orn.setAlpha(0); hint.setAlpha(0); arrow.setAlpha(0);
-    this.tweens.add({ targets: shade, alpha: 1, duration: 250 });
-    this.tweens.add({ targets: [title, orn], alpha: 1, duration: 400, delay: 100 });
-    cards.forEach((c, i) => {
-      c.setAlpha(0).setScale(0.05 * c.size, c.size).setY(c.baseY + 40);
-      this.tweens.add({ targets: c, alpha: 1, scaleX: c.size, y: c.baseY, duration: 380, delay: 200 + i * 120, ease: 'Back.easeOut' });
-    });
-    this.tweens.add({ targets: [hint, arrow], alpha: 1, duration: 300, delay: 700 });
-    this.time.delayedCall(640, () => focus(1));
-    const follow = () => {
-      const c = cards[ch.index];
-      if (c && arrow.active) arrow.setPosition(c.x, c.y - 52 - 168 * c.scaleY + Math.sin(this.time.now / 160) * 4);
-    };
-    this.events.on('update', follow);
-    root.once('destroy', () => this.events.off('update', follow));
+    this.openChoice([{ items, gear, onPick, heading }]);
   }
 
-  private chooseNav(left: boolean, right: boolean, ok: boolean) {
-    const ch = this.choice;
-    if (!ch || ch.busy) return;
-    const focus = (ch as unknown as { focus: (i: number) => void }).focus;
-    if (left) focus(ch.index - 1);
-    else if (right) focus(ch.index + 1);
-    else if (ok) ch.pick(ch.index);
+  // The same screen with a side for each player in co-op (DESIGN.md 9.5): each has
+  // their own cards, compared with their own gear, their own cursor and keys, and
+  // the screen closes once both have taken one. With one side it is the solo chest.
+  openChoice(specs: ChoiceSpec[]) {
+    this.hideTip();
+    this.blurRoom(true);
+    const coop = specs.length > 1;
+    const root = this.add.container(0, 0).setDepth(90);
+    const shade = this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, 0x05070c, coop ? 0.9 : 0.62).setInteractive(); // six cards need the HUD hidden, as the rack does
+    const what = (items: Item[]) => items[0].cat === 'weapon' ? 'Choose a weapon' : items[0].cat === 'armor' ? 'Choose an armor kit' : 'Choose a trinket';
+    const head = coop ? 'Choose a treasure' : specs[0].heading ?? what(specs[0].items);
+    const title = txt(this, viewW / 2, coop ? 34 : 42, head.toUpperCase(), 'head', { fontSize: coop ? '22px' : '26px', letterSpacing: 4, strokeThickness: 6, padding: { x: 6, y: 6 } }).setOrigin(0.5);
+    gild(title, GOLD_STOPS);
+    const orn = pic(this, viewW / 2, coop ? 56 : 66, 'ui_ornament');
+    root.add([shade, title, orn]);
+    const fadeIn: Phaser.GameObjects.GameObject[] = [];
+    const later: Phaser.GameObjects.GameObject[] = [];
+    const sides: ChoiceSide[] = [];
+    let closing = false;
+
+    const finish = () => {
+      if (closing || sides.some((sd) => sd.taken === null)) return;
+      closing = true;
+      this.time.delayedCall(560, () => {
+        this.tweens.add({ targets: root, alpha: 0, duration: 220, onComplete: () => root.destroy() });
+        this.blurRoom(false);
+        this.choice = undefined;
+        sides.forEach((sd, i) => specs[i].onPick(sd.taken!));
+        this.refreshGear();
+        const got = sides.map((sd) => sd.taken!);
+        if (coop) this.banner('good', 'Treasure taken', got.map((it) => it.name).join('  ·  '));
+        else this.banner('good', got[0].cat === 'trinket' ? 'Trinket gained' : 'Equipped', got[0].name);
+      });
+    };
+
+    specs.forEach((sp, s) => {
+      const cx = coop ? viewW / 4 + s * (viewW / 2) : viewW / 2;
+      const cy = coop ? 334 : 312;
+      const lift = coop ? 40 : 52; // the arrow's height over a card, clear of the player's label in co-op
+      // up to four cards side by side; more (or half a screen each in co-op) rest
+      // smaller and overlap a little, and the focused one grows to full size
+      const n = sp.items.length, many = n > 4;
+      const gap = coop ? 150 : many ? Math.min(228, 740 / (n - 1)) : 228;
+      const size = coop ? 0.62 : many ? 0.74 : 1;
+      const cards = sp.items.map((it, i) => new ItemCard(this, cx + (i - (n - 1) / 2) * gap, cy, it, sp.gear, size));
+      root.add(cards);
+      const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, s === 0 ? 0xffd100 : 0x7fe3d4).setStrokeStyle(1.5, s === 0 ? 0x3a2000 : 0x0a2a26);
+      root.add(arrow);
+      const keys = menuLabels(sp.device ?? { kind: 'solo' });
+      const hint = this.add.container(0, 504);
+      const h1 = keyHint(this, 0, 0, keys.move, 'Choose');
+      const h2 = keyHint(this, h1.width + 18, 0, [keys.ok], 'Take');
+      hint.add([h1, h2]);
+      hint.x = cx - (h1.width + 18 + h2.width) / 2;
+      root.add(hint);
+      later.push(hint, arrow);
+      if (coop) {
+        const label = txt(this, cx, 80, `${sp.name ?? `Player ${s + 1}`}  ·  ${what(sp.items)}`.toUpperCase(), 'head', { fontSize: '13px', letterSpacing: 2, strokeThickness: 4, color: s === 0 ? C.gold : '#7fe3d4' }).setOrigin(0.5);
+        root.add(label);
+        fadeIn.push(label);
+      }
+
+      const sd: ChoiceSide = {
+        cards, index: 1, taken: null, device: sp.device,
+        focus: (i: number) => {
+          sd.index = (i + cards.length) % cards.length;
+          cards.forEach((c, k) => c.setFocus(k === sd.index));
+        },
+        pick: (i: number) => {
+          if (sd.taken || closing) return;
+          sd.taken = sp.items[i];
+          cards[i].chosen();
+          arrow.setVisible(false);
+          cards.forEach((c, k) => { if (k !== i) this.tweens.add({ targets: c, alpha: 0, y: c.y + 30, duration: 260 }); });
+          if (coop) {
+            // the hint gives way to who is still choosing
+            hint.setVisible(false);
+            const other = sides.find((o) => o !== sd && o.taken === null);
+            const wait = txt(this, cx, 504, other ? `Taken  ·  waiting for ${specs[sides.indexOf(other)].name ?? 'the other player'}` : 'Taken', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0.5).setAlpha(0);
+            root.add(wait);
+            this.tweens.add({ targets: wait, alpha: 1, duration: 200 });
+            sides.forEach((o) => o.waitText?.setText('Taken'));
+            sd.waitText = wait;
+          }
+          finish();
+        },
+      };
+      cards.forEach((c, i) => {
+        c.onHover = () => { if (!sd.taken) sd.focus(i); };
+        c.onPick = () => sd.pick(i);
+      });
+      sides.push(sd);
+
+      cards.forEach((c, i) => {
+        c.setAlpha(0).setScale(0.05 * c.size, c.size).setY(c.baseY + 40);
+        this.tweens.add({ targets: c, alpha: 1, scaleX: c.size, y: c.baseY, duration: 380, delay: 200 + i * 120, ease: 'Back.easeOut' });
+      });
+      this.time.delayedCall(640, () => { if (!sd.taken) sd.focus(1); });
+      const follow = () => {
+        const c = cards[sd.index];
+        if (c && arrow.active) arrow.setPosition(c.x, c.y - lift - 168 * c.scaleY + Math.sin(this.time.now / 160) * 4);
+      };
+      this.events.on('update', follow);
+      root.once('destroy', () => this.events.off('update', follow));
+    });
+    this.choice = { sides, root };
+
+    // in they come: the shade, the title, then the cards turning over one by one
+    shade.setAlpha(0); title.setAlpha(0); orn.setAlpha(0);
+    for (const o of [...fadeIn, ...later]) (o as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0);
+    this.tweens.add({ targets: shade, alpha: 1, duration: 250 });
+    this.tweens.add({ targets: [title, orn, ...fadeIn], alpha: 1, duration: 400, delay: 100 });
+    this.tweens.add({ targets: later, alpha: 1, duration: 300, delay: 700 });
+  }
+
+  private chooseNav(sd: ChoiceSide, left?: boolean, right?: boolean, ok?: boolean) {
+    if (sd.taken) return;
+    if (left) sd.focus(sd.index - 1);
+    else if (right) sd.focus(sd.index + 1);
+    else if (ok) sd.pick(sd.index);
   }
 
   get choosing() {
@@ -503,9 +561,11 @@ export class HudScene extends Phaser.Scene {
 
   // The camp's weapon rack: tabs per weapon type, a grid, and the weapon in your
   // hand compared with the one selected (ui/armory.ts). The room is paused under it.
-  openRack(items: Item[], gear: Gear, onPick: (it: Item) => void, onClose: () => void) {
+  // In co-op it is the turn of whoever opened it: only their keys work it.
+  openRack(items: Item[], gear: Gear, onPick: (it: Item) => void, onClose: () => void, turn?: { name: string; device: Device }) {
     this.hideTip();
     this.blurRoom(true);
+    this.shopDevice = turn?.device ?? { kind: 'solo' };
     this.shop = new WeaponShop(this, items, gear, (it) => {
       this.blurRoom(false);
       this.shop = undefined;
@@ -516,7 +576,7 @@ export class HudScene extends Phaser.Scene {
       this.blurRoom(false);
       this.shop = undefined;
       onClose();
-    });
+    }, turn);
   }
 
   // ---- the boss ----------------------------------------------------------------------------
@@ -777,9 +837,15 @@ export class HudScene extends Phaser.Scene {
     const right = code === 'ArrowRight' || code === 'KeyD';
     const ok = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyJ';
     const back = code === 'Escape' || code === 'Backspace';
-    const numOk = code === 'Numpad1' || code === 'Numpad0';
-    if (this.shop) { this.shop.key(numOk ? 'KeyE' : code); return; }
-    if (this.choice) { this.chooseNav(left, right, ok || numOk || code === 'KeyE'); return; }
+    // the rack and the chest answer only the keys of the player whose they are
+    if (this.shop) { const st = menuKey(this.shopDevice, code); if (st) this.shop.nav(st); return; }
+    if (this.choice) {
+      for (const sd of this.choice.sides) {
+        const st = menuKey(sd.device ?? { kind: 'solo' }, code);
+        if (st) this.chooseNav(sd, st.left, st.right, st.ok);
+      }
+      return;
+    }
     if (this.end) {
       if (code === 'KeyR') this.restartRun();
       else if (code === 'Escape') this.toMenu();
@@ -814,8 +880,8 @@ export class HudScene extends Phaser.Scene {
     const down = hit(13) || (sy > 0.5 && !this.padPrev[98]);
     const left = hit(14) || (sx < -0.5 && !this.padPrev[97]);
     const right = hit(15) || (sx > 0.5 && !this.padPrev[96]);
-    if (this.shop) this.shop.nav({ left, right, up, down, tabL: hit(4), tabR: hit(5), ok: hit(0), back: hit(1) });
-    else if (this.choice) this.chooseNav(left, right, hit(0));
+    if (this.shop) { if (menuPad(this.shopDevice, pad.index)) this.shop.nav({ left, right, up, down, tabL: hit(4), tabR: hit(5), ok: hit(0), back: hit(1) }); }
+    else if (this.choice) { for (const sd of this.choice.sides) if (menuPad(sd.device ?? { kind: 'solo' }, pad.index)) this.chooseNav(sd, left, right, hit(0)); }
     else if (this.end) this.end.list.nav(up, down, left, right, hit(0));
     else if (this.pause || this.options) this.nav(up, down, left, right, hit(0), hit(1) || hit(9), false);
     else if (hit(9)) this.openPause();

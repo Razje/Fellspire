@@ -102,7 +102,7 @@ test('two heroes in the camp, each on their own keys, with their own weapon', as
   expect(await page.evaluate(() => [localStorage.getItem('fellspire.weapon'), localStorage.getItem('fellspire.weapon2')])).toEqual(['bow', picked]);
 
   // through the gate, each carries their own weapon into room 1
-  await room(page, `const [h, g] = s.heroes; h.x = s.world.exit.x; h.y = s.world.exit.y; g.x = h.x - 60; g.y = h.y + 40;`);
+  await room(page, `const [h, g] = s.heroes; h.x = s.world.exit.x; h.y = s.world.exit.y; g.x = h.x - 20; g.y = h.y + 10;`);
   await expect.poll(() => room(page, `return s.room;`), { timeout: 8000 }).toBe(1);
   await page.waitForTimeout(400);
   expect(await room(page, `return s.heroes.map((h) => h.stats.kind);`)).toEqual(['bow', picked]);

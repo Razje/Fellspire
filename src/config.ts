@@ -14,6 +14,10 @@ export const WORLD = {
   groundBottom: 622,
 };
 
+// Two players: every foe (the Warden and his minions too, not the camp's dummy)
+// has this much more health, so a room is not over twice as fast. DESIGN.md 9.5.
+export const COOP = { foeHp: 1.5 };
+
 // A zone is a few combat rooms, then the boss. (DESIGN.md plans 6 to 8 rooms later.)
 export const ZONE = { bossRoom: 4 };
 

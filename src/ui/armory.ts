@@ -12,6 +12,7 @@ import { KINDS, WEAPONS, type WeaponKind } from '../weapons';
 import { CURSOR_HOVER, Frame, hi, keyHint, keycap, pic, rrect } from './kit';
 import { ItemCard, itemIcon } from './items';
 import { C, GOLD_STOPS, gild, txt } from './theme';
+import { menuLabels, type Device } from '../input';
 
 type Tab = 'all' | WeaponKind;
 
@@ -96,7 +97,10 @@ export class WeaponShop {
   private chosenCard?: ItemCard;
 
   constructor(private scene: Phaser.Scene, private items: Item[], private gear: Gear,
-    private onPick: (it: Item) => void, private onClose: () => void) {
+    private onPick: (it: Item) => void, private onClose: () => void,
+    // in co-op: whose turn it is, shown over the panel, and their device's keys
+    turn?: { name: string; device: Device }) {
+    const keys = menuLabels(turn?.device ?? { kind: 'solo' });
     const s = scene, { viewW, viewH } = { viewW: 960, viewH: 540 };
     this.tabs = ['all', ...KINDS.filter((k) => items.some((it) => it.kind === k))];
     this.root = s.add.container(0, 0).setDepth(90);
@@ -108,8 +112,13 @@ export class WeaponShop {
     this.root.add(panel);
     const top = PANEL.y - PANEL.h / 2 + 44;
     const tw = 50, x0 = PANEL.x - ((this.tabs.length - 1) * tw) / 2;
-    this.root.add(keycap(s, x0 - 42, top, 'Q'));
-    this.root.add(keycap(s, x0 + (this.tabs.length - 1) * tw + 42, top, 'R'));
+    this.root.add(keycap(s, x0 - 42, top, keys.tabs[0]));
+    this.root.add(keycap(s, x0 + (this.tabs.length - 1) * tw + 42, top, keys.tabs[1]));
+    if (turn) {
+      const who = txt(s, PANEL.x, PANEL.y - PANEL.h / 2 - 18, `${turn.name.toUpperCase()}'S TURN`, 'head', { fontSize: '14px', letterSpacing: 3, strokeThickness: 4 }).setOrigin(0.5);
+      gild(who, GOLD_STOPS);
+      this.root.add(who);
+    }
     this.tabs.forEach((t, i) => {
       const x = x0 + i * tw;
       const bg = pic(s, x, top, tabTex(s, false));
@@ -140,7 +149,7 @@ export class WeaponShop {
 
     // what the keys do
     const hint = s.add.container(0, 516);
-    const parts = [keyHint(s, 0, 0, ['A', 'D', 'W', 'S'], 'Choose'), keyHint(s, 0, 0, ['Q', 'R'], 'Weapon type'), keyHint(s, 0, 0, ['E'], 'Equip'), keyHint(s, 0, 0, ['Esc'], 'Back')];
+    const parts = [keyHint(s, 0, 0, keys.move4, 'Choose'), keyHint(s, 0, 0, keys.tabs, 'Weapon type'), keyHint(s, 0, 0, [keys.ok], 'Equip'), keyHint(s, 0, 0, [keys.back], 'Back')];
     let hx = 0;
     for (const p of parts) { p.x = hx; hx += p.width + 22; hint.add(p); }
     hint.x = viewW / 2 - (hx - 22) / 2;

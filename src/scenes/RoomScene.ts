@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DARK, WORLD, ZONE } from '../config';
+import { COOP, DARK, WORLD, ZONE } from '../config';
 import { Player } from '../entities/Player';
 import { BoneThrower, Enemy, Ghoul } from '../entities/Enemies';
 import { Warden } from '../entities/Warden';
@@ -48,7 +48,9 @@ interface Coin { img: Phaser.GameObjects.Image; x: number; y: number; z: number;
 interface Fire { x: number; y: number; left: number; tick: number; dmg: number; by: Player; objs: Phaser.GameObjects.Image[] }
 interface Chest {
   img: Phaser.GameObjects.Image; runes: Phaser.GameObjects.Image; x: number; y: number;
-  prompt: Phaser.GameObjects.Container; locked: boolean; opened: boolean; items: Item[];
+  prompt: Phaser.GameObjects.Container; locked: boolean; opened: boolean;
+  items: Item[]; // player 1's cards
+  items2?: Item[]; // player 2's, rolled apart, in co-op
 }
 
 interface Wave { ghouls: number; throwers: number }
@@ -101,6 +103,7 @@ export class RoomScene extends Phaser.Scene {
   private dark: { img: Phaser.GameObjects.Image; t: number; r: number; tick: number; warned: boolean } | null = null;
   private slow = { k: 1, left: 0 };
   private emberFx?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gateWait?: Phaser.GameObjects.Text; // "Waiting for ..." over the gate, in co-op
 
   constructor() {
     super('room');
@@ -117,6 +120,7 @@ export class RoomScene extends Phaser.Scene {
     this.dark = null;
     this.slow = { k: 1, left: 0 };
     this.emberFx = undefined;
+    this.gateWait = undefined;
     this.startHp = data.hps ?? [data.hp];
     this.heroes = [];
     this.fallen = new Set();
@@ -233,7 +237,7 @@ export class RoomScene extends Phaser.Scene {
       this.world.openExit();
     } else if (!this.isBossRoom) this.placeChest();
     if (this.isBossRoom) {
-      const b = new Warden(this, roomW / 2 + 260, (WORLD.groundTop + WORLD.groundBottom) / 2);
+      const b = this.toughen(new Warden(this, roomW / 2 + 260, (WORLD.groundTop + WORLD.groundBottom) / 2));
       this.boss = b;
       this.enemies.push(b);
       this.world.lights.push(b.light);
@@ -589,8 +593,14 @@ export class RoomScene extends Phaser.Scene {
     if (!this.livingHeroes.length) return;
     if (this.gateOpen) {
       const ex = this.world.exit;
-      // either hero stepping into the gate takes both through
-      if (!this.leaving && this.livingHeroes.some((h) => Math.hypot(h.x - ex.x, (h.y - ex.y) * 1.6) < 46)) {
+      // every living hero has to stand in the gate before it takes them through (a
+      // fallen one comes along and gets up in the next room); until then it says who
+      // it is waiting for
+      const live = this.livingHeroes;
+      const inGate = (h: Player) => Math.hypot(h.x - ex.x, (h.y - ex.y) * 1.6) < 46;
+      const missing = live.filter((h) => !inGate(h));
+      this.showGateWait(missing.length < live.length && missing.length ? missing[0] : null);
+      if (!this.leaving && !missing.length) {
         this.leaving = true;
         const cam = this.cameras.main;
         if (this.isCamp) {
@@ -631,6 +641,19 @@ export class RoomScene extends Phaser.Scene {
     }
   }
 
+  // Over the gate while one hero stands in it and the other is still on the way.
+  private showGateWait(waitingFor: Player | null) {
+    const ex = this.world.exit;
+    if (waitingFor && !this.gateWait) {
+      this.gateWait = this.add.text(ex.x, ex.y - 78, '', { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 })
+        .setOrigin(0.5).setDepth(19500).setAlpha(0);
+    }
+    const t = this.gateWait;
+    if (!t) return;
+    if (waitingFor) t.setText(`Waiting for ${heroLook(waitingFor.who).name}`);
+    t.setAlpha(Phaser.Math.Linear(t.alpha, waitingFor && !this.leaving ? 1 : 0, 0.2)).setY(ex.y - 78 + Math.sin(this.time.now / 250) * 2);
+  }
+
   private spawnWave(w: Wave) {
     const { viewW, roomW, groundTop, groundBottom } = WORLD;
     const left = this.cameras.main.worldView.x;
@@ -649,7 +672,7 @@ export class RoomScene extends Phaser.Scene {
         x = Phaser.Math.Clamp(x, 20, roomW - 20);
         y = Phaser.Math.Between(groundTop + 30, groundBottom - 20);
       }
-      const e = type === 'g' ? new Ghoul(this, x, y, tier) : new BoneThrower(this, x, y, tier);
+      const e = this.toughen(type === 'g' ? new Ghoul(this, x, y, tier) : new BoneThrower(this, x, y, tier));
       e.appear = 0; // fades in
       this.enemies.push(e);
     });
@@ -948,7 +971,8 @@ export class RoomScene extends Phaser.Scene {
     const label = this.add.text(16, 0, 'Open', { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 }).setOrigin(0, 0.5);
     cap.x = -label.width / 2 - 4; label.x = cap.x + 14;
     prompt.add([cap, label]);
-    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: rollChest(this.room) };
+    // in co-op each player gets their own random cards
+    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: rollChest(this.room), items2: getParty().length > 1 ? rollChest(this.room) : undefined };
   }
 
   // The room is won: light falls on the chest, the runes wake, the seal is gone.
@@ -983,7 +1007,7 @@ export class RoomScene extends Phaser.Scene {
     return !!c && !c.locked && !c.opened && !p.isDead() && Math.hypot(p.x - c.x, (p.y - c.y) * 1.6) < 72;
   }
 
-  // Whoever presses interact by the chest opens it, and chooses from it (until 9.5).
+  // Whoever presses interact by the chest opens it; in co-op both then choose.
   private updateChest() {
     const c = this.chest;
     if (!c) return;
@@ -1010,10 +1034,27 @@ export class RoomScene extends Phaser.Scene {
       const hud = this.hud;
       if (!hud || !this.livingHeroes.length) return;
       this.scene.pause();
-      hud.openChest(c.items, gearOf(this.run, by.who), (it) => {
-        this.equip(it, by);
-        this.scene.resume();
-      });
+      if (this.heroes.length < 2) {
+        hud.openChest(c.items, gearOf(this.run, by.who), (it) => {
+          this.equip(it, by);
+          this.scene.resume();
+        });
+        return;
+      }
+      // one screen, a side for each player (a fallen hero chooses too); the room
+      // resumes once both have taken a card
+      const party = getParty();
+      let left = this.heroes.length;
+      hud.openChoice(this.heroes.map((h) => ({
+        items: (h.who === 0 ? c.items : c.items2) ?? (c.items2 = rollChest(this.room)),
+        gear: gearOf(this.run, h.who),
+        device: party[h.who],
+        name: heroLook(h.who).name,
+        onPick: (it: Item) => {
+          this.equip(it, h);
+          if (--left === 0) this.scene.resume();
+        },
+      })));
     });
   }
 
@@ -1026,7 +1067,7 @@ export class RoomScene extends Phaser.Scene {
     const before = p.maxHp;
     p.stats = gearStats(g);
     p.maxHp = 100 + p.stats.fx.maxHp;
-    if (p.maxHp > before) p.hp += p.maxHp - before;
+    if (p.maxHp > before && !p.isDead()) p.hp += p.maxHp - before; // more health does not raise a fallen hero
     p.hp = Math.min(p.hp, p.maxHp);
     if (it.cat === 'weapon') p.arm();
   }
@@ -1057,7 +1098,18 @@ export class RoomScene extends Phaser.Scene {
       if (it.kind) saveWeapon(it.kind, by.who);
       camp.chosen = true;
       this.scene.resume();
-    }, () => this.scene.resume());
+    }, () => this.scene.resume(),
+    // in co-op it is the opener's turn, on their keys
+    this.heroes.length > 1 ? { name: heroLook(by.who).name, device: getParty()[by.who] } : undefined);
+  }
+
+  // A foe as it comes into the room: tougher with two heroes.
+  private toughen<T extends Fighter>(e: T): T {
+    if (getParty().length > 1) {
+      e.maxHp = Math.round(e.maxHp * COOP.foeHp);
+      e.hp = e.maxHp;
+    }
+    return e;
   }
 
   // ---- the boss fight -----------------------------------------------------
@@ -1074,7 +1126,7 @@ export class RoomScene extends Phaser.Scene {
     const left = this.cameras.main.worldView.x;
     for (let i = 0; i < n; i++) {
       const x = Phaser.Math.Clamp(b.x + (i % 2 ? 1 : -1) * Phaser.Math.Between(90, 220), Math.max(60, left + 60), Math.min(WORLD.roomW - 60, left + WORLD.viewW - 60));
-      const g = new Ghoul(this, x, WORLD.groundTop + 2, 1.2);
+      const g = this.toughen(new Ghoul(this, x, WORLD.groundTop + 2, 1.2));
       g.appear = 0;
       this.enemies.push(g);
       const glow = this.add.image(x, WORLD.groundTop - 10, 'tt_light').setTint(0x6fffd8).setBlendMode(Phaser.BlendModes.ADD).setDepth(WORLD.groundTop + 20).setScale(0.2).setAlpha(0.9);
