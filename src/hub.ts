@@ -34,20 +34,21 @@ export const CAMP_CLEAR: ClearSpot[] = [
 // What the rack offers: one plain weapon of every type.
 export const RACK_KINDS: WeaponKind[] = KINDS;
 
-// The weapon chosen last, remembered in the browser for the next run.
-const KEY = 'fellspire.weapon';
+// The weapon chosen last, remembered in the browser for the next run; player 2
+// in co-op has their own.
+const KEYS = ['fellspire.weapon', 'fellspire.weapon2'];
 
-export function savedWeapon(): Item {
+export function savedWeapon(who = 0): Item {
   try {
     // a pick from before 8.4 (longsword, greatblade, rapier) maps to its new type
-    const k = asKind(localStorage.getItem(KEY));
+    const k = asKind(localStorage.getItem(KEYS[who]));
     if (k) return starterWeapon(k);
   } catch { /* storage blocked: fall back */ }
   return starterWeapon('sword');
 }
 
-export function saveWeapon(kind: WeaponKind) {
-  try { localStorage.setItem(KEY, kind); } catch { /* storage blocked */ }
+export function saveWeapon(kind: WeaponKind, who = 0) {
+  try { localStorage.setItem(KEYS[who], kind); } catch { /* storage blocked */ }
 }
 
 // ---- textures ------------------------------------------------------------------------------

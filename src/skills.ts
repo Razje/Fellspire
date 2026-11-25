@@ -63,7 +63,7 @@ function shieldCharge(s: RoomScene, p: Player) {
     const k = 1 - (t / T.time) * 0.4;
     p.x += p.facing * T.speed * k * dt;
     if ((dustT -= dt) <= 0) { dustT = 0.05; s.dust(p.x - p.facing * 10, p.y, 1); }
-    s.strike(p, true, spec, s.enemies, (x, y) => Math.abs(x - (p.x + p.facing * 14)) < 30 && Math.abs(y - p.y) <= spec.depth, { once: hit });
+    s.strike(p, p, spec, s.enemies, (x, y) => Math.abs(x - (p.x + p.facing * 14)) < 30 && Math.abs(y - p.y) <= spec.depth, { once: hit });
     return true;
   };
   s.addEffect(run);
@@ -88,7 +88,7 @@ function leapSlam(s: RoomScene, p: Player) {
     p.clamp();
     s.shockwave(p.x, p.y, 0xffd27a);
     s.shake(180, 0.01);
-    s.strike({ x: p.x, y: p.y - 1, facing: p.facing }, true, { dmg: T.dmg, range: 0, depth: T.ry, knock: T.knock, heavy: true }, s.enemies, inEllipse(p.x, p.y, T.rx, T.ry));
+    s.strike({ x: p.x, y: p.y - 1, facing: p.facing }, p, { dmg: T.dmg, range: 0, depth: T.ry, knock: T.knock, heavy: true }, s.enemies, inEllipse(p.x, p.y, T.rx, T.ry));
     return false;
   };
   s.addEffect(run);
@@ -110,7 +110,7 @@ function rainOfArrows(s: RoomScene, p: Player) {
     if (t < T.mark) return true;
     while (landed < done && t >= T.mark + landed * T.every + FALL) {
       landed++;
-      s.strike({ x, y: y - 1, facing: p.facing }, true, spec, s.enemies, inEllipse(x, y, T.rx, T.ry));
+      s.strike({ x, y: y - 1, facing: p.facing }, p, spec, s.enemies, inEllipse(x, y, T.rx, T.ry));
     }
     while (done < T.volleys && t >= T.mark + done * T.every) {
       done++;
@@ -155,7 +155,7 @@ function blizzard(s: RoomScene, p: Player) {
     t += dt;
     if ((tick -= dt) <= 0 && t <= T.last) {
       tick = T.every;
-      s.strike({ x, y: y - 1, facing: p.facing }, true, spec, s.enemies, inEllipse(x, y, T.rx, T.ry));
+      s.strike({ x, y: y - 1, facing: p.facing }, p, spec, s.enemies, inEllipse(x, y, T.rx, T.ry));
     }
     if (t < T.last) return true;
     snow.stop();
@@ -182,7 +182,7 @@ function bladeStorm(s: RoomScene, p: Player) {
       p.facing = n % 2 ? -dir : dir;
       p.playAnim(n % 3 === 2 ? 'heavy' : 'attack', { duration: T.every * 1000 * 1.6, force: true });
       slashArc(s, p.x, p.y, n++);
-      s.strike({ x: p.x, y: p.y - 1, facing: p.facing }, true, spec, s.enemies, inEllipse(p.x, p.y, T.rx, T.ry));
+      s.strike({ x: p.x, y: p.y - 1, facing: p.facing }, p, spec, s.enemies, inEllipse(p.x, p.y, T.rx, T.ry));
     }
     return true;
   };
@@ -220,7 +220,7 @@ function sparkVolley(s: RoomScene, p: Player) {
     for (let i = 0; i < T.count; i++) {
       // spread over a half circle in front, up and down the floor
       const a = (i / (T.count - 1) - 0.5) * Math.PI * 0.9;
-      s.shots.launch(p.x + p.facing * 18, p.y, Math.cos(a) * T.speed * p.facing, Math.sin(a) * T.speed * 0.6, move);
+      s.shots.launch(p.x + p.facing * 18, p.y, Math.cos(a) * T.speed * p.facing, Math.sin(a) * T.speed * 0.6, move, p);
     }
     s.shockwave(p.x + p.facing * 18, p.y, 0xb98aff);
     return false;
@@ -250,10 +250,10 @@ function cannonBlast(s: RoomScene, p: Player) {
       const d = (x - x0) * dir;
       return d > -20 && d < T.reach && Math.abs(y - y0) <= 22 + Math.max(0, d) * T.spread;
     };
-    s.strike({ x: x0 - dir * 40, y: y0, facing: dir }, true, spec, s.enemies, inside);
+    s.strike({ x: x0 - dir * 40, y: y0, facing: dir }, p, spec, s.enemies, inside);
     for (let i = 0; i < T.pellets; i++) {
       const lean = (Math.random() - 0.5) * 2 * T.spread, k = 0.8 + Math.random() * 0.4;
-      s.shots.launch(x0, y0, dir * 1000 * k, lean * 1000 * k, pellets);
+      s.shots.launch(x0, y0, dir * 1000 * k, lean * 1000 * k, pellets, p);
     }
     s.shots.muzzle(x0, y0, dir, 2.6);
     s.shockwave(x0 + dir * 50, y0, 0xffb060);
@@ -284,7 +284,7 @@ function fanTheHammer(s: RoomScene, p: Player) {
       p.playAnim('throw', { duration: T.every * 1000 * 1.5, force: true });
       const lean = (Math.random() - 0.5) * 2 * T.wobble;
       const hand = fired % 2 ? 4 : -4; // left gun, right gun
-      s.shots.launch(p.x + dir * 30, p.y + hand, dir * T.speed, lean * T.speed, move);
+      s.shots.launch(p.x + dir * 30, p.y + hand, dir * T.speed, lean * T.speed, move, p);
       s.shots.muzzle(p.x + dir * 30, p.y + hand, dir, 0.8);
       fired++;
     }

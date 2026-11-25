@@ -106,7 +106,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts the camp after, `'menu'` returns to the open menu, `'lobby'` to the co-op lobby; `who` is the player (0 or 1) |
 | `src/scenes/LobbyScene.ts` | The co-op lobby (`?coop`): two slots joined from any device, Ready / Change hero / Leave on each player's own keys; both ready sets the party and opens the camp |
 | `src/hero.ts` | The players' characters: the saved look per player (`fellspire.hero`, and `fellspire.hero2` for co-op's player 2), the names of the choices, `heroRig()` / `dressRig()` that put the look on a rig |
-| `src/scenes/HudScene.ts` | Runs on top of a room: unit frame, action bar, room plaque, objective, banners, pause menu, end screen. Owns Esc |
+| `src/scenes/HudScene.ts` | Runs on top of a room: a unit frame and action bar per hero (player 1 bottom left, player 2 bottom right, mirrored), room plaque, objective, banners, pause menu, end screen. Owns Esc |
 | `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
 | `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `ChoiceRow` (◀ value ▶), `TextRow` (a typed name), `FocusList` (keys, stick and mouse), banner bands, the cursor |
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
@@ -114,15 +114,15 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
 | `src/hub.ts` | The camp between runs, which is room 0 of `RoomScene`: where things stand (`CAMP`), the campfire, the weapon rack and what it offers (`RACK_KINDS`), the chosen weapon remembered in the browser (`fellspire.weapon`) |
 | `src/ui/armory.ts` | The rack's store (`WeaponShop`): tabs per weapon type, a grid, the equipped and selected weapons compared as cards; opened by `HudScene.openRack` |
-| `src/scenes/RoomScene.ts` | A room: waves, exit, hit resolution (`strike`, the one path for swings, shots and skill areas) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
+| `src/scenes/RoomScene.ts` | A room: `heroes` (one per device in the party; `player` is player 1, `stats` player 1's), the camera on the middle of the living heroes and the `LEASH` between them, `nearestHero` for enemies, a fallen hero in co-op (`checkFallen`), waves, exit, hit resolution (`strike(attacker, by, ...)`, the one path for swings, shots and skill areas; `by` is the hero whose gear bonuses apply) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
 | `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash), set its own hit-stop (`stop`), kick the hero back (`recoil`), make her untouchable until it lands (`evade`) and spend a round (`ammo`, with the weapon's `mag`). A new weapon type starts here |
 | `src/skills.ts` | How each skill plays out (`SKILL_TUNING` holds its numbers): it returns how long the hero is busy and puts an effect on the room that runs each frame |
 | `src/shots.ts` | The player's arrows, bolts, orbs, sparks, pellets and bullets in flight (guns leave a `muzzle()` flash and smoke): first foe or barrel hit, piercing, bursting, a spread fanned up and down the floor, seeking (`homing`); `launch()` sends one with any velocity, for skills |
-| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (reads its moves and skill from `weapons.ts`, its keys through `input.ts`: L dodge, Shift block, I skill; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
+| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (`who` is 0 or 1, `stats` its own gear's; reads its moves and skill from `weapons.ts`, its keys through `input.ts`: L dodge, Shift block, I skill; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower; each goes for `scene.nearestHero`, kept in `hunted`), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
-| `src/run.ts` | One run's state carried between rooms: stats, gold, gear |
+| `src/run.ts` | One run's state carried between rooms: stats, gold (one shared purse), player 1's `gear` and player 2's `gear2`; `gearOf(run, who)` |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
@@ -181,7 +181,9 @@ Decorative, bundled from npm.
   handled; `MenuScene` uses a `WeakSet`. Found by the menu test, 2026-11-23.
   `Key.isDown`/`JustDown` in the fight are not affected.
 - **Bash heredocs eat backslashes** in this harness (see `C:\IXON\CLAUDE.md`).
-  Write scripts with the Write tool.
+  Write scripts with the Write tool. A Python script that edits files must open them
+  with `newline=''` (or in binary): text mode on Windows writes every line back as
+  CRLF. Found 2026-11-25, eleven files at once.
 - **A camera fade is ignored while another one runs.** `fadeOut` during the title's
   1.4 s fade-in did nothing, so `camerafadeoutcomplete` never came and the screen never
   changed. Leaving a scene uses `cam.fade(ms, 0, 0, 0, true)` (forced). Found by the

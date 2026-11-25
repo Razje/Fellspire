@@ -10,7 +10,9 @@ import { buildBlightwood, type Blightwood } from '../blightwood';
 import { canvas, makeTitleTextures } from '../titleArt';
 import { settings } from '../settings';
 import type { Action, HudScene } from './HudScene';
-import { newRun, type Run } from '../run';
+import { gearOf, newRun, type Run } from '../run';
+import { newGear } from '../loot';
+import { heroLook } from '../hero';
 import { getParty } from '../input';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
 import { hi, keycap } from '../ui/kit';
@@ -42,7 +44,7 @@ export interface StrikeOpts {
 }
 
 interface Coin { img: Phaser.GameObjects.Image; x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; value: number; dead: boolean }
-interface Fire { x: number; y: number; left: number; tick: number; dmg: number; objs: Phaser.GameObjects.Image[] }
+interface Fire { x: number; y: number; left: number; tick: number; dmg: number; by: Player; objs: Phaser.GameObjects.Image[] }
 interface Chest {
   img: Phaser.GameObjects.Image; runes: Phaser.GameObjects.Image; x: number; y: number;
   prompt: Phaser.GameObjects.Container; locked: boolean; opened: boolean; items: Item[];
@@ -58,8 +60,17 @@ interface Projectile {
 
 interface Pickup { sprite: Phaser.GameObjects.Image; x: number; y: number; t: number; dead: boolean }
 
+// The farthest apart two heroes may stand, side to side, so both stay in view
+// (the view is 960 wide; this leaves each a margin at the edge).
+export const LEASH = 820;
+// A hero who fell comes back in the next room with this share of their health.
+const REJOIN = 0.3;
+
 export class RoomScene extends Phaser.Scene {
-  player!: Player;
+  heroes: Player[] = []; // one in solo, two in co-op
+  private fallen = new Set<Player>(); // heroes already counted as down
+  private focus = { x: 0, y: 0 }; // what the camera follows: between the living heroes
+  private striker: Player | null = null; // whose blow is being dealt (for kill effects)
   enemies: Enemy[] = [];
   private projectiles: Projectile[] = [];
   shots!: Shots; // the player's arrows and bolts
@@ -72,15 +83,13 @@ export class RoomScene extends Phaser.Scene {
   gateOpen = false;
   private leaving = false;
   private freeze = 0;
-  private startHp?: number;
+  private startHp: (number | undefined)[] = [];
   slain = 0; // in this room
   run: Run = newRun();
-  stats!: GearStats; // what the gear carried adds up to
   private coins: Coin[] = [];
   private fires: Fire[] = [];
   private chest: Chest | null = null;
   private hitCount = 0; // for every-fifth-hit effects
-  private secondWindUsed = false;
   private world!: Blightwood;
   boss: Warden | null = null;
   camp: Camp | null = null; // room 0, between runs
@@ -96,7 +105,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // Phaser reuses the scene object on restart, so all state is reset here.
-  init(data: { room?: number; hp?: number; run?: Run; intro?: boolean }) {
+  init(data: { room?: number; hp?: number; hps?: (number | undefined)[]; run?: Run; intro?: boolean }) {
     this.room = data.room ?? 1;
     this.intro = data.intro ?? true;
     this.boss = null;
@@ -106,16 +115,20 @@ export class RoomScene extends Phaser.Scene {
     this.dark = null;
     this.slow = { k: 1, left: 0 };
     this.emberFx = undefined;
-    this.startHp = data.hp;
+    this.startHp = data.hps ?? [data.hp];
+    this.heroes = [];
+    this.fallen = new Set();
+    this.striker = null;
     this.run = data.run ? { ...data.run } : newRun();
-    // the camp hands out the weapon chosen at its rack last time
-    if (this.isCamp && !data.run) this.run.gear = { ...this.run.gear, weapon: savedWeapon() };
-    this.stats = gearStats(this.run.gear);
+    // the camp hands out the weapon each player chose at its rack last time
+    if (this.isCamp && !data.run) {
+      this.run.gear = { ...this.run.gear, weapon: savedWeapon(0) };
+      if (getParty().length > 1) this.run.gear2 = { ...newGear(), weapon: savedWeapon(1) };
+    }
     this.coins = [];
     this.fires = [];
     this.chest = null;
     this.hitCount = 0;
-    this.secondWindUsed = false;
     this.enemies = [];
     this.projectiles = [];
     this.effects = [];
@@ -127,6 +140,32 @@ export class RoomScene extends Phaser.Scene {
     this.freeze = 0;
     this.slain = 0;
     this.waves = this.makeWaves(this.room);
+  }
+
+  // Player 1's hero (the only one in solo).
+  get player() {
+    return this.heroes[0];
+  }
+
+  // What player 1's gear adds up to (each hero has their own: hero.stats).
+  get stats(): GearStats {
+    return this.player?.stats ?? gearStats(this.run.gear);
+  }
+
+  get livingHeroes() {
+    return this.heroes.filter((h) => !h.isDead());
+  }
+
+  // The living hero nearest to a point; keep stays the choice unless another is
+  // clearly closer, so a foe does not turn back and forth between two heroes.
+  nearestHero(x: number, y: number, keep?: Player | null): Player {
+    const live = this.livingHeroes;
+    if (!live.length) return keep ?? this.player;
+    const d = (h: Player) => Math.hypot(h.x - x, (h.y - y) * 1.6);
+    let best = live[0];
+    for (const h of live) if (d(h) < d(best)) best = h;
+    if (keep && !keep.isDead() && keep !== best && d(keep) < d(best) + 60) return keep;
+    return best;
   }
 
   get isBossRoom() {
@@ -171,10 +210,16 @@ export class RoomScene extends Phaser.Scene {
     this.shots = new Shots(this);
 
     const start = this.isCamp ? CAMP.start : { x: 150, y: 470 };
-    this.player = new Player(this, start.x, start.y, getParty()[0]); // a second hero comes in 9.3
-    if (this.startHp !== undefined) this.player.hp = this.startHp;
+    getParty().forEach((device, who) => {
+      // player 2 starts a step behind and below player 1
+      const h = new Player(this, start.x - who * 40, start.y + who * 60, device, who as 0 | 1);
+      const hp = this.startHp[who];
+      if (hp !== undefined) h.hp = Math.max(1, Math.min(h.maxHp, hp));
+      this.heroes.push(h);
+    });
+    this.updateFocus(true);
     // follow the body, not the feet, and lag a touch so movement reads
-    cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
+    cam.startFollow(this.focus, true, 0.1, 0.1, 0, 30);
     cam.fadeIn(350);
 
     if (this.isCamp) {
@@ -203,16 +248,16 @@ export class RoomScene extends Phaser.Scene {
     cam.stopFollow();
     this.time.delayedCall(500, () => cam.pan(b.x, b.y - 60, 1100, 'Sine.easeInOut'));
     this.time.delayedCall(1700, () => { b.flare(); this.hud?.bossIntro('The Lantern Warden', 'Keeper of the Drowned Light'); });
-    this.time.delayedCall(4500, () => cam.pan(this.player.x, this.player.y - 30, 800, 'Sine.easeInOut'));
+    this.time.delayedCall(4500, () => cam.pan(this.focus.x, this.focus.y - 30, 800, 'Sine.easeInOut'));
     this.time.delayedCall(5350, () => {
-      cam.startFollow(this.player.sprite, true, 0.1, 0.1, 0, 30);
+      cam.startFollow(this.focus, true, 0.1, 0.1, 0, 30);
       this.cutscene = false;
       b.wake();
     });
   }
 
   canPause() {
-    return !this.leaving && !this.player.isDead();
+    return !this.leaving && this.livingHeroes.length > 0;
   }
 
   // A new run starts back at the camp.
@@ -233,8 +278,53 @@ export class RoomScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', go);
   }
 
-  onPlayerAction(a: Action) {
-    this.hud?.used(a);
+  onPlayerAction(p: Player, a: Action) {
+    this.hud?.used(p.who, a);
+  }
+
+  // The camera's point: the middle of the living heroes (of all of them once none
+  // is left standing). The sprite's y is the feet, like the hero's own.
+  private updateFocus(snap = false) {
+    const live = this.livingHeroes.length ? this.livingHeroes : this.heroes;
+    if (!live.length) return;
+    this.focus.x = live.reduce((n, h) => n + h.x, 0) / live.length;
+    this.focus.y = live.reduce((n, h) => n + h.y, 0) / live.length;
+    if (snap) this.cameras.main.centerOn(this.focus.x, this.focus.y - 30);
+  }
+
+  // Two living heroes may not walk further apart than LEASH: whoever moved away
+  // this frame is held back (by the share they moved), so neither leaves the screen.
+  private leash(before: number[]) {
+    const live = this.livingHeroes;
+    if (live.length < 2) return;
+    const [a, b] = live;
+    let excess = Math.abs(a.x - b.x) - LEASH;
+    if (excess <= 0) return;
+    const away = (h: Player, o: Player) => Math.max(0, (h.x - before[this.heroes.indexOf(h)]) * Math.sign(h.x - o.x));
+    const ma = away(a, b), mb = away(b, a), sum = ma + mb;
+    if (sum > 0) {
+      const ka = Math.min(ma, (excess * ma) / sum), kb = Math.min(mb, (excess * mb) / sum);
+      a.x -= Math.sign(a.x - b.x) * ka;
+      b.x -= Math.sign(b.x - a.x) * kb;
+      excess -= ka + kb;
+    }
+    if (excess > 0.5) {
+      // pushed apart by something else (a knockback): both give way
+      a.x -= Math.sign(a.x - b.x) * excess / 2;
+      b.x -= Math.sign(b.x - a.x) * excess / 2;
+    }
+    for (const h of live) h.syncPosition();
+  }
+
+  // A hero who has just gone down: in co-op the other fights on; when no one is
+  // left standing the run is over.
+  private checkFallen() {
+    for (const h of this.heroes) {
+      if (!h.isDead() || this.fallen.has(h)) continue;
+      this.fallen.add(h);
+      if (this.livingHeroes.length === 0) this.hud?.showDeath(this.run);
+      else this.hud?.banner('warn', `${heroLook(h.who).name} has fallen`, 'Fight on: back on their feet in the next room');
+    }
   }
 
   update(_time: number, deltaMs: number) {
@@ -245,13 +335,17 @@ export class RoomScene extends Phaser.Scene {
       dt *= this.slow.k;
       if (this.slow.left <= 0) { this.tweens.timeScale = 1; this.anims.globalTimeScale = 1; }
     }
+    this.checkFallen();
     if (this.freeze > 0) {
       this.freeze -= dt;
       if (this.freeze <= 0) this.anims.resumeAll();
       return;
     }
 
-    this.player.update(dt);
+    const before = this.heroes.map((h) => h.x);
+    for (const h of this.heroes) h.update(dt);
+    this.leash(before);
+    this.updateFocus();
     this.effects = this.effects.filter((f) => f(dt));
     this.updateChest();
     this.updateCamp();
@@ -266,7 +360,7 @@ export class RoomScene extends Phaser.Scene {
     this.updateDark(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
     this.world.update(this.cameras.main);
-    if (!this.player.isDead() && !this.isCamp) this.run.time += dt;
+    if (this.livingHeroes.length && !this.isCamp) this.run.time += dt;
   }
 
   // ---- combat -----------------------------------------------------------
@@ -278,7 +372,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   resolveMelee(attacker: Fighter, spec: AttackSpec, targets: Fighter[]): number {
-    return this.strike(attacker, attacker === this.player, spec, targets, (x, y) => this.inReach(attacker, x, y, spec));
+    return this.strike(attacker, attacker instanceof Player ? attacker : null, spec, targets, (x, y) => this.inReach(attacker, x, y, spec));
   }
 
   // A skill's effect, run every frame until it returns false.
@@ -287,11 +381,13 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // Every hit goes through here, whether a swing, a shot or a skill's area: inside
-  // says which floor positions it reaches. The player's hits get the gear's bonuses
-  // and effects and also break barrels and crates.
-  strike(attacker: HitSource, byPlayer: boolean, spec: AttackSpec, targets: Fighter[], inside: (x: number, y: number) => boolean, opts: StrikeOpts = {}): number {
+  // says which floor positions it reaches. A hero's hits (by) get that hero's gear
+  // bonuses and effects and also break barrels and crates.
+  strike(attacker: HitSource, by: Player | null, spec: AttackSpec, targets: Fighter[], inside: (x: number, y: number) => boolean, opts: StrikeOpts = {}): number {
     let hits = 0;
-    const fx = this.stats.fx;
+    const byPlayer = !!by;
+    const fx = by?.stats.fx;
+    this.striker = by;
     const { once, max = Infinity } = opts;
     for (const t of targets) {
       if (hits >= max) break;
@@ -299,8 +395,8 @@ export class RoomScene extends Phaser.Scene {
       if (!inside(t.x, t.y)) continue;
       let dmg = spec.dmg;
       let crit = false;
-      if (byPlayer) {
-        dmg *= this.stats.power * (1 + fx.damage);
+      if (by && fx) {
+        dmg *= by.stats.power * (1 + fx.damage);
         if (t.hp / t.maxHp < 0.3) dmg *= 1 + fx.execute;
         if (fx.crit > 0 && Math.random() < fx.crit) { dmg *= 2; crit = true; }
         dmg = Math.max(1, Math.round(dmg));
@@ -313,25 +409,25 @@ export class RoomScene extends Phaser.Scene {
         if (spec.stun) t.stun(spec.stun);
         if (spec.slow) t.slowT = Math.max(t.slowT, spec.slow);
       }
-      if (byPlayer) {
+      if (by) {
         this.run.damage += dealt;
-        this.onPlayerHit(t as Enemy, dealt);
-      } else if (t === this.player && dealt > 0 && fx.thorns > 0 && attacker instanceof Enemy) {
-        const back = attacker.takeDot(fx.thorns);
+        this.onPlayerHit(by, t as Enemy, dealt);
+      } else if (t instanceof Player && dealt > 0 && t.stats.fx.thorns > 0 && attacker instanceof Enemy) {
+        const back = attacker.takeDot(t.stats.fx.thorns);
         if (back > 0) this.combatText(attacker, back, 'burn');
       }
       this.combatText(t, dealt, byPlayer ? (crit ? 'crit' : spec.heavy ? 'heavy' : 'hit') : 'hurt');
       this.hitSpark(t.x - attacker.facing * 12, t.y - t.visualHeight * 0.5, byPlayer ? 0xfff1c0 : 0xff6b5e);
     }
-    if (byPlayer && hits < max) {
+    if (by && fx && hits < max) {
       hits += this.smashProps(attacker, spec, inside, once);
-      if (hits > 0 && spec.heavy && fx.burn > 0) this.burnGround(attacker.x + attacker.facing * (spec.around ? 0 : 40), attacker.y, fx.burn);
+      if (hits > 0 && spec.heavy && fx.burn > 0) this.burnGround(by, attacker.x + attacker.facing * (spec.around ? 0 : 40), attacker.y, fx.burn);
     }
+    this.striker = null;
     if (hits > 0 && !spec.dot && !spec.quiet) {
       this.hitStop(spec.stop ?? (spec.heavy ? 85 : 45));
       if (spec.heavy) this.shake(110, 0.006);
     }
-    if (this.player.isDead()) this.onPlayerDied();
     return hits;
   }
 
@@ -347,18 +443,17 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private updateProjectiles(dt: number) {
-    const p = this.player;
     for (const b of this.projectiles) {
       b.x += b.vx * dt;
       b.left -= Math.abs(b.vx) * dt;
       b.sprite.setPosition(b.x, b.y - 30).setDepth(b.y + 11).setRotation(b.sprite.rotation + dt * 14);
       b.shadow.setPosition(b.x, b.y);
-      if (Math.abs(p.x - b.x) < 18 && Math.abs(p.y - b.y) < 13) {
+      for (const p of this.livingHeroes) {
+        if (b.dead || Math.abs(p.x - b.x) >= 18 || Math.abs(p.y - b.y) >= 13) continue;
         const dealt = p.takeHit(b.dmg, b.x - Math.sign(b.vx) * 40, 140, false);
         if (dealt >= 0) {
           b.dead = true;
           if (dealt > 0) this.combatText(p, dealt, 'hurt');
-          if (p.isDead()) this.onPlayerDied();
         }
       }
       if (b.left <= 0) b.dead = true;
@@ -386,8 +481,14 @@ export class RoomScene extends Phaser.Scene {
     this.world?.pushOut(f);
   }
 
-  // Keeps enemies from stacking on one spot or standing inside the player.
+  // Keeps enemies from stacking on one spot or standing inside a hero, and the
+  // two heroes from standing inside each other.
   private separate() {
+    const live = this.livingHeroes;
+    if (live.length === 2 && live.every((h) => h.state !== 'dodge')) {
+      this.pushApart(live[0], live[1], 22, 9, 0.5);
+      for (const h of live) h.clamp();
+    }
     const list = this.enemies.filter((e) => !e.isDead());
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
@@ -396,8 +497,7 @@ export class RoomScene extends Phaser.Scene {
         const k = Math.max(a.body, b.body);
         this.pushApart(a, b, 26 * k, 11 * k, a.body > b.body ? 1 : b.body > a.body ? 0 : 0.5);
       }
-      const p = this.player;
-      if (!p.isDead() && p.state !== 'dodge') this.pushApart(a, p, 24 * a.body, 10 * a.body, a.body > 1 ? 1 : 0);
+      for (const p of live) if (p.state !== 'dodge') this.pushApart(a, p, 24 * a.body, 10 * a.body, a.body > 1 ? 1 : 0);
       a.clamp();
     }
   }
@@ -406,8 +506,9 @@ export class RoomScene extends Phaser.Scene {
     this.slain++;
     this.run.kills++;
     this.spawnCoins(e.x, e.y, e.key === 'ghoul' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(3, 5));
-    const heal = this.stats.fx.lifeOnKill;
-    if (heal > 0) this.healPlayer(heal);
+    // life on kill heals whoever dealt the blow (the nearest hero, if no one's blow did it)
+    const by = this.striker ?? (this.livingHeroes.length ? this.nearestHero(e.x, e.y) : null);
+    if (by && by.stats.fx.lifeOnKill > 0) this.healPlayer(by, by.stats.fx.lifeOnKill);
     if (Math.random() < 0.25) {
       const sprite = this.add.image(e.x, e.y - 10, 'ph_orb').setDepth(e.y + 5).setScale(0.8);
       this.pickups.push({ sprite, x: e.x, y: e.y, t: 0, dead: false });
@@ -415,23 +516,19 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private updatePickups(dt: number) {
-    const p = this.player;
     for (const o of this.pickups) {
       o.t += dt;
       o.sprite.setY(o.y - 10 - Math.sin(o.t * 4) * 3);
-      if (!p.isDead() && Math.abs(p.x - o.x) < 24 && Math.abs(p.y - o.y) < 16) {
+      const p = this.livingHeroes.find((h) => Math.abs(h.x - o.x) < 24 && Math.abs(h.y - o.y) < 16);
+      if (p) {
         o.dead = true;
-        const heal = Math.min(Math.round(15 * (1 + this.stats.fx.orbs)), p.maxHp - p.hp);
+        const heal = Math.min(Math.round(15 * (1 + p.stats.fx.orbs)), p.maxHp - p.hp);
         p.hp += heal;
         if (heal > 0) this.combatText(p, heal, 'heal');
         o.sprite.destroy();
       }
     }
     this.pickups = this.pickups.filter((o) => !o.dead);
-  }
-
-  private onPlayerDied() {
-    this.hud?.showDeath(this.run);
   }
 
   // Colour a character should be tinted where it stands: moonlight, warmer near fire.
@@ -442,10 +539,11 @@ export class RoomScene extends Phaser.Scene {
   // ---- waves and the exit ----------------------------------------------
 
   private updateWaves(dt: number) {
-    if (this.player.isDead()) return;
+    if (!this.livingHeroes.length) return;
     if (this.gateOpen) {
       const ex = this.world.exit;
-      if (!this.leaving && Math.hypot(this.player.x - ex.x, (this.player.y - ex.y) * 1.6) < 46) {
+      // either hero stepping into the gate takes both through
+      if (!this.leaving && this.livingHeroes.some((h) => Math.hypot(h.x - ex.x, (h.y - ex.y) * 1.6) < 46)) {
         this.leaving = true;
         const cam = this.cameras.main;
         if (this.isCamp) {
@@ -453,14 +551,18 @@ export class RoomScene extends Phaser.Scene {
           cam.flash(250, 127, 252, 240);
           this.time.delayedCall(120, () => cam.fade(600, 0, 0, 0, true));
           cam.once('camerafadeoutcomplete', () => {
-            this.scene.restart({ room: 1, run: { ...newRun(), gear: { ...newRun().gear, weapon: this.run.gear.weapon } } });
+            const run = { ...newRun(), gear: { ...newGear(), weapon: this.run.gear.weapon } };
+            if (this.heroes.length > 1) run.gear2 = { ...newGear(), weapon: gearOf(this.run, 1).weapon };
+            this.scene.restart({ room: 1, run });
           });
           return;
         }
         cam.fadeOut(400);
         this.run.rooms++;
         cam.once('camerafadeoutcomplete', () => {
-          this.scene.restart({ room: this.room + 1, hp: Math.min(this.player.maxHp, this.player.hp + 20), run: this.run });
+          // the living heal a little between rooms; the fallen get back up
+          const hps = this.heroes.map((h) => (h.isDead() ? Math.round(h.maxHp * REJOIN) : Math.min(h.maxHp, h.hp + 20)));
+          this.scene.restart({ room: this.room + 1, hps, run: this.run });
         });
       }
       return;
@@ -509,8 +611,7 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- gear effects -----------------------------------------------------------
 
-  private healPlayer(n: number) {
-    const p = this.player;
+  private healPlayer(p: Player, n: number) {
     if (p.isDead()) return;
     const heal = Math.min(n, p.maxHp - p.hp);
     if (heal <= 0) return;
@@ -518,23 +619,20 @@ export class RoomScene extends Phaser.Scene {
     this.combatText(p, heal, 'heal');
   }
 
-  private onPlayerHit(t: Enemy, _dealt: number) {
-    const fx = this.stats.fx;
-    if (fx.lifeOnHit > 0) {
-      const p = this.player;
-      p.hp = Math.min(p.maxHp, p.hp + fx.lifeOnHit);
-    }
+  private onPlayerHit(p: Player, t: Enemy, _dealt: number) {
+    const fx = p.stats.fx;
+    if (fx.lifeOnHit > 0) p.hp = Math.min(p.maxHp, p.hp + fx.lifeOnHit);
     if (fx.frost > 0 && !t.isDead()) t.slowT = Math.max(t.slowT, fx.frost);
     this.hitCount++;
     if (fx.storm > 0 && this.hitCount % 5 === 0) this.chainLightning(t, fx.storm);
   }
 
-  // Called after the player takes a hit: the armor's second wind, once a room.
-  afterPlayerHurt() {
-    const p = this.player, sw = this.stats.fx.secondWind;
-    if (sw > 0 && !this.secondWindUsed && p.hp > 0 && p.hp < p.maxHp * 0.3) {
-      this.secondWindUsed = true;
-      this.healPlayer(sw);
+  // Called after a hero takes a hit: their armor's second wind, once a room.
+  afterPlayerHurt(p: Player) {
+    const sw = p.stats.fx.secondWind;
+    if (sw > 0 && !p.secondWindUsed && p.hp > 0 && p.hp < p.maxHp * 0.3) {
+      p.secondWindUsed = true;
+      this.healPlayer(p, sw);
       const ring = this.add.ellipse(p.x, p.y, 30, 12).setStrokeStyle(3, 0x6dffa0, 1).setDepth(2);
       this.tweens.add({ targets: ring, scaleX: 3, scaleY: 3, alpha: 0, duration: 500, onComplete: () => ring.destroy() });
     }
@@ -562,7 +660,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   // Burning ground where a heavy attack lands: it hurts foes standing in it.
-  private burnGround(x: number, y: number, dmg: number) {
+  private burnGround(by: Player, x: number, y: number, dmg: number) {
     const objs: Phaser.GameObjects.Image[] = [];
     objs.push(this.add.image(x, y, 'fw_pool').setTint(0xff6a20).setBlendMode(Phaser.BlendModes.ADD).setScale(1.1, 0.9).setAlpha(0.6).setDepth(0.5));
     for (let i = 0; i < 4; i++) {
@@ -571,7 +669,7 @@ export class RoomScene extends Phaser.Scene {
       this.tweens.add({ targets: fl, scaleY: 0.22, duration: 120 + Math.random() * 80, yoyo: true, repeat: -1 });
       objs.push(fl);
     }
-    this.fires.push({ x, y, left: 3, tick: 0.25, dmg, objs });
+    this.fires.push({ x, y, left: 3, tick: 0.25, dmg, by, objs });
   }
 
   private updateFires(dt: number) {
@@ -580,11 +678,13 @@ export class RoomScene extends Phaser.Scene {
       f.tick -= dt;
       if (f.tick <= 0) {
         f.tick = 0.5;
+        this.striker = f.by;
         for (const e of this.enemies) {
           if (e.isDead() || ((e.x - f.x) / 46) ** 2 + ((e.y - f.y) / 18) ** 2 > 1) continue;
           const d = e.takeDot(f.dmg);
           if (d > 0) { this.combatText(e, d, 'burn'); this.run.damage += d; }
         }
+        this.striker = null;
       }
       if (f.left <= 0) {
         this.tweens.add({ targets: f.objs, alpha: 0, duration: 300, onComplete: () => f.objs.forEach((o) => o.destroy()) });
@@ -617,11 +717,13 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private updateCoins(dt: number) {
-    const p = this.player;
+    const anyone = this.livingHeroes.length > 0;
     for (const c of this.coins) {
       c.t += dt;
+      // gold is one purse: a coin flies to whichever hero is nearer
+      const p = this.nearestHero(c.x, c.y);
       const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
-      const pull = !p.isDead() && c.t > 0.45 && (d < 80 || this.gateOpen || !!this.boss?.isDead());
+      const pull = anyone && c.t > 0.45 && (d < 80 || this.gateOpen || !!this.boss?.isDead());
       if (pull) {
         const sp = 260 + c.t * 300;
         c.x += (dx / (d || 1)) * Math.min(d, sp * dt);
@@ -829,21 +931,23 @@ export class RoomScene extends Phaser.Scene {
     this.shake(120, 0.003);
   }
 
-  private chestNear() {
-    const c = this.chest, p = this.player;
+  private chestNear(p: Player) {
+    const c = this.chest;
     return !!c && !c.locked && !c.opened && !p.isDead() && Math.hypot(p.x - c.x, (p.y - c.y) * 1.6) < 72;
   }
 
+  // Whoever presses interact by the chest opens it, and chooses from it (until 9.5).
   private updateChest() {
     const c = this.chest;
     if (!c) return;
-    const near = this.chestNear();
-    c.prompt.setAlpha(Phaser.Math.Linear(c.prompt.alpha, near ? 1 : 0, 0.2)).setY(c.y - 52 + Math.sin(this.time.now / 250) * 2);
-    if (near && this.player.interact) this.openChest();
+    const near = this.heroes.filter((h) => this.chestNear(h));
+    c.prompt.setAlpha(Phaser.Math.Linear(c.prompt.alpha, near.length ? 1 : 0, 0.2)).setY(c.y - 52 + Math.sin(this.time.now / 250) * 2);
+    const by = near.find((h) => h.interact);
+    if (by) this.openChest(by);
   }
 
   // Lid up, light out, then the HUD offers the three cards with the room paused.
-  openChest() {
+  openChest(by: Player = this.player) {
     const c = this.chest;
     if (!c || c.opened) return;
     c.opened = true;
@@ -857,23 +961,24 @@ export class RoomScene extends Phaser.Scene {
     this.tweens.add({ targets: glow, scale: 1.4, alpha: 0.35, duration: 500 });
     this.time.delayedCall(450, () => {
       const hud = this.hud;
-      if (!hud || this.player.isDead()) return;
+      if (!hud || !this.livingHeroes.length) return;
       this.scene.pause();
-      hud.openChest(c.items, this.run.gear, (it) => {
-        this.equip(it);
+      hud.openChest(c.items, gearOf(this.run, by.who), (it) => {
+        this.equip(it, by);
         this.scene.resume();
       });
     });
   }
 
-  equip(it: Item) {
-    const g = this.run.gear;
+  // Puts an item on a hero (player 1 unless said otherwise).
+  equip(it: Item, p: Player = this.player) {
+    const g = gearOf(this.run, p.who);
     if (it.cat === 'weapon') g.weapon = it;
     else if (it.cat === 'armor') g.armor = it;
     else g.trinkets.push(it);
-    const p = this.player, before = p.maxHp;
-    this.stats = gearStats(g);
-    p.maxHp = 100 + this.stats.fx.maxHp;
+    const before = p.maxHp;
+    p.stats = gearStats(g);
+    p.maxHp = 100 + p.stats.fx.maxHp;
     if (p.maxHp > before) p.hp += p.maxHp - before;
     p.hp = Math.min(p.hp, p.maxHp);
     if (it.cat === 'weapon') p.arm();
@@ -881,27 +986,28 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- the camp -----------------------------------------------------------
 
-  private rackNear() {
-    const p = this.player, r = CAMP.rack;
+  private rackNear(p: Player) {
+    const r = CAMP.rack;
     return !!this.camp && !p.isDead() && Math.hypot(p.x - r.x, (p.y - r.y) * 1.6) < 80;
   }
 
   private updateCamp() {
     if (!this.camp) return;
-    const near = this.rackNear();
-    this.camp.update(near);
-    if (near && this.player.interact) this.openRack();
+    const near = this.heroes.filter((h) => this.rackNear(h));
+    this.camp.update(near.length > 0);
+    const by = near.find((h) => h.interact);
+    if (by) this.openRack(by);
   }
 
   // The rack opens as a store over the paused camp (HudScene.openRack); the pick
   // is remembered, and Esc walks away without changing anything.
-  openRack() {
+  openRack(by: Player = this.player) {
     const hud = this.hud, camp = this.camp;
     if (!hud || !camp || hud.choosing) return;
     this.scene.pause();
-    hud.openRack(camp.rackItems(), this.run.gear, (it) => {
-      this.equip(it);
-      if (it.kind) saveWeapon(it.kind);
+    hud.openRack(camp.rackItems(), gearOf(this.run, by.who), (it) => {
+      this.equip(it, by);
+      if (it.kind) saveWeapon(it.kind, by.who);
       camp.chosen = true;
       this.scene.resume();
     }, () => this.scene.resume());
@@ -909,12 +1015,10 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- the boss fight -----------------------------------------------------
 
-  // A boss's blow on the player, outside the usual melee check.
-  hitPlayer(from: Fighter, dmg: number, knock: number, heavy: boolean) {
-    const p = this.player;
+  // A boss's blow on a hero, outside the usual melee check.
+  hitPlayer(p: Player, from: Fighter, dmg: number, knock: number, heavy: boolean) {
     const dealt = p.takeHit(dmg, from.x, knock, heavy);
     if (dealt > 0) this.combatText(p, dealt, 'hurt');
-    if (p.isDead()) this.onPlayerDied();
   }
 
   summonMinions(n: number) {
@@ -1024,16 +1128,18 @@ export class RoomScene extends Phaser.Scene {
     if (!this.boss?.isDead()) d.r = Math.max(DARK.endRadius, DARK.startRadius - ((DARK.startRadius - DARK.endRadius) * d.t) / DARK.shrinkSeconds);
     const s = d.r / 80; // the hole in the texture is about 80 pixels across its soft edge
     d.img.setScale(s, s * DARK.squash);
-    const p = this.player;
-    if (p.isDead() || this.boss?.isDead() || this.cutscene) return;
-    if (this.inDark(p.x, p.y)) {
+    if (this.boss?.isDead() || this.cutscene) return;
+    const out = this.livingHeroes.filter((p) => this.inDark(p.x, p.y));
+    if (out.length) {
       d.tick -= dt;
       if (d.tick <= 0) {
         d.tick = DARK.tick;
-        p.hp = Math.max(0, p.hp - DARK.damage);
-        this.combatText(p, DARK.damage, 'hurt');
+        for (const p of out) {
+          p.hp = Math.max(0, p.hp - DARK.damage);
+          this.combatText(p, DARK.damage, 'hurt');
+          if (p.hp <= 0) p.die();
+        }
         if (!d.warned) { d.warned = true; this.hud?.banner('warn', 'The dark gnaws at you'); }
-        if (p.hp <= 0) { p.die(); this.onPlayerDied(); }
       }
     } else d.tick = Math.min(d.tick, DARK.tick);
   }
@@ -1062,7 +1168,7 @@ export class RoomScene extends Phaser.Scene {
     this.shake(300, 0.01);
     for (const e of this.enemies) if (e !== b && !e.isDead()) e.takeHit(999, e.x - 1, 0, false);
     if (this.dark) this.tweens.add({ targets: this.dark.img, alpha: 0, duration: 2200, delay: 400 });
-    this.time.delayedCall(3000, () => { if (!this.player.isDead()) this.hud?.showVictory(this.run); });
+    this.time.delayedCall(3000, () => { if (this.livingHeroes.length) this.hud?.showVictory(this.run); });
   }
 
   // ---- feedback --------------------------------------------------------

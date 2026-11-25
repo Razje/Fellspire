@@ -172,7 +172,7 @@ test('each effect does what it says', async ({ page }) => {
     clearGear(); trinket({ thorns: 6 }); place(); g.attackCd = 0; step(70);
     out.thorns = g.maxHp - g.hp;
 
-    clearGear(); trinket({ secondWind: 20 }); place(); p.hp = 25; s.secondWindUsed = false; s.spawnBone(p.x + 200, p.y, -390, 8, 560); g.x = 200; step(45);
+    clearGear(); trinket({ secondWind: 20 }); place(); p.hp = 25; p.secondWindUsed = false; s.spawnBone(p.x + 200, p.y, -390, 8, 560); g.x = 200; step(45);
     out.afterSecondWind = p.hp;
 
     clearGear(); trinket({ lifeOnKill: 4 }); place(); p.hp = 50; g.takeHit(999, p.x, 0, false); step(2);

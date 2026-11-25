@@ -69,7 +69,7 @@ export class Warden extends Enemy {
   phase: 1 | 2 = 1;
   private move: Move = 'slam';
   private t = 0; // time in the current mode
-  private struck = false;
+  private struck = new Set<object>(); // heroes the rush has already hit
   attacksSinceRest = 0;
   private summonCd = 6;
   private target = { x: 0, y: 0 }; // where the slam lands
@@ -117,7 +117,7 @@ export class Warden extends Enemy {
   private setMode(m: Mode) {
     this.mode = m;
     this.t = 0;
-    this.struck = false;
+    this.struck.clear();
   }
 
   takeHit(dmg: number, fromX: number, _knock: number, heavy: boolean): number {
@@ -288,9 +288,10 @@ export class Warden extends Enemy {
         this.rushLeft -= step;
         this.scene.dust(this.x, this.y, 1);
         this.scene.embers(this.x, this.y - this.H * 0.4);
-        if (!this.struck && !p.isDead() && Math.hypot(p.x - this.x, (p.y - this.y) * 2) < 40) {
-          this.struck = true;
-          this.scene.hitPlayer(this, WARDEN.rush.dmg, 260, true);
+        for (const h of this.scene.livingHeroes) {
+          if (this.struck.has(h) || Math.hypot(h.x - this.x, (h.y - this.y) * 2) >= 40) continue;
+          this.struck.add(h);
+          this.scene.hitPlayer(h, this, WARDEN.rush.dmg, 260, true);
         }
         const before = { x: this.x, y: this.y };
         this.clamp();
@@ -362,14 +363,14 @@ export class Warden extends Enemy {
     this.telegraph.clear();
     if (this.move === 'slam') {
       const { rx, ry, dmg } = WARDEN.slam;
-      if (!p.isDead() && ((p.x - this.target.x) / rx) ** 2 + ((p.y - this.target.y) / ry) ** 2 <= 1) {
-        this.scene.hitPlayer(this, dmg, 220, true);
+      for (const h of this.scene.livingHeroes) {
+        if (((h.x - this.target.x) / rx) ** 2 + ((h.y - this.target.y) / ry) ** 2 <= 1) this.scene.hitPlayer(h, this, dmg, 220, true);
       }
       this.scene.shockwave(this.target.x, this.target.y, this.phase === 1 ? 0x7fffd8 : 0xff8a3a);
       this.scene.shake(160, 0.008);
       this.endMove(WARDEN.slam.recover);
     } else if (this.move === 'sweep') {
-      this.scene.resolveMelee(this, { dmg: WARDEN.sweep.dmg, range: WARDEN.sweep.range, depth: WARDEN.sweep.depth, knock: 280, heavy: true }, [p]);
+      this.scene.resolveMelee(this, { dmg: WARDEN.sweep.dmg, range: WARDEN.sweep.range, depth: WARDEN.sweep.depth, knock: 280, heavy: true }, this.scene.livingHeroes);
       this.scene.sweepArc(this.x, this.y - this.H * 0.4, this.facing, this.phase === 1 ? 0x9fffe0 : 0xffb070);
       this.endMove(WARDEN.sweep.recover);
     } else if (this.move === 'summon') {

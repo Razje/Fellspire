@@ -8,6 +8,7 @@ import { WORLD } from './config';
 import { canvas } from './titleArt';
 import type { Move } from './weapons';
 import type { RoomScene } from './scenes/RoomScene';
+import type { Player } from './entities/Player';
 
 const CHEST = 34; // how far above the feet a shot flies
 
@@ -16,6 +17,7 @@ interface Shot {
   glow?: Phaser.GameObjects.Image;
   shadow: Phaser.GameObjects.Ellipse;
   x: number; y: number; vx: number; vy: number;
+  by: Player; // who fired it: their gear's bonuses apply
   left: number;
   move: Move;
   speed: number;
@@ -98,7 +100,7 @@ export class Shots {
 
   // Sends out the move's shot from the hero's hand, straight the way they face; a
   // spread sends several, fanned up and down the floor around that line.
-  fire(from: { x: number; y: number; facing: number }, move: Move) {
+  fire(from: Player, move: Move) {
     const spec = move.shot!;
     const dir = from.facing;
     const n = spec.spread?.count ?? 1;
@@ -107,7 +109,7 @@ export class Shots {
       const lean = n > 1 ? (i - (n - 1) / 2) * (spec.spread!.lean / ((n - 1) / 2)) : 0;
       // a pellet's speed varies a little, so the cone looks ragged rather than a fan
       const k = spec.look === 'pellet' ? 0.85 + Math.random() * 0.3 : 1;
-      this.launch(from.x + dir * (gun ? 30 : 22), from.y, dir * spec.speed * k, lean * spec.speed * k, move);
+      this.launch(from.x + dir * (gun ? 30 : 22), from.y, dir * spec.speed * k, lean * spec.speed * k, move, from);
     }
     if (gun) this.muzzle(from.x + dir * 30, from.y, dir, spec.look === 'pellet' ? 1.5 : 0.8);
   }
@@ -128,7 +130,7 @@ export class Shots {
   }
 
   // One shot from a point with a velocity (floor pixels a second).
-  launch(x: number, y: number, vx: number, vy: number, move: Move) {
+  launch(x: number, y: number, vx: number, vy: number, move: Move, by: Player) {
     const spec = move.shot!;
     const s = this.scene;
     const dir = Math.sign(vx) || 1;
@@ -144,7 +146,7 @@ export class Shots {
         .setScale(spec.look === 'orb' ? 0.5 : spec.look === 'spark' ? 0.24 : 0.3).setAlpha(0.7);
     }
     const shadow = s.add.ellipse(x, y, spec.look === 'arrow' ? 18 : spec.look === 'pellet' ? 6 : 14, spec.look === 'pellet' ? 3 : 5, 0x000000, 0.25).setDepth(1);
-    const b: Shot = { img, glow, shadow, x, y, vx, vy, left: spec.reach, move, speed: Math.hypot(vx, vy), hit: new Set(), dead: false };
+    const b: Shot = { img, glow, shadow, x, y, vx, vy, left: spec.reach, move, by, speed: Math.hypot(vx, vy), hit: new Set(), dead: false };
     this.turn(b);
     this.list.push(b);
   }
@@ -182,7 +184,7 @@ export class Shots {
       const dir = Math.sign(b.vx);
       // what it touches this frame, a short box around its head
       const inside = (x: number, y: number) => Math.abs(x - b.x) < 18 && Math.abs(y - b.y) <= b.move.depth;
-      const hits = spec.show ? 0 : s.strike({ x: b.x - dir * 40, y: b.y, facing: dir }, true, b.move, s.enemies, inside, { once: b.hit, max: spec.pierce ? undefined : 1 });
+      const hits = spec.show ? 0 : s.strike({ x: b.x - dir * 40, y: b.y, facing: dir }, b.by, b.move, s.enemies, inside, { once: b.hit, max: spec.pierce ? undefined : 1 });
       if ((hits > 0 && !spec.pierce) || b.left <= 0 || off) {
         b.dead = true;
         if (spec.burst) this.burst(b);
@@ -211,7 +213,7 @@ export class Shots {
   private burst(b: Shot) {
     const s = this.scene, { rx, ry } = b.move.shot!.burst!;
     s.shockwave(b.x, b.y, 0x7ffcf0);
-    s.strike({ x: b.x, y: b.y - 1, facing: Math.sign(b.vx) }, true, { ...b.move, heavy: true }, s.enemies,
+    s.strike({ x: b.x, y: b.y - 1, facing: Math.sign(b.vx) }, b.by, { ...b.move, heavy: true }, s.enemies,
       (x, y) => ((x - b.x) / rx) ** 2 + ((y - b.y) / ry) ** 2 <= 1, { once: b.hit });
   }
 }

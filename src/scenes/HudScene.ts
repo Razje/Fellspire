@@ -20,7 +20,10 @@ import { WeaponShop } from '../ui/armory';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
 import { Rig } from '../rig/Rig';
-import { heroLook, heroRig } from '../hero';
+import { heroLook, heroRig, type Who } from '../hero';
+import { getParty, keyLabels } from '../input';
+import { gearOf } from '../run';
+import type { Player } from '../entities/Player';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
@@ -30,6 +33,23 @@ export type BannerKind = 'zone' | 'warn' | 'good';
 export type Action = 'light' | 'heavy' | 'skill' | 'dodge';
 
 const { viewW, viewH } = WORLD;
+
+// One hero's corner of the screen: player 1 bottom left, player 2 (co-op) bottom
+// right, mirrored. objs is everything in it, so a fallen hero's frame can dim.
+interface Unit {
+  who: Who;
+  hp: Bar;
+  slots: Record<Action | 'block', Slot>;
+  portrait?: Rig;
+  lastHp: number;
+  objs: Fadable[];
+  gearUi?: Phaser.GameObjects.Container;
+}
+
+type Fadable = { alpha: number; setAlpha(a: number): unknown };
+
+// A key's name short enough for the corner of an action slot.
+const short = (k: string) => k.replace('Num ', 'N').replace('Shift', 'Shft');
 
 function ringTexture(scene: Phaser.Scene) {
   hi(scene, 'ui_ring', 104, 104, (c) => {
@@ -88,14 +108,12 @@ export class HudScene extends Phaser.Scene {
   ready = false;
   private room!: RoomScene;
   private roomNo = 1;
-  private hp!: Bar;
-  private slots!: Record<Action | 'block', Slot>;
+  private units: Unit[] = [];
   private pips: Phaser.GameObjects.Image[] = [];
   private objective!: Phaser.GameObjects.Text;
   private objectiveDone!: Phaser.GameObjects.Text;
   private killText!: Phaser.GameObjects.Text;
   private hurt!: Phaser.GameObjects.Image;
-  private lastHp = 0;
   private bannerObjs: Phaser.GameObjects.GameObject[] = [];
   private pause?: { root: Phaser.GameObjects.Container; list: FocusList };
   private options?: Panel;
@@ -103,10 +121,8 @@ export class HudScene extends Phaser.Scene {
   private blur?: Phaser.FX.Blur;
   private padPrev: boolean[] = [];
   private gateShown = false;
-  private portrait?: Rig;
   private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
   private goldText!: Phaser.GameObjects.Text;
-  private gearUi?: Phaser.GameObjects.Container;
   private tip?: Phaser.GameObjects.Container;
   private choice?: { cards: ItemCard[]; index: number; busy: boolean; root: Phaser.GameObjects.Container; pick: (i: number) => void };
   shop?: WeaponShop; // the camp's weapon rack, while it is open
@@ -126,11 +142,11 @@ export class HudScene extends Phaser.Scene {
     this.end = undefined;
     this.blur = undefined;
     this.padPrev = [];
+    this.padPrevs = new Map();
     this.gateShown = false;
     this.bossBar = undefined;
-    this.portrait = undefined;
+    this.units = [];
     this.endKind = null;
-    this.gearUi = undefined;
     this.tip = undefined;
     this.choice = undefined;
     this.shop = undefined;
@@ -142,12 +158,11 @@ export class HudScene extends Phaser.Scene {
     this.room = this.scene.get('room') as RoomScene;
     ringTexture(this);
     bandTextures(this);
-    this.buildUnitFrame();
+    this.room.heroes.forEach((h) => this.buildUnitFrame(h));
     this.buildPlaque();
-    this.buildHints();
+    if (!this.coop) this.buildHints();
     this.refreshGear();
     this.hurt = pic(this, viewW / 2, viewH / 2, 'ui_hurt').setDisplaySize(viewW, viewH).setTint(0x9a0000).setAlpha(0).setDepth(-10);
-    this.lastHp = this.room.player?.hp ?? 100;
 
     const seen = new WeakSet<KeyboardEvent>();
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
@@ -161,36 +176,63 @@ export class HudScene extends Phaser.Scene {
     else this.buildBossBar();
   }
 
-  // ---- the hero, bottom left ---------------------------------------------------------
+  // Player 1's portrait.
+  get portrait() {
+    return this.units[0]?.portrait;
+  }
 
-  private buildUnitFrame() {
-    const cx = 62, cy = 474;
+  get coop() {
+    return this.room.heroes.length > 1;
+  }
+
+  // Where something of a hero's corner goes, across the screen: player 1 as laid
+  // out, player 2 mirrored onto the right. w is the thing's width, for left edges.
+  private side(who: Who, x: number, w = 0) {
+    return who === 0 ? x : viewW - x - w;
+  }
+
+  // ---- the heroes: player 1 bottom left, player 2 bottom right -------------------------
+
+  private buildUnitFrame(h: Player) {
+    const who = h.who, X = (x: number, w = 0) => this.side(who, x, w);
+    const objs: Fadable[] = [];
+    const keep = <T extends Fadable>(o: T) => { objs.push(o); return o; };
+    const cx = X(62), cy = 474;
     const art = loadedAnims.hero?.has('idle');
-    this.add.circle(cx, cy, 37, 0x142231, 1);
-    this.add.circle(cx, cy + 10, 30, 0x070b12, 0.6);
+    keep(this.add.circle(cx, cy, 37, 0x142231, 1));
+    keep(this.add.circle(cx, cy + 10, 30, 0x070b12, 0.6));
     // the hero's own head and shoulders, from her parts (or from a frame without them)
     const size = 0.15;
-    const rig = heroRig(this, cx + 2, cy + 290 * size, size);
+    const rig = heroRig(this, cx + 2, cy + 290 * size, size, heroLook(who));
     let face: Phaser.GameObjects.Image | Rig;
+    let portrait: Rig | undefined;
     if (rig) {
-      face = this.portrait = rig;
+      face = portrait = rig;
+      if (who === 1) rig.setFacing(-1); // player 2 looks in from the right
     } else {
       const img = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero! : 'ph_hero');
-      face = img.setScale(art ? 150 / img.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5);
+      face = img.setScale(art ? 150 / img.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5).setFlipX(who === 1);
     }
+    keep(face);
     const mask = this.make.graphics({}, false).fillCircle(cx, cy, 36);
     face.setMask(mask.createGeometryMask());
-    pic(this, cx, cy - 2, 'ui_ring');
+    keep(pic(this, cx, cy - 2, 'ui_ring'));
 
-    txt(this, 116, 432, heroLook().name, 'head', { fontSize: '15px' }).setOrigin(0, 0.5);
-    this.hp = new Bar(this, 114, 444, 214, 15, 'health');
+    keep(txt(this, X(116), 432, heroLook(who).name, 'head', { fontSize: '15px' }).setOrigin(who === 0 ? 0 : 1, 0.5));
+    const hp = keep(new Bar(this, X(114, 214), 444, 214, 15, 'health'));
 
+    // the keys of the device this hero plays on
+    const kl = keyLabels(getParty()[who] ?? { kind: 'solo' });
     const keys: [Action | 'block', 'light' | 'heavy' | 'dodge' | 'block', string][] = [
-      ['light', 'light', 'J'], ['heavy', 'heavy', 'K'], ['skill', 'heavy', 'I'], ['dodge', 'dodge', 'L'], ['block', 'block', 'Shft'],
+      ['light', 'light', kl.light], ['heavy', 'heavy', kl.heavy], ['skill', 'heavy', kl.skill], ['dodge', 'dodge', kl.dodge], ['block', 'block', kl.block],
     ];
     const s = {} as Record<Action | 'block', Slot>;
-    keys.forEach(([k, ico, key], i) => { s[k] = new Slot(this, 136 + i * 46, 492, ico, key); });
-    this.slots = s;
+    keys.forEach(([k, ico, key], i) => { s[k] = keep(new Slot(this, X(136 + i * 46), 492, ico, short(key))); });
+    if (who === 1) {
+      // mirrored as a group, so the slots still read light to block from left to right
+      keys.forEach(([k], i) => s[k].setX(viewW - 136 - (keys.length - 1 - i) * 46));
+    }
+    this.units[who] = { who, hp, slots: s, portrait, lastHp: h.hp, objs };
   }
 
   // ---- where you are and what to do, top right ---------------------------------------
@@ -230,12 +272,14 @@ export class HudScene extends Phaser.Scene {
       this.objectiveDone.setAlpha(1);
     }
 
-    // gold and kills over the whole run, bottom right
-    const gf = new Frame(this, 902, 468, 92, 32, 'dark');
+    // gold and kills over the whole run, bottom right; in co-op that corner is
+    // player 2's, so they sit under the objective instead
+    const [gx, gy, kx, ky] = this.coop ? [796, 146, 894, 146] : [902, 468, 902, 506];
+    const gf = new Frame(this, gx, gy, 92, 32, 'dark');
     gf.add(pic(this, -26, 0, itemIcon(this, 'coin', 20)));
     this.goldText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.gold }).setOrigin(0, 0.5);
     gf.add(this.goldText);
-    const k = new Frame(this, 902, 506, 92, 32, 'dark');
+    const k = new Frame(this, kx, ky, 92, 32, 'dark');
     k.add(pic(this, -26, 0, icon(this, 'skull', 22)));
     this.killText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.ivory }).setOrigin(0, 0.5);
     k.add(this.killText);
@@ -259,24 +303,32 @@ export class HudScene extends Phaser.Scene {
   update(_t: number, dms: number) {
     const dt = Math.min(dms, 50) / 1000;
     const r = this.room;
-    const p = r.player;
-    if (!p) return;
-    this.hp.set(Math.max(0, p.hp), p.maxHp, dt);
-    this.portrait?.step(dms);
+    if (!r.player) return;
+    let hurtNow = false, low = false;
+    for (const u of this.units) {
+      const p = r.heroes[u.who];
+      if (!u || !p) continue;
+      u.hp.set(Math.max(0, p.hp), p.maxHp, dt);
+      u.portrait?.step(dms);
+      if (p.hp < u.lastHp - 0.5) hurtNow = true;
+      if (p.hp > 0 && p.hp / p.maxHp < 0.3) low = true;
+      u.lastHp = p.hp;
+      u.slots.dodge.cooldown(Math.max(0, p.dodgeCd) / 0.55);
+      u.slots.skill.cooldown(Math.max(0, p.skillCd) / p.skill.cooldown, Math.max(0, p.skillCd));
+      u.slots.block.setActive(p.state === 'block');
+      // a fallen hero's corner goes dim
+      const a = p.isDead() ? 0.4 : 1;
+      if (u.objs[0].alpha !== a) { for (const o of u.objs) o.setAlpha(a); u.gearUi?.setAlpha(a); }
+    }
 
     // taking damage flashes the edges red; low health keeps them pulsing
-    if (p.hp < this.lastHp - 0.5) {
+    if (hurtNow) {
       this.tweens.killTweensOf(this.hurt);
       this.hurt.setAlpha(0.55);
       this.tweens.add({ targets: this.hurt, alpha: 0, duration: 450 });
-    } else if (p.hp > 0 && p.hp / p.maxHp < 0.3 && !this.tweens.isTweening(this.hurt)) {
+    } else if (low && !this.tweens.isTweening(this.hurt)) {
       this.hurt.setAlpha(0.18 + 0.16 * Math.sin(this.time.now / 260));
     } else if (!this.tweens.isTweening(this.hurt)) this.hurt.setAlpha(0);
-    this.lastHp = p.hp;
-
-    this.slots.dodge.cooldown(Math.max(0, p.dodgeCd) / 0.55);
-    this.slots.skill.cooldown(Math.max(0, p.skillCd) / p.skill.cooldown, Math.max(0, p.skillCd));
-    this.slots.block.setActive(p.state === 'block');
 
     this.pips.forEach((pip, i) => pip.setTexture(r.gateOpen || i < r.wave - 1 ? 'ui_pip' : i === r.wave - 1 ? 'ui_pip' : 'ui_pip_off')
       .setAlpha(r.gateOpen || i < r.wave - 1 ? 1 : i === r.wave - 1 ? 0.55 + 0.45 * Math.sin(this.time.now / 300) ** 2 : 1));
@@ -298,19 +350,25 @@ export class HudScene extends Phaser.Scene {
   // ---- what you carry: weapon and armor beside the action bar, trinkets above the name ----
 
   // The skill slot shows the carried weapon's skill; the block slot dims without a shield.
-  private refreshSkill() {
-    const st = this.room.stats;
-    this.slots.skill.setIcon(itemIcon(this, `sk_${st.skill}`, SLOT - 6));
-    this.slots.block.setAlpha(WEAPONS[st.kind].block ? 1 : 0.3);
+  private refreshSkill(u: Unit) {
+    const st = this.room.heroes[u.who].stats;
+    u.slots.skill.setIcon(itemIcon(this, `sk_${st.skill}`, SLOT - 6));
+    u.slots.block.setAlpha(WEAPONS[st.kind].block ? 1 : 0.3);
   }
 
+  // Every hero's weapon, armor and trinkets, beside their action bar.
   refreshGear() {
-    this.refreshSkill();
-    this.gearUi?.destroy();
     this.hideTip();
-    const g = this.room.run.gear;
+    for (const u of this.units) if (u) this.refreshUnitGear(u);
+  }
+
+  private refreshUnitGear(u: Unit) {
+    this.refreshSkill(u);
+    u.gearUi?.destroy();
+    const g = gearOf(this.room.run, u.who);
+    const X = (x: number) => this.side(u.who, x);
     const root = this.add.container(0, 0);
-    this.gearUi = root;
+    u.gearUi = root;
     const slot = (x: number, y: number, size: number, it: Item | null, emptyIcon: string) => {
       const c = this.add.container(x, y);
       c.add(this.add.rectangle(0, 0, size - 4, size - 4, 0x050505));
@@ -328,10 +386,11 @@ export class HudScene extends Phaser.Scene {
       return c;
     };
     // a thin divider, then the weapon and the armor
-    root.add(this.add.rectangle(364, 492, 1, 30, 0xb89040, 0.5));
-    slot(388, 492, 40, g.weapon, 'sword');
-    slot(434, 492, 40, g.armor, 'armor');
-    g.trinkets.forEach((t, i) => slot(128 + i * 27, 408, 24, t, t.icon));
+    root.add(this.add.rectangle(X(364), 492, 1, 30, 0xb89040, 0.5));
+    // weapon then armor, left to right on both sides
+    slot(u.who === 0 ? 388 : viewW - 434, 492, 40, g.weapon, 'sword');
+    slot(u.who === 0 ? 434 : viewW - 388, 492, 40, g.armor, 'armor');
+    g.trinkets.forEach((t, i) => slot(X(128 + i * 27), 408, 24, t, t.icon));
   }
 
   private showTip(it: Item, x: number, bottom: number) {
@@ -510,8 +569,8 @@ export class HudScene extends Phaser.Scene {
 
   // ---- events from the room -----------------------------------------------------------------
 
-  used(a: Action) {
-    this.slots[a].flash();
+  used(who: number, a: Action) {
+    this.units[who]?.slots[a].flash();
   }
 
   banner(kind: BannerKind, text: string, sub?: string) {
@@ -657,7 +716,8 @@ export class HudScene extends Phaser.Scene {
       : txt(this, cx, cy - 96, 'YOU HAVE FALLEN', 'title', { fontFamily: FONT.logo, fontSize: '46px', fontStyle: '900', strokeThickness: 7, stroke: '#1a0202', padding: { x: 16, y: 10 } }).setOrigin(0.5);
     gild(title, won ? GOLD_STOPS : RED_STOPS);
     if (title.preFX) { title.preFX.padding = 20; title.preFX.addGlow(won ? 0xffa030 : 0xff2a10, 2, 0, false, 0.1, 10); }
-    const sub = txt(this, cx, cy - 56, won ? `The Lantern Warden falls to ${heroLook().name}, and the dead lie still at last.` : `The Blightwood claims ${heroLook().name}.`, 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
+    const names = this.room.heroes.map((h) => heroLook(h.who).name).join(' and ');
+    const sub = txt(this, cx, cy - 56, won ? `The Lantern Warden falls to ${names}, and the dead lie still at last.` : `The Blightwood claims ${names}.`, 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
     const orn = pic(this, cx, cy - 36, 'ui_ornament');
     root.add([title, sub, orn]);
 
@@ -717,8 +777,9 @@ export class HudScene extends Phaser.Scene {
     const right = code === 'ArrowRight' || code === 'KeyD';
     const ok = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyJ';
     const back = code === 'Escape' || code === 'Backspace';
-    if (this.shop) { this.shop.key(code); return; }
-    if (this.choice) { this.chooseNav(left, right, ok || code === 'KeyE'); return; }
+    const numOk = code === 'Numpad1' || code === 'Numpad0';
+    if (this.shop) { this.shop.key(numOk ? 'KeyE' : code); return; }
+    if (this.choice) { this.chooseNav(left, right, ok || numOk || code === 'KeyE'); return; }
     if (this.end) {
       if (code === 'KeyR') this.restartRun();
       else if (code === 'Escape') this.toMenu();
@@ -739,8 +800,13 @@ export class HudScene extends Phaser.Scene {
   }
 
   private pollPad() {
-    const pad = this.input.gamepad?.pad1;
-    if (!pad) return;
+    for (const pad of this.input.gamepad?.getAll() ?? []) this.pollOnePad(pad);
+  }
+
+  private padPrevs = new Map<number, boolean[]>();
+
+  private pollOnePad(pad: Phaser.Input.Gamepad.Gamepad) {
+    this.padPrev = this.padPrevs.get(pad.index) ?? [];
     const b = (i: number) => !!pad.buttons[i]?.pressed;
     const hit = (i: number) => b(i) && !this.padPrev[i];
     const sy = pad.leftStick.y, sx = pad.leftStick.x;
@@ -755,5 +821,6 @@ export class HudScene extends Phaser.Scene {
     else if (hit(9)) this.openPause();
     this.padPrev = pad.buttons.map((x) => x.pressed);
     this.padPrev[99] = sy < -0.5; this.padPrev[98] = sy > 0.5; this.padPrev[97] = sx < -0.5; this.padPrev[96] = sx > 0.5;
+    this.padPrevs.set(pad.index, this.padPrev);
   }
 }

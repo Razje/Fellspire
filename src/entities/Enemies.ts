@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Fighter } from './Fighter';
 import type { CharKey } from '../config';
 import type { RoomScene } from '../scenes/RoomScene';
+import type { Player } from './Player';
 
 export abstract class Enemy extends Fighter {
   protected attackCd: number;
@@ -25,8 +26,12 @@ export abstract class Enemy extends Fighter {
     this.facing = x < scene.player.x ? 1 : -1;
   }
 
-  protected get player() {
-    return this.scene.player;
+  private hunted: Player | null = null;
+
+  // The hero this enemy is after: the nearest living one, kept until another is
+  // clearly closer (RoomScene.nearestHero). Chosen once a frame in update.
+  protected get player(): Player {
+    return this.hunted ?? this.scene.player;
   }
 
   takeHit(dmg: number, fromX: number, knock: number, heavy: boolean): number {
@@ -73,6 +78,7 @@ export abstract class Enemy extends Fighter {
       this.tintColor = this.slowT > 0 ? 0x9fd0ff : this.baseTint;
     }
     let moving = false;
+    this.hunted = this.scene.nearestHero(this.x, this.y, this.hunted);
     if (!this.isDead()) {
       if (this.state === 'hurt') {
         if (this.stateT >= 0) { this.state = 'idle'; this.stateT = 0; }
@@ -180,7 +186,7 @@ export class Ghoul extends Enemy {
           g.clear();
           this.state = 'attack';
           this.stateT = 0;
-          this.scene.resolveMelee(this, { dmg: 10, range: 56, depth: 18, knock: 160 }, [p]);
+          this.scene.resolveMelee(this, { dmg: 10, range: 56, depth: 18, knock: 160 }, this.scene.livingHeroes);
         }
         return false;
       }

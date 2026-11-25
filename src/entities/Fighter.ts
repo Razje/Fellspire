@@ -186,6 +186,12 @@ export abstract class Fighter {
     this.scene.pushOut(this);
   }
 
+  // Moves the picture to where the body now is, after something outside the
+  // character's own update moved it (the co-op leash).
+  syncPosition() {
+    this.sync(0, this.state === 'move');
+  }
+
   protected sync(dt: number, moving = false) {
     if (this.rig) { this.syncRig(dt); return; }
     let bob = 0;

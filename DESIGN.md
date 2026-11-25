@@ -256,11 +256,23 @@ studied for its card and end-screen ideas only; none of its art is used.
    keyboard + controller, two controllers and two on one keyboard all work. In a slot
    the player's own keys work it: light attack Ready, skill Change hero, heavy Leave.
    Player 2's first join opens character creation for them (a random look to start
-   from), saved apart from player 1's. Both ready: into the camp. Until 9.3 the room
-   still holds only player 1's hero, driven by player 1's device.
-   9.3 Two heroes in a room: the camera keeps both in view and they cannot walk apart
-   off screen; enemies and the Warden go for the nearest living hero; each hero has
-   their own weapon, skill and gear; a second unit frame and action bar on the right.
+   from), saved apart from player 1's. Both ready: into the camp.
+   9.3 **built** two heroes in a room (2026-11-25): player 2 stands beside player 1 in
+   their own look, on the device they joined with. The camera follows the middle of
+   the living heroes, and a leash keeps them at most 820 px apart side to side (whoever
+   walks away is held back, the other is not dragged). Ghouls, bone throwers and the
+   Warden go for the nearest living hero, switching only when the other is clearly
+   nearer; a claw, a bone, the Warden's slam, sweep and rush and the darkness hurt
+   whichever hero they reach. Each hero carries their own weapon, armor, trinkets and
+   skill (`run.gear` and `run.gear2`), and their gear's bonuses apply to their own
+   blows; the rack remembers each player's weapon (`fellspire.weapon2`). Until 9.5
+   whoever presses interact at a chest or the rack chooses; gold is one purse and
+   coins fly to the nearer hero. Player 2's unit frame and action bar sit bottom right,
+   mirrored, with their own keys (N1..N5 on the numpad, X Y LB A RB on a controller);
+   gold and kills move under the objective in co-op. Until 9.4: a fallen hero's frame
+   dims and they stay down for the room, out of the leash, while the other fights on;
+   either hero at the gate takes both through, and the fallen one gets back up with
+   30% of their health. The run ends when both are down.
    9.4 Going down: a fallen hero leaves a soul; the other holds interact beside it for
    about three seconds to revive her at part health. The run ends when both are down.
    9.5 Camp and loot: each hero has a turn at the weapon rack, gold is one shared

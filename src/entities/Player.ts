@@ -5,7 +5,9 @@ import { SKILLS, WEAPONS, type Move } from '../weapons';
 import { startSkill } from '../skills';
 import { armRig } from '../rig/weapons';
 import { CHARACTERS } from '../config';
-import { heroRig } from '../hero';
+import { heroLook, heroRig, type Who } from '../hero';
+import { gearStats, type GearStats } from '../loot';
+import { gearOf } from '../run';
 
 const DODGE_CD = 0.55;
 
@@ -37,11 +39,17 @@ export class Player extends Fighter {
   ammo = 0; // rounds left in a weapon with a magazine
   reloadT = 0; // seconds until the reload is done
 
-  constructor(scene: RoomScene, x: number, y: number, device: Device = { kind: 'solo' }) {
-    super(scene, 'hero', x, y, 100 + scene.stats.fx.maxHp);
+  stats: GearStats; // what this hero's own gear adds up to
+  secondWindUsed = false; // the armor's second wind, once a room
+
+  // who: player 1 (0) or player 2 (1) in co-op; each carries their own gear
+  constructor(scene: RoomScene, x: number, y: number, device: Device = { kind: 'solo' }, readonly who: Who = 0) {
+    const stats = gearStats(gearOf(scene.run, who));
+    super(scene, 'hero', x, y, 100 + stats.fx.maxHp);
+    this.stats = stats;
     // drawn from parts when they are there: the frames' 900-pixel canvas maps to the
     // configured height, so the two are the same size
-    const rig = heroRig(scene, x, y, CHARACTERS.hero.height / 900);
+    const rig = heroRig(scene, x, y, CHARACTERS.hero.height / 900, heroLook(who));
     if (rig) {
       this.rig = rig;
       this.sprite.setVisible(false);
@@ -57,16 +65,16 @@ export class Player extends Fighter {
   }
 
   private get kit() {
-    return WEAPONS[this.scene.stats.kind];
+    return WEAPONS[this.stats.kind];
   }
 
   get skill() {
-    return SKILLS[this.scene.stats.skill];
+    return SKILLS[this.stats.skill];
   }
 
   // Puts the carried weapon in the hero's hand (the drawn hero only).
   arm() {
-    if (this.rig) armRig(this.rig, this.scene.stats.kind);
+    if (this.rig) armRig(this.rig, this.stats.kind);
     this.refill();
   }
 
@@ -87,7 +95,7 @@ export class Player extends Fighter {
   }
 
   get dodgeCdMax() {
-    return DODGE_CD * (1 - this.scene.stats.fx.dodgeCd);
+    return DODGE_CD * (1 - this.stats.fx.dodgeCd);
   }
 
   private readInput(): Input {
@@ -220,7 +228,7 @@ export class Player extends Fighter {
   }
 
   private startLight() {
-    this.scene.onPlayerAction('light');
+    this.scene.onPlayerAction(this, 'light');
     const light = this.kit.light;
     const m = light[this.combo % light.length];
     this.combo = (this.combo + 1) % light.length;
@@ -231,7 +239,7 @@ export class Player extends Fighter {
   // A dash cuts whatever it passes, each foe once, without stopping the dash.
   private sweepCut(m: Move) {
     const s = this.scene;
-    s.strike(this, true, { ...m, quiet: true }, s.enemies, (x, y) => s.inReach(this, x, y, m), { once: this.swept });
+    s.strike(this, this, { ...m, quiet: true }, s.enemies, (x, y) => s.inReach(this, x, y, m), { once: this.swept });
   }
 
   private startMove(m: Move) {
@@ -244,7 +252,7 @@ export class Player extends Fighter {
     this.state = 'attack';
     this.stateT = 0;
     this.playAnim(m.anim, { duration: m.dur * 1000, force: true });
-    if (m === this.kit.heavy) this.scene.onPlayerAction('heavy');
+    if (m === this.kit.heavy) this.scene.onPlayerAction(this, 'heavy');
   }
 
   private startSkill() {
@@ -253,8 +261,8 @@ export class Player extends Fighter {
     this.stateT = 0;
     this.move = null;
     this.combo = 0;
-    this.skillLock = startSkill(this.scene.stats.skill, this.scene, this);
-    this.scene.onPlayerAction('skill');
+    this.skillLock = startSkill(this.stats.skill, this.scene, this);
+    this.scene.onPlayerAction(this, 'skill');
   }
 
   private startDodge(inp: Input) {
@@ -268,20 +276,20 @@ export class Player extends Fighter {
     this.move = null;
     this.combo = 0;
     this.playAnim('dodge', { duration: DODGE_TIME * 1000, force: true });
-    this.scene.onPlayerAction('dodge');
+    this.scene.onPlayerAction(this, 'dodge');
     this.scene.dust(this.x, this.y, 3);
   }
 
   takeHit(dmg: number, fromX: number, knock: number, heavy: boolean): number {
     if (this.isDead() || this.invuln > 0 || this.state === 'dodge') return -1;
     const fromFront = Math.sign(fromX - this.x) === this.facing;
-    const armor = this.scene.stats.fx.armor;
+    const armor = this.stats.fx.armor;
     if (this.state === 'block' && fromFront) {
       this.scene.blockSpark(this.x + this.facing * 18, this.y - this.visualHeight * 0.5);
       return this.applyDamage(Math.round(dmg * 0.2 * (1 - armor)), fromX, knock * 0.4, 0);
     }
     const d = this.applyDamage(Math.max(1, Math.round(dmg * (1 - armor))), fromX, knock, heavy ? 0.4 : 0.22);
-    this.scene.afterPlayerHurt();
+    this.scene.afterPlayerHurt(this);
     this.invuln = 0.5;
     this.move = null;
     this.combo = 0;

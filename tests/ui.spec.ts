@@ -105,8 +105,7 @@ test('HUD, pause menu and end screen', async ({ page }, info) => {
   await page.evaluate(() => {
     const s = (window as any).game.scene.getScene('room');
     s.run.damage = 432; s.run.kills = 7;
-    s.player.takeHit(999, s.player.x + 10, 0, false);
-    s.onPlayerDied();
+    s.player.takeHit(999, s.player.x + 10, 0, false); // the room sees her fall on its next frame
   });
   await page.waitForTimeout(4200);
   await shot(page, info, '8-end-screen');
