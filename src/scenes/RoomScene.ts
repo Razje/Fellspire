@@ -13,7 +13,8 @@ import type { Action, HudScene } from './HudScene';
 import { gearOf, newRun, type Run } from '../run';
 import { newGear } from '../loot';
 import { heroLook } from '../hero';
-import { getParty } from '../input';
+import { getParty, keyLabels } from '../input';
+import { REVIVE, Soul } from '../revive';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
 import { hi, keycap } from '../ui/kit';
 import { Shots } from '../shots';
@@ -69,6 +70,7 @@ const REJOIN = 0.3;
 export class RoomScene extends Phaser.Scene {
   heroes: Player[] = []; // one in solo, two in co-op
   private fallen = new Set<Player>(); // heroes already counted as down
+  souls: Soul[] = []; // a fallen hero's, while the other can still revive her
   private focus = { x: 0, y: 0 }; // what the camera follows: between the living heroes
   private striker: Player | null = null; // whose blow is being dealt (for kill effects)
   enemies: Enemy[] = [];
@@ -118,6 +120,7 @@ export class RoomScene extends Phaser.Scene {
     this.startHp = data.hps ?? [data.hp];
     this.heroes = [];
     this.fallen = new Set();
+    this.souls = [];
     this.striker = null;
     this.run = data.run ? { ...data.run } : newRun();
     // the camp hands out the weapon each player chose at its rack last time
@@ -322,9 +325,52 @@ export class RoomScene extends Phaser.Scene {
     for (const h of this.heroes) {
       if (!h.isDead() || this.fallen.has(h)) continue;
       this.fallen.add(h);
-      if (this.livingHeroes.length === 0) this.hud?.showDeath(this.run);
-      else this.hud?.banner('warn', `${heroLook(h.who).name} has fallen`, 'Fight on: back on their feet in the next room');
+      if (this.livingHeroes.length === 0) {
+        this.hud?.showDeath(this.run);
+        continue;
+      }
+      // she leaves a soul; the other holds interact by it to bring her back
+      this.souls.push(new Soul(this, h, (share, by) => this.raise(h, share, by)));
+      const other = this.livingHeroes[0];
+      const key = keyLabels(getParty()[other.who] ?? { kind: 'solo' }).interact;
+      this.hud?.banner('warn', `${heroLook(h.who).name} has fallen`, `${heroLook(other.who).name}: hold ${key} by her soul to revive her`);
     }
+  }
+
+  // Is this hero standing by a fallen hero's soul (and so rooted while holding interact)?
+  byASoul(p: Player) {
+    return this.souls.some((s) => s.near(p));
+  }
+
+  private updateSouls(dt: number) {
+    if (!this.livingHeroes.length) return;
+    for (const s of [...this.souls]) s.update(dt, this.heroes);
+  }
+
+  // A fallen hero gets back up, with share of her health: a burst of light where
+  // her soul was, a moment untouchable, her corner of the HUD lit again.
+  raise(h: Player, share: number, by?: Player) {
+    const soul = this.souls.find((s) => s.hero === h);
+    if (soul) { soul.destroy(); this.souls = this.souls.filter((s) => s !== soul); }
+    if (!h.isDead()) return;
+    h.hp = Math.max(1, Math.round(h.maxHp * share));
+    h.state = 'idle';
+    h.stateT = 0;
+    h.invuln = REVIVE.invuln;
+    h.dim = 1;
+    h.playAnim('idle', { loop: true, force: true });
+    this.fallen.delete(h);
+    const burst = this.add.particles(h.x, h.y - 40, 'tt_dot', {
+      speed: { min: 50, max: 170 }, lifespan: { min: 400, max: 900 },
+      scale: { start: 0.3, end: 0 }, tint: [0xa8f0ff, 0xffffff, 0xffe08a], blendMode: 'ADD', emitting: false,
+    }).setDepth(h.y + 20);
+    burst.explode(36);
+    this.time.delayedCall(1000, () => burst.destroy());
+    const flash = this.add.image(h.x, h.y - 30, 'tt_light').setTint(0xa8f0ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(h.y + 19).setScale(0.3).setAlpha(0.95);
+    this.tweens.add({ targets: flash, scale: 1.3, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
+    const strong = share >= REVIVE.sweetHp;
+    const name = heroLook(h.who).name;
+    this.hud?.banner('good', strong ? `${name} rises, strong` : `${name} is back on her feet`, by ? `Revived by ${heroLook(by.who).name}` : undefined);
   }
 
   update(_time: number, deltaMs: number) {
@@ -349,6 +395,7 @@ export class RoomScene extends Phaser.Scene {
     this.effects = this.effects.filter((f) => f(dt));
     this.updateChest();
     this.updateCamp();
+    this.updateSouls(dt);
     for (const e of this.enemies) e.update(dt);
     this.separate();
     this.updateProjectiles(dt);

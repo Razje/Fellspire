@@ -36,6 +36,7 @@ export class Player extends Fighter {
   private vy = 0;
   private dustT = 0;
   interact = false; // E pressed this frame (open a chest)
+  interactHeld = false; // E held down (reviving a fallen hero)
   ammo = 0; // rounds left in a weapon with a magazine
   reloadT = 0; // seconds until the reload is done
 
@@ -115,6 +116,7 @@ export class Player extends Fighter {
     }
     const inp = this.readInput();
     this.interact = inp.interact;
+    this.interactHeld = inp.interactHeld;
     this.dodgeCd -= dt;
     this.skillCd -= dt;
     if (this.reloadT > 0) {
@@ -133,6 +135,9 @@ export class Player extends Fighter {
         if ((inp.light || inp.lightHeld) && this.canLight) { this.aim(inp); this.startLight(); break; }
         if (inp.heavy || inp.heavyHeld) { this.aim(inp); this.startMove(this.kit.heavy); break; }
         if (inp.skill && this.skillCd <= 0) { this.aim(inp); this.startSkill(); break; }
+        // holding interact by a fallen hero's soul roots her to the spot (an attack, a
+        // dodge or a skill above breaks it off)
+        if (inp.interactHeld && this.scene.byASoul(this)) { inp.mx = inp.my = 0; inp.block = false; }
         const blocking = inp.block;
         if (inp.mx !== 0 && !blocking) this.facing = Math.sign(inp.mx);
         // ease towards the wanted velocity: quick, but not instant

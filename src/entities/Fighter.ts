@@ -23,6 +23,7 @@ export abstract class Fighter {
   removed = false;
   protected fading = false;
   appear = 1; // 0..1, rises to 1: lets a newcomer fade in
+  dim = 1; // 0..1, a fallen hero's body fades while her soul waits
   lift = 0; // pixels above the floor (a leap); the shadow stays on the floor
   protected knockVx = 0;
   protected flashT = 0;
@@ -164,7 +165,7 @@ export abstract class Fighter {
       r.flash(true);
     } else r.tintAll(this.tintColor ?? this.scene.lightAt(this.x, this.y));
     this.appear = Math.min(1, this.appear + dt * 2.5);
-    if (!this.fading) r.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear);
+    if (!this.fading) r.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear * this.dim);
   }
 
   // Knockback, timers and staying on the ground strip.
@@ -214,6 +215,6 @@ export abstract class Fighter {
     }
     // Blink while invulnerable after a hit (not during a dodge, which is obvious).
     this.appear = Math.min(1, this.appear + dt * 2.5);
-    if (!this.fading) this.sprite.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear);
+    if (!this.fading) this.sprite.setAlpha((this.invuln > 0 && this.state !== 'dodge' && Math.floor(this.invuln * 20) % 2 === 0 ? 0.45 : 1) * this.appear * this.dim);
   }
 }

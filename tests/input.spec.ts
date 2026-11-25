@@ -48,14 +48,14 @@ test('each keyboard layout drives its own actions', async ({ page }) => {
   // one player: WASD or arrows, L dodges, Shift blocks, Space does nothing in a fight
   expect(r.solo).toEqual({
     W: 'my-1', UP: 'my-1', J: 'light lightHeld', K: 'heavy heavyHeld', I: 'skill',
-    L: 'dodge', SHIFT: 'block', E: 'interact', SPACE: 'not listened to',
+    L: 'dodge', SHIFT: 'block', E: 'interact interactHeld', SPACE: 'not listened to',
   });
   // two on one keyboard: the left side leaves the arrows and numpad alone...
   expect(r.left).toEqual({ D: 'mx1', UP: 'not listened to', L: 'dodge', SHIFT: 'block', NUMPAD_ONE: 'not listened to' });
   // ...and the right side has arrows and numpad 1-5 and 0, and none of the letters
   expect(r.right).toEqual({
     RIGHT: 'mx1', UP: 'my-1', NUMPAD_ONE: 'light lightHeld', NUMPAD_TWO: 'heavy heavyHeld', NUMPAD_THREE: 'dodge',
-    NUMPAD_FOUR: 'skill', NUMPAD_FIVE: 'block', NUMPAD_ZERO: 'interact', J: 'not listened to', L: 'not listened to',
+    NUMPAD_FOUR: 'skill', NUMPAD_FIVE: 'block', NUMPAD_ZERO: 'interact interactHeld', J: 'not listened to', L: 'not listened to',
   });
   expect(errors).toEqual([]);
 });

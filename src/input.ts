@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 
 // What a hero wants to do this frame, whatever device it came from.
 // light/heavy: pressed this frame; lightHeld/heavyHeld: held down (repeats the attack)
-export interface Input { mx: number; my: number; light: boolean; heavy: boolean; lightHeld: boolean; heavyHeld: boolean; skill: boolean; dodge: boolean; block: boolean; interact: boolean }
+export interface Input { mx: number; my: number; light: boolean; heavy: boolean; lightHeld: boolean; heavyHeld: boolean; skill: boolean; dodge: boolean; block: boolean; interact: boolean; interactHeld: boolean }
 
-export const NO_INPUT: Input = { mx: 0, my: 0, light: false, heavy: false, lightHeld: false, heavyHeld: false, skill: false, dodge: false, block: false, interact: false };
+export const NO_INPUT: Input = { mx: 0, my: 0, light: false, heavy: false, lightHeld: false, heavyHeld: false, skill: false, dodge: false, block: false, interact: false, interactHeld: false };
 
 // Which device drives a hero.
 //   solo   the whole keyboard (WASD or the arrows) plus the first controller, as one player
@@ -136,7 +136,7 @@ export class Controls {
       inp.light = jd('light'); inp.heavy = jd('heavy');
       inp.lightHeld = down('light'); inp.heavyHeld = down('heavy');
       inp.skill = jd('skill'); inp.dodge = jd('dodge');
-      inp.block = down('block'); inp.interact = jd('interact');
+      inp.block = down('block'); inp.interact = jd('interact'); inp.interactHeld = down('interact');
       this.taps.clear();
     }
     const pad = this.pad;
@@ -155,6 +155,7 @@ export class Controls {
       inp.dodge ||= pressed(PAD.dodge);
       inp.block ||= b(PAD.block);
       inp.interact ||= pressed(PAD.interact);
+      inp.interactHeld ||= b(PAD.interact);
       this.padPrev = pad.buttons.map((x) => x.pressed);
     }
     return inp;
