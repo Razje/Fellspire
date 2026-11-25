@@ -7,12 +7,13 @@ export interface Run {
   damage: number; // dealt
   time: number; // seconds
   gold: number; // one purse, shared in co-op
+  embers: number; // earned this run (already banked: see embers.ts)
   gear: Gear; // player 1's
   gear2?: Gear; // player 2's, in co-op
 }
 
 export function newRun(): Run {
-  return { rooms: 0, kills: 0, damage: 0, time: 0, gold: 0, gear: newGear() };
+  return { rooms: 0, kills: 0, damage: 0, time: 0, gold: 0, embers: 0, gear: newGear() };
 }
 
 // What a hero carries: player 1 (who 0) or player 2 (who 1).

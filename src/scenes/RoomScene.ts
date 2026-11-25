@@ -11,6 +11,7 @@ import { canvas, makeTitleTextures } from '../titleArt';
 import { settings } from '../settings';
 import type { Action, HudScene } from './HudScene';
 import { gearOf, newRun, type Run } from '../run';
+import { EMBERS, earnEmbers } from '../embers';
 import { newGear } from '../loot';
 import { heroLook } from '../hero';
 import { getParty, keyLabels } from '../input';
@@ -556,6 +557,7 @@ export class RoomScene extends Phaser.Scene {
   onEnemyDied(e: Enemy) {
     this.slain++;
     this.run.kills++;
+    this.earn(EMBERS.kill);
     this.spawnCoins(e.x, e.y, e.key === 'ghoul' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(3, 5));
     // life on kill heals whoever dealt the blow (the nearest hero, if no one's blow did it)
     const by = this.striker ?? (this.livingHeroes.length ? this.nearestHero(e.x, e.y) : null);
@@ -638,6 +640,7 @@ export class RoomScene extends Phaser.Scene {
       this.world.openExit();
       this.hud?.banner('good', 'Room Cleared', 'The chest is unsealed');
       this.unlockChest();
+      this.earn(EMBERS.room);
     }
   }
 
@@ -1258,6 +1261,7 @@ export class RoomScene extends Phaser.Scene {
     this.run.rooms++;
     this.run.kills++;
     this.run.gold += 60; // his hoard, counted at once so the victory screen has it
+    this.earn(EMBERS.boss);
     this.spawnCoins(b.x, b.y, 24, 0);
     // the killing blow in slow motion, then the light comes back
     this.slow = { k: 0.25, left: 1.6 };
@@ -1309,6 +1313,12 @@ export class RoomScene extends Phaser.Scene {
     this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, x: x + drift, y: y - (kind === 'heavy' ? 46 : 36), duration: 900, delay: 120, ease: 'Sine.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, duration: 350, delay: kind === 'heavy' ? 760 : 620, onComplete: () => t.destroy() });
+  }
+
+  // Embers for a deed: banked at once, and the HUD's counter glows.
+  earn(n: number) {
+    earnEmbers(this.run, n);
+    this.hud?.emberPulse(n);
   }
 
   // A word over someone's head that rises and fades ("Reload").

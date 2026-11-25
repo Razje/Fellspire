@@ -19,6 +19,7 @@ import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
 import { WeaponShop } from '../ui/armory';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
+import { embers } from '../embers';
 import { Rig } from '../rig/Rig';
 import { heroLook, heroRig, type Who } from '../hero';
 import { getParty, keyLabels, menuKey, menuLabels, menuPad, type Device } from '../input';
@@ -27,6 +28,8 @@ import type { Player } from '../entities/Player';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
+
+const EMBER = '#ffa040'; // the colour of ember counts
 
 export type RunStats = Run;
 export type BannerKind = 'zone' | 'warn' | 'good';
@@ -136,6 +139,7 @@ export class HudScene extends Phaser.Scene {
   private gateShown = false;
   private bossBar?: { root: Phaser.GameObjects.Container; bar: Bar; exposed: Phaser.GameObjects.Text };
   private goldText!: Phaser.GameObjects.Text;
+  private emberText!: Phaser.GameObjects.Text; // the bank, not just this run
   private tip?: Phaser.GameObjects.Container;
   private choice?: { sides: ChoiceSide[]; root: Phaser.GameObjects.Container };
   shop?: WeaponShop; // the camp's weapon rack, while it is open
@@ -299,6 +303,13 @@ export class HudScene extends Phaser.Scene {
     k.add(pic(this, -26, 0, icon(this, 'skull', 22)));
     this.killText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.ivory }).setOrigin(0, 0.5);
     k.add(this.killText);
+
+    // embers: everything banked, kept between runs; above gold, or left of it in co-op
+    const [ex, ey] = this.coop ? [R + 698, 146] : [R + 902, 430];
+    const ef = new Frame(this, ex, ey, 92, 32, 'dark');
+    ef.add(pic(this, -26, 0, itemIcon(this, 'ember', 22)));
+    this.emberText = txt(this, 6, 0, String(embers()), 'head', { fontSize: '16px', color: EMBER }).setOrigin(0, 0.5);
+    ef.add(this.emberText);
   }
 
   private buildHints() {
@@ -359,6 +370,7 @@ export class HudScene extends Phaser.Scene {
     }
     this.killText.setText(String(r.run.kills));
     this.goldText.setText(String(r.run.gold));
+    this.emberText.setText(String(embers()));
 
     this.pollPad();
   }
@@ -421,6 +433,21 @@ export class HudScene extends Phaser.Scene {
   private hideTip() {
     this.tip?.destroy();
     this.tip = undefined;
+  }
+
+  // Embers earned: the counter swells, and a bigger gift rises from it as "+n".
+  emberPulse(n: number) {
+    const t = this.emberText;
+    if (!t) return;
+    t.setText(String(embers()));
+    this.tweens.killTweensOf(t);
+    t.setScale(n > 1 ? 1.45 : 1.25);
+    this.tweens.add({ targets: t, scale: 1, duration: n > 1 ? 320 : 180, ease: 'Back.easeOut' });
+    if (n > 1) {
+      const m = t.getWorldTransformMatrix();
+      const up = txt(this, m.tx + 4, m.ty - 18, `+${n}`, 'head', { fontSize: '15px', color: EMBER, strokeThickness: 4 }).setOrigin(0, 0.5).setDepth(50);
+      this.tweens.add({ targets: up, y: up.y - 22, alpha: 0, duration: 1400, delay: 300, ease: 'Sine.easeOut', onComplete: () => up.destroy() });
+    }
   }
 
   goldPulse() {
@@ -787,6 +814,7 @@ export class HudScene extends Phaser.Scene {
       ['Rooms cleared', run.rooms, (v) => String(Math.round(v))],
       ['Dead slain', run.kills, (v) => String(Math.round(v))],
       ['Gold', run.gold, (v) => String(Math.round(v))],
+      ['Embers kept', run.embers ?? 0, (v) => `+${Math.round(v)}`],
       ['Damage dealt', run.damage, (v) => Math.round(v).toLocaleString('en-US')],
       ['Time', run.time, (v) => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`],
     ];

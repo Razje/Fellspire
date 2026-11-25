@@ -359,6 +359,22 @@ function drawItemIcon(c: Ctx, name: string, s: number) {
       disc(s * 0.42, s * 0.42, s * 0.06, 'rgba(255,255,255,0.95)');
       break;
     }
+    case 'ember': {
+      // a small flame: dark outline, a red-orange body, a yellow-white heart
+      const flame = (k: number, fill: string | CanvasGradient) => {
+        const cx = s * 0.5, base = s * 0.9;
+        c.fillStyle = fill; c.beginPath();
+        c.moveTo(cx, base - s * 0.86 * k);
+        c.bezierCurveTo(cx + s * 0.1 * k, base - s * 0.6 * k, cx + s * 0.36 * k, base - s * 0.48 * k, cx + s * 0.32 * k, base - s * 0.24 * k);
+        c.bezierCurveTo(cx + s * 0.3 * k, base - s * 0.02 * k, cx - s * 0.3 * k, base - s * 0.02 * k, cx - s * 0.32 * k, base - s * 0.24 * k);
+        c.bezierCurveTo(cx - s * 0.34 * k, base - s * 0.44 * k, cx - s * 0.12 * k, base - s * 0.5 * k, cx, base - s * 0.86 * k);
+        c.closePath(); c.fill();
+      };
+      flame(1.08, '#1a0602');
+      flame(0.96, vg(c, s * 0.08, s * 0.9, [[0, '#ffd060'], [0.5, '#ff7a1a'], [1, '#b02a08']]));
+      flame(0.55, vg(c, s * 0.4, s * 0.9, [[0, '#fff6c0'], [1, '#ffc040']]));
+      break;
+    }
     case 'coin': {
       disc(s * 0.5, s * 0.5, s * 0.42, '#3a2204');
       disc(s * 0.5, s * 0.5, s * 0.36, vg(c, s * 0.14, s * 0.86, [[0, '#fff3b0'], [0.5, '#f0b030'], [1, '#b06a10']]));

@@ -293,7 +293,22 @@ studied for its card and end-screen ideas only; none of its art is used.
    was already one purse (9.3). After Martijn played it: the gate takes the party
    through only when every living hero stands in it, and says "Waiting for <name>"
    over the gate until then; a fallen hero does not hold it up.
-10. Hub camp with embers between runs.
+10. **in progress** Hub camp with embers between runs, in parts (planned 2026-11-25):
+   10.1 **built** earning and keeping embers (2026-11-25): 1 for every foe laid to
+   rest (the Warden's ghouls too), 5 for a cleared room, 40 for the Warden (numbers
+   in `EMBERS`, `src/embers.ts`). They go into the bank the moment they are earned and
+   are kept in the browser (`fellspire.embers`), so dying, giving up or closing the
+   game keeps them; gold is still lost. One bank for the party in co-op. The HUD shows
+   the bank with a flame icon above gold (beside it in co-op), swelling on each ember
+   and showing "+5" or "+40" for a room or the Warden; the end screen counts "Embers
+   kept" for the run.
+   10.2 The ember shrine at camp: a station by the fire, E opens a panel in the rack's
+   style with an upgrade tree of three branches, rising costs. Might: more health,
+   more damage. Grace: shorter skill cooldown, longer untouchable dodge. Fortune: more
+   gold, a fourth card at chests, Second Wind (up again once per run when you fall).
+   10.3 The upgrades take effect in runs, each one data feeding into the gear
+   bonuses, with tests; costs balanced after Martijn plays it.
+   Later perhaps 10.4: a keeper of run records.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away
 with `?boss` on the address (http://127.0.0.1:5180/?boss).

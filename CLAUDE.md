@@ -123,7 +123,8 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/blightwood.ts` | The fight room: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), the rune-ring exit, foreground framing |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
 | `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
-| `src/run.ts` | One run's state carried between rooms: stats, gold (one shared purse), player 1's `gear` and player 2's `gear2`; `gearOf(run, who)` |
+| `src/run.ts` | One run's state carried between rooms: stats, gold (one shared purse), embers earned this run, player 1's `gear` and player 2's `gear2`; `gearOf(run, who)` |
+| `src/embers.ts` | Embers, kept between runs: what each deed gives (`EMBERS`), the bank in the browser (`fellspire.embers`, one for the party), `earnEmbers` (banks at once; `RoomScene.earn` also pulses the HUD) and `spendEmbers` for the shrine |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
