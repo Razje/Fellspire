@@ -1082,12 +1082,30 @@ export class RoomScene extends Phaser.Scene {
     return !!this.camp && !p.isDead() && Math.hypot(p.x - r.x, (p.y - r.y) * 1.6) < 80;
   }
 
+  private shrineNear(p: Player) {
+    const r = CAMP.shrine;
+    return !!this.camp && !p.isDead() && Math.hypot(p.x - r.x, (p.y - r.y) * 1.6) < 80;
+  }
+
   private updateCamp() {
     if (!this.camp) return;
     const near = this.heroes.filter((h) => this.rackNear(h));
-    this.camp.update(near.length > 0);
+    const nearShrine = this.heroes.filter((h) => this.shrineNear(h));
+    this.camp.update(near.length > 0, nearShrine.length > 0);
     const by = near.find((h) => h.interact);
-    if (by) this.openRack(by);
+    if (by) { this.openRack(by); return; }
+    const at = nearShrine.find((h) => h.interact);
+    if (at) this.openShrine(at);
+  }
+
+  // The ember shrine opens over the paused camp (HudScene.openShrine); what is
+  // learned there is kept by shrine.ts, so closing it is all the room has to do.
+  openShrine(by: Player = this.player) {
+    const hud = this.hud;
+    if (!hud || !this.camp || hud.choosing) return;
+    this.scene.pause();
+    hud.openShrine(() => this.scene.resume(),
+      this.heroes.length > 1 ? { name: heroLook(by.who).name, device: getParty()[by.who] } : undefined);
   }
 
   // The rack opens as a store over the paused camp (HudScene.openRack); the pick

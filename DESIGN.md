@@ -302,12 +302,27 @@ studied for its card and end-screen ideas only; none of its art is used.
    the bank with a flame icon above gold (beside it in co-op), swelling on each ember
    and showing "+5" or "+40" for a room or the Warden; the end screen counts "Embers
    kept" for the run.
-   10.2 The ember shrine at camp: a station by the fire, E opens a panel in the rack's
-   style with an upgrade tree of three branches, rising costs. Might: more health,
-   more damage. Grace: shorter skill cooldown, longer untouchable dodge. Fortune: more
-   gold, a fourth card at chests, Second Wind (up again once per run when you fall).
-   10.3 The upgrades take effect in runs, each one data feeding into the gear
-   bonuses, with tests; costs balanced after Martijn plays it.
+   10.2 **built** the ember shrine (2026-11-26): a stone altar with a bowl of embers
+   between the fire and the gate; E opens a panel in the rack's style. After Lost Castle
+   2's camp upgrades it is a branching tree, chosen over three short ladders on
+   2026-11-26: 18 upgrades in three branches, each opening once the one above it has a
+   rank, with rising costs (10 at the top of a branch, up to 90). Might: Vigour (health)
+   splits into Edge (damage) and Bulwark (armour), then Keen Strikes (crit) and
+   Executioner, Thornhide and Bloodthirst (life on kill). Grace: Focus (skill cooldown)
+   splits into Fleetfoot (longer untouchable dodge) and Swift Step (dodge cooldown),
+   then Kindling (burn), Rime (frost), and Storm Touch under either. Fortune: Greed
+   (gold) splits into Keen Eye (a fourth card at chests) and Packed Bags (gold at the
+   start of a run), then Lucky Charm (health orbs) and Undying (get up once per run
+   from a fall, the plan's "Second Wind", renamed because a gear effect already has
+   that name). The tree is data (`SHRINE` in `src/shrine.ts`), what is learned is kept
+   in the browser (`fellspire.shrine`), one tree for the party. The panel shows the
+   bank and a card for the selected upgrade (now, next rank, cost, what stands in the
+   way). Learned upgrades do nothing in a run yet: that is 10.3. Upgrades for systems
+   the game lacks (potions, pets, rarer chests) are left for when those exist.
+   10.3 The upgrades take effect in runs: most add to the gear effects that already
+   exist (`shrineBonus()` sums them; fold it into `gearStats`), and five need a small
+   rule of their own: skill cooldown, dodge length, more gold, start gold, the fourth
+   chest card and Undying. Tests with it; costs balanced after Martijn plays it.
    Later perhaps 10.4: a keeper of run records.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away

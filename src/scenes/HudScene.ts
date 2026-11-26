@@ -20,6 +20,7 @@ import { WeaponShop } from '../ui/armory';
 import { RARITY, type Gear, type Item } from '../loot';
 import type { Run } from '../run';
 import { embers } from '../embers';
+import { ShrinePanel } from '../ui/shrine';
 import { Rig } from '../rig/Rig';
 import { heroLook, heroRig, type Who } from '../hero';
 import { getParty, keyLabels, menuKey, menuLabels, menuPad, type Device } from '../input';
@@ -142,7 +143,7 @@ export class HudScene extends Phaser.Scene {
   private emberText!: Phaser.GameObjects.Text; // the bank, not just this run
   private tip?: Phaser.GameObjects.Container;
   private choice?: { sides: ChoiceSide[]; root: Phaser.GameObjects.Container };
-  shop?: WeaponShop; // the camp's weapon rack, while it is open
+  shop?: WeaponShop | ShrinePanel; // the camp's weapon rack or ember shrine, while it is open
   private shopDevice: Device = { kind: 'solo' }; // whose turn it is at the rack
   endKind: 'death' | 'victory' | null = null;
 
@@ -602,6 +603,19 @@ export class HudScene extends Phaser.Scene {
       this.refreshGear();
       this.banner('good', 'Equipped', it.name);
     }, () => {
+      this.blurRoom(false);
+      this.shop = undefined;
+      onClose();
+    }, turn);
+  }
+
+  // The camp's ember shrine: the upgrade tree bought with embers (ui/shrine.ts).
+  // The room is paused under it; in co-op only the opener's keys work it.
+  openShrine(onClose: () => void, turn?: { name: string; device: Device }) {
+    this.hideTip();
+    this.blurRoom(true);
+    this.shopDevice = turn?.device ?? { kind: 'solo' };
+    this.shop = new ShrinePanel(this, () => {
       this.blurRoom(false);
       this.shop = undefined;
       onClose();
