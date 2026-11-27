@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Going down in co-op (DESIGN.md 9.4): a fallen hero leaves a soul, the other holds
 // interact by it to revive her. Letting go in the gold arc gives 60% health, holding

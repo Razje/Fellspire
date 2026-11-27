@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Embers (step 10.1): earned for kills, cleared rooms and the Warden, banked at
 // once in the browser, kept across a reload, shown on the HUD in a room and at

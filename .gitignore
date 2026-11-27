@@ -7,3 +7,4 @@ assets/**
 test-results/
 playwright-report/
 release/
+.covermap/

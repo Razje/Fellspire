@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Gold, breakable props, the room chest and its three cards, and gear that
 // really changes the numbers. The loot module is imported straight from the dev

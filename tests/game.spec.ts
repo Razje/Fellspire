@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The game exposes itself as window.game in development builds. Tests reach into
 // it to read state and, for combat, to run the game logic frame by frame so the

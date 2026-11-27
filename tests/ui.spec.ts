@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Walks through every screen of the interface, checks each one comes up and
 // responds, and saves a full-HD screenshot of each under test-results/ to look at.

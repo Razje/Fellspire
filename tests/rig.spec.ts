@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 // The rig lab (?rig): characters drawn from the packs' separate parts by our own
 // Spriter player. Checks it comes up and every character is fully drawn, and saves

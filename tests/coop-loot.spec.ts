@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Camp and loot in co-op (DESIGN.md 9.5): the weapon rack is the turn of whoever
 // opened it and answers only their keys; a chest puts one screen up with a side for

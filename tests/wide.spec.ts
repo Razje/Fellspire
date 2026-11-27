@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Wide and ultrawide screens: the view is 540 high and as wide as the window's
 // shape allows (config.ts), from 960 at 16:9 up to the room's width, 1500. The

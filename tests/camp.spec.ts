@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The camp between runs (DESIGN.md 8.3): New Run lands there, the rack opens as
 // a store with tabs and a comparison (8.6) and remembers the pick, the training dummy takes blows and never

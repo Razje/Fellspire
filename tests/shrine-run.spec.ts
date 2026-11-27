@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The ember shrine's upgrades count in a run (step 10.3): learned ranks add to the
 // hero's numbers, and the shrine's own upgrades each have their rule: skills and

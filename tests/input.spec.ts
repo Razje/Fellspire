@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The devices a hero can be driven by (src/input.ts): the solo keyboard, the left and
 // right halves of one keyboard for two players, and their key layouts.

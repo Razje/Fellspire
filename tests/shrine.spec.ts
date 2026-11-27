@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The ember shrine at camp (step 10.2): E beside it opens the upgrade tree over
 // the paused camp; learning a rank takes its embers and is kept across a reload;

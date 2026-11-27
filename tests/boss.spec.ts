@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The Lantern Warden: each attack lands on a player who stands there and misses
 // one who dodges, the rest window takes extra damage, the lantern breaks at half
@@ -28,8 +28,17 @@ test('the Lantern Warden fight works', async ({ page }) => {
   await waitForScene(page, 'room');
   expect(await page.evaluate(() => !!(window as any).game.scene.getScene('room').boss)).toBe(false);
 
-  await page.evaluate(() => (window as any).game.scene.getScene('room').scene.restart({ room: 4, intro: false }));
-  await page.waitForFunction(() => !!(window as any).game.scene.getScene('room').boss, null, { timeout: 20_000 });
+  // the boss room starts with the game's clock stopped, stepped by hand until he is there:
+  // awake, he summons minions after 6 s, and on a busy machine (tests side by side) a
+  // check from outside saw him only after 7 s of game time
+  const atStart = await page.evaluate(() => {
+    const g = (window as any).game, s = g.scene.getScene('room');
+    g.loop.sleep();
+    s.scene.restart({ room: 4, intro: false });
+    let t = performance.now();
+    for (let i = 0; i < 60 && !(s.boss && g.scene.isActive('hud')); i++) { t += 16.7; g.step(t, 16.7); }
+    return s.enemies.length;
+  });
   await waitForScene(page, 'hud');
 
   const r = await page.evaluate(() => {
@@ -73,7 +82,7 @@ test('the Lantern Warden fight works', async ({ page }) => {
     game.loop.wake();
     return out;
   });
-  expect(r.enemies).toBe(1);
+  expect(atStart).toBe(1);
   expect(r.slam).toBe(18);
   expect(r.slamDodged).toBe(0);
   expect(r.sweep).toBe(14);

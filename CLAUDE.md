@@ -82,16 +82,51 @@ build has no `window.game`, so drive it with keys, clicks and screenshots.
 
 ## Testing: after every change
 
+While working, run only the tests a change can affect:
+
+```powershell
+npm --prefix C:\IXON\fellspire run test:changed
+```
+
+Before a commit, and whenever `test:changed` says so, run everything:
+
 ```powershell
 npm --prefix C:\IXON\fellspire test
 ```
 
 Playwright drives the real game in the Edge that comes with Windows (no browser
-download), on its own port 5181. `tests/` checks that the title screen comes up
-without errors, the menu responds, the combat rules hold (hits land, blocking and
-dodging work, waves clear, the exit leads to the next room). It saves a title-screen
-screenshot under `test-results/` to look at. A new feature gets a test with it, and
-the suite must pass before a change is called done.
+download). `tests/` checks that the title screen comes up without errors, the menu
+responds, the combat rules hold (hits land, blocking and dodging work, waves clear,
+the exit leads to the next room), and every feature since. It saves screenshots under
+`test-results/` to look at. A new feature gets a test with it, and the suite must pass
+before a change is called done.
+
+**How the suite runs (since 2026-11-27).** Four tests at a time (`PW_WORKERS` changes
+it), each worker with its own dev server on ports 5181 and up, Edge on the real GPU:
+6 to 8 minutes instead of 11.8. Every spec imports `test` from `tests/fixtures.ts`, not
+from `@playwright/test`: that sets each worker's server and records, from the browser's
+own code coverage, which functions of `src/` each test ran (`.covermap/`, ignored by
+git, rebuilt by every run). `tools/test-changed.mjs` maps each changed line to the
+function around it (TypeScript's parser) and runs just the tests that ran it: one line
+in `RoomScene.raise` ran the 3 revive and Undying tests in 58 s. Comments, types and
+imports run nothing; a change outside any function (data such as `AREAS`) runs every
+test that used the file; a changed spec runs whole; config, `index.html`, package files
+or no record yet run everything. `--dry` says what it would run, a commit id compares
+against that commit instead of the last one.
+
+- **Booting the game is the cost of a test**, about 10 s of the 5 to 30: 411 separate
+  frame images decoded and uploaded to the GPU. More workers stop helping past four on
+  this laptop because that work is CPU in every browser. Packing the frames into a few
+  sheets would cut it for every test.
+- **Never rely on a check from outside catching a moment in the game.** Under load
+  Playwright's polling lagged 7 s of game time behind: the boss test saw the Warden
+  only after he had summoned minions. Stop the clock (`game.loop.sleep()`) and step it
+  by hand (`game.step(t, 16.7)`) when a test needs the first frames.
+- **Coverage is lost across a reload unless it is taken before.** The fixture takes it
+  inside `page.goto` and `page.reload`; watching for the new page's request was too late,
+  and holding that request deadlocked the browser. A test must leave a page only through
+  those two. It also opens `/tsconfig.json` first, because coverage switched on in the
+  blank start page does not follow the move to the game's process.
 
 Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing it.
 
@@ -133,7 +168,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show; `menuKey()` / `menuPad()` / `menuLabels()` which keys and controller work a menu for a device. Tests press `p.keys[...]`, the Phaser names of that device's keys |
 | `src/settings.ts` | Options remembered in the browser |
-| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs` |
+| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs`, `test-changed.mjs` (runs the tests a change affects; see Testing), `package.mjs` |
 
 Keep it that way as it grows: new enemies, weapons and rooms should become data
 (definitions in a list), not more branches in `Player` or `RoomScene`. Large single

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Character creation (DESIGN.md 8.2): the first New Run opens it, choices change
 // the hero and are remembered, the name reaches the HUD, and the title menu's

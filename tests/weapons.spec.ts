@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The weapon types (DESIGN.md 8.4 to 8.6): sword and shield, greatsword, dual
 // blades, bow, staff, wand, blunderbuss and dual revolvers.

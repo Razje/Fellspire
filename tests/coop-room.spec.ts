@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Two heroes in a room (DESIGN.md 9.3): each on their own keys and with their own
 // gear, the camera keeping both in view and a leash holding them together, enemies

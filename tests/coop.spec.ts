@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Starting a co-op run (DESIGN.md 9.2): New Run asks Solo or Co-op; in the lobby each
 // player joins on their own device, player 2 makes a hero the first time, both press
