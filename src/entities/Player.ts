@@ -8,6 +8,7 @@ import { CHARACTERS } from '../config';
 import { heroLook, heroRig, type Who } from '../hero';
 import { gearStats, type GearStats } from '../loot';
 import { gearOf } from '../run';
+import { shrineBonus } from '../shrine';
 
 const DODGE_CD = 0.55;
 
@@ -45,7 +46,7 @@ export class Player extends Fighter {
 
   // who: player 1 (0) or player 2 (1) in co-op; each carries their own gear
   constructor(scene: RoomScene, x: number, y: number, device: Device = { kind: 'solo' }, readonly who: Who = 0) {
-    const stats = gearStats(gearOf(scene.run, who));
+    const stats = gearStats(gearOf(scene.run, who), shrineBonus());
     super(scene, 'hero', x, y, 100 + stats.fx.maxHp);
     this.stats = stats;
     // drawn from parts when they are there: the frames' 900-pixel canvas maps to the
@@ -97,6 +98,17 @@ export class Player extends Fighter {
 
   get dodgeCdMax() {
     return DODGE_CD * (1 - this.stats.fx.dodgeCd);
+  }
+
+  // The skill's cooldown, shortened by Focus at the shrine.
+  get skillCdMax() {
+    return this.skill.cooldown * (1 - this.stats.fx.skillCd);
+  }
+
+  // How long a dodge keeps her untouchable: the roll itself, plus Fleetfoot's
+  // milliseconds (the roll does not get longer, the safety after it does).
+  get dodgeSafe() {
+    return DODGE_TIME + this.stats.fx.dodgeTime / 1000;
   }
 
   private readInput(): Input {
@@ -261,7 +273,7 @@ export class Player extends Fighter {
   }
 
   private startSkill() {
-    this.skillCd = this.skill.cooldown;
+    this.skillCd = this.skillCdMax;
     this.state = 'skill';
     this.stateT = 0;
     this.move = null;
@@ -276,7 +288,7 @@ export class Player extends Fighter {
     if (inp.mx) this.facing = Math.sign(inp.mx);
     this.state = 'dodge';
     this.stateT = 0;
-    this.invuln = DODGE_TIME;
+    this.invuln = this.dodgeSafe;
     this.dodgeCd = this.dodgeCdMax;
     this.move = null;
     this.combo = 0;

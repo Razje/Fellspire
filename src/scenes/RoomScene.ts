@@ -17,6 +17,7 @@ import { heroLook } from '../hero';
 import { getParty, keyLabels } from '../input';
 import { REVIVE, Soul } from '../revive';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
+import { shrineBonus } from '../shrine';
 import { hi, keycap } from '../ui/kit';
 import { Shots } from '../shots';
 import type { Breakable } from '../blightwood';
@@ -157,7 +158,7 @@ export class RoomScene extends Phaser.Scene {
 
   // What player 1's gear adds up to (each hero has their own: hero.stats).
   get stats(): GearStats {
-    return this.player?.stats ?? gearStats(this.run.gear);
+    return this.player?.stats ?? gearStats(this.run.gear, shrineBonus());
   }
 
   get livingHeroes() {
@@ -329,6 +330,13 @@ export class RoomScene extends Phaser.Scene {
   private checkFallen() {
     for (const h of this.heroes) {
       if (!h.isDead() || this.fallen.has(h)) continue;
+      // Undying at the shrine: once a run, each hero gets straight back up
+      const und = h.stats.fx.undying;
+      if (und > 0 && !this.run.risen?.includes(h.who)) {
+        this.run.risen = [...(this.run.risen ?? []), h.who];
+        this.raise(h, und, undefined, 'Undying');
+        continue;
+      }
       this.fallen.add(h);
       if (this.livingHeroes.length === 0) {
         this.hud?.showDeath(this.run);
@@ -354,7 +362,7 @@ export class RoomScene extends Phaser.Scene {
 
   // A fallen hero gets back up, with share of her health: a burst of light where
   // her soul was, a moment untouchable, her corner of the HUD lit again.
-  raise(h: Player, share: number, by?: Player) {
+  raise(h: Player, share: number, by?: Player, why?: string) {
     const soul = this.souls.find((s) => s.hero === h);
     if (soul) { soul.destroy(); this.souls = this.souls.filter((s) => s !== soul); }
     if (!h.isDead()) return;
@@ -375,7 +383,8 @@ export class RoomScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, scale: 1.3, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
     const strong = share >= REVIVE.sweetHp;
     const name = heroLook(h.who).name;
-    this.hud?.banner('good', strong ? `${name} rises, strong` : `${name} is back on her feet`, by ? `Revived by ${heroLook(by.who).name}` : undefined);
+    if (why) this.hud?.banner('good', `${name} rises again`, why);
+    else this.hud?.banner('good', strong ? `${name} rises, strong` : `${name} is back on her feet`, by ? `Revived by ${heroLook(by.who).name}` : undefined);
   }
 
   update(_time: number, deltaMs: number) {
@@ -610,7 +619,8 @@ export class RoomScene extends Phaser.Scene {
           cam.flash(250, 127, 252, 240);
           this.time.delayedCall(120, () => cam.fade(600, 0, 0, 0, true));
           cam.once('camerafadeoutcomplete', () => {
-            const run = { ...newRun(), gear: { ...newGear(), weapon: this.run.gear.weapon } };
+            // Packed Bags at the shrine: the purse is not empty at the start
+            const run = { ...newRun(), gold: shrineBonus().startGold ?? 0, gear: { ...newGear(), weapon: this.run.gear.weapon } };
             if (this.heroes.length > 1) run.gear2 = { ...newGear(), weapon: gearOf(this.run, 1).weapon };
             this.scene.restart({ room: 1, run });
           });
@@ -779,9 +789,17 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
+  // Greed at the shrine: n gold becomes n x (1 + bonus), the fraction left over
+  // rounded up by chance, so +10% on a ghoul's 3 coins is sometimes a fourth.
+  private moreGold(n: number) {
+    const x = n * (1 + (shrineBonus().gold ?? 0));
+    return Math.floor(x) + (Math.random() < x % 1 ? 1 : 0);
+  }
+
   // Coins spill out with a bounce, then fly to the hero once close (or once the room is won).
   spawnCoins(x: number, y: number, n: number, value = 1) {
     this.coinTexture();
+    if (value > 0) n = this.moreGold(n);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = 30 + Math.random() * 70;
       const img = this.add.image(x, y, 'coin').setScale(0.5);
@@ -975,7 +993,12 @@ export class RoomScene extends Phaser.Scene {
     cap.x = -label.width / 2 - 4; label.x = cap.x + 14;
     prompt.add([cap, label]);
     // in co-op each player gets their own random cards
-    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: rollChest(this.room), items2: getParty().length > 1 ? rollChest(this.room) : undefined };
+    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: this.rollCards(), items2: getParty().length > 1 ? this.rollCards() : undefined };
+  }
+
+  // A chest's cards: three, and one more for each rank of Keen Eye at the shrine.
+  private rollCards() {
+    return rollChest(this.room, Math.random, undefined, 3 + (shrineBonus().chestCard ?? 0));
   }
 
   // The room is won: light falls on the chest, the runes wake, the seal is gone.
@@ -1049,7 +1072,7 @@ export class RoomScene extends Phaser.Scene {
       const party = getParty();
       let left = this.heroes.length;
       hud.openChoice(this.heroes.map((h) => ({
-        items: (h.who === 0 ? c.items : c.items2) ?? (c.items2 = rollChest(this.room)),
+        items: (h.who === 0 ? c.items : c.items2) ?? (c.items2 = this.rollCards()),
         gear: gearOf(this.run, h.who),
         device: party[h.who],
         name: heroLook(h.who).name,
@@ -1068,7 +1091,7 @@ export class RoomScene extends Phaser.Scene {
     else if (it.cat === 'armor') g.armor = it;
     else g.trinkets.push(it);
     const before = p.maxHp;
-    p.stats = gearStats(g);
+    p.stats = gearStats(g, shrineBonus());
     p.maxHp = 100 + p.stats.fx.maxHp;
     if (p.maxHp > before && !p.isDead()) p.hp += p.maxHp - before; // more health does not raise a fallen hero
     p.hp = Math.min(p.hp, p.maxHp);
@@ -1278,7 +1301,7 @@ export class RoomScene extends Phaser.Scene {
   onBossDied(b: Warden) {
     this.run.rooms++;
     this.run.kills++;
-    this.run.gold += 60; // his hoard, counted at once so the victory screen has it
+    this.run.gold += this.moreGold(60); // his hoard, counted at once so the victory screen has it
     this.earn(EMBERS.boss);
     this.spawnCoins(b.x, b.y, 24, 0);
     // the killing blow in slow motion, then the light comes back

@@ -444,10 +444,12 @@ export function categoryLabel(it: Item) {
 
 // One item's text block: name, rarity, rule, stat and effect lines. Returns the
 // objects (centred on x = 0, starting at y) and the y below the last one.
-function itemBody(scene: Phaser.Scene, it: Item, gear: Gear | null, y: number, width: number) {
+// k scales the type (a card with a lot to say steps it down to fit, see ItemCard).
+function itemBody(scene: Phaser.Scene, it: Item, gear: Gear | null, y: number, width: number, k = 1) {
+  const px = (n: number) => `${Math.round(n * k * 2) / 2}px`;
   const col = RARITY[it.rarity].color;
   const objs: Phaser.GameObjects.GameObject[] = [];
-  const name = txt(scene, 0, y, it.name, 'head', { fontSize: '16px', color: col, align: 'center', wordWrap: { width }, strokeThickness: 4 }).setOrigin(0.5, 0);
+  const name = txt(scene, 0, y, it.name, 'head', { fontSize: px(16), color: col, align: 'center', wordWrap: { width }, strokeThickness: 4 }).setOrigin(0.5, 0);
   objs.push(name);
   y += name.height + 2;
   objs.push(txt(scene, 0, y, RARITY[it.rarity].label.toUpperCase(), 'small', { fontSize: '10px', color: col, letterSpacing: 3, strokeThickness: 2 }).setOrigin(0.5, 0).setAlpha(0.85));
@@ -456,16 +458,16 @@ function itemBody(scene: Phaser.Scene, it: Item, gear: Gear | null, y: number, w
   y += 10;
   for (const l of itemLines(it, gear)) {
     if (l.value !== undefined) {
-      objs.push(txt(scene, -width / 2, y, l.label, 'label', { fontSize: '13px', strokeThickness: 2 }).setOrigin(0, 0));
-      objs.push(txt(scene, width / 2, y, l.value, 'label', { fontSize: '13px', color: l.color ?? C.ivory, strokeThickness: 2 }).setOrigin(1, 0));
-      y += 20;
+      objs.push(txt(scene, -width / 2, y, l.label, 'label', { fontSize: px(13), strokeThickness: 2 }).setOrigin(0, 0));
+      objs.push(txt(scene, width / 2, y, l.value, 'label', { fontSize: px(13), color: l.color ?? C.ivory, strokeThickness: 2 }).setOrigin(1, 0));
+      y += Math.round(20 * k);
     } else {
       const t = txt(scene, 0, y, l.equip ? `Equip: ${l.label}` : l.label, 'label', {
-        fontSize: l.equip ? '13px' : '12px', color: l.equip ? '#1eff00' : (l.color ?? C.body), align: 'center',
+        fontSize: px(l.equip ? 13 : 12), color: l.equip ? '#1eff00' : (l.color ?? C.body), align: 'center',
         wordWrap: { width }, strokeThickness: 2, fontStyle: l.equip ? 'normal' : 'italic', lineSpacing: 2,
       }).setOrigin(0.5, 0);
       objs.push(t);
-      y += t.height + 6;
+      y += t.height + Math.round(6 * k);
     }
   }
   return { objs, y };
@@ -499,12 +501,21 @@ export class ItemCard extends Phaser.GameObjects.Container implements Focusable 
     pill.fillStyle(0x000000, 0.55).fillRoundedRect(-tag.width / 2 - 9, -h / 2 + 41, tag.width + 18, 18, 9);
     pill.lineStyle(1, RARITY[r].tint, 0.45).strokeRoundedRect(-tag.width / 2 - 9, -h / 2 + 41, tag.width + 18, 18, 9);
     this.add([pill, tag]);
-    const body = itemBody(scene, item, gear, -h / 2 + 70, w - 34);
-    this.add(body.objs);
     foot ??= item.cat === 'trinket'
       ? `Kept alongside your ${gear.trinkets.length ? `${gear.trinkets.length} other trinket${gear.trinkets.length > 1 ? 's' : ''}` : 'other gear'}`
       : item.cat === 'weapon' ? `Replaces ${gear.weapon.name}` : gear.armor ? `Replaces ${gear.armor.name}` : 'You wear no armor yet';
-    this.add(txt(scene, 0, h / 2 - 22, foot, 'small', { fontSize: '10px', color: C.grey, align: 'center', wordWrap: { width: w - 30 }, strokeThickness: 0 }).setOrigin(0.5));
+    const footText = txt(scene, 0, h / 2 - 22, foot, 'small', { fontSize: '10px', color: C.grey, align: 'center', wordWrap: { width: w - 30 }, strokeThickness: 0 }).setOrigin(0.5);
+    // the text has to end a little above that line: a weapon with a long
+    // description and equip effects is set in smaller type until it does
+    const room = footText.y - footText.height / 2 - 6;
+    let body = itemBody(scene, item, gear, -h / 2 + 70, w - 34);
+    for (const k of [0.92, 0.85, 0.78, 0.72, 0.66]) {
+      if (body.y <= room) break;
+      body.objs.forEach((o) => o.destroy());
+      body = itemBody(scene, item, gear, -h / 2 + 70, w - 34, k);
+    }
+    this.add(body.objs);
+    this.add(footText);
     this.flash = pic(scene, 0, 0, `card_glow_${r}`).setTintFill(0xffffff).setAlpha(0);
     this.add(this.flash);
     this.setSize(w, h).setInteractive({ cursor: CURSOR_HOVER });

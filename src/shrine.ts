@@ -8,10 +8,12 @@
 // upgrade is adding a line. What is bought is kept in the browser
 // (`fellspire.shrine`), one tree for the party in co-op, like the ember bank.
 //
-// 10.2 buys and remembers them; 10.3 makes them count in a run (`shrineBonus`
-// is what they add up to, ready for that).
+// 10.2 buys and remembers them; 10.3 makes them count in a run: `shrineBonus()`
+// is what they add up to, and every hero's `gearStats(gear, shrineBonus())`
+// folds it in with the gear. Most add to a gear effect; the shrine's own
+// (ShrineOnly in loot.ts) each have a small rule in Player or RoomScene.
 import { embers, spendEmbers } from './embers';
-import { describe, type Effect } from './loot';
+import { describe, type Bonus, type Effect, type ShrineOnly } from './loot';
 
 export type Branch = 'might' | 'grace' | 'fortune';
 
@@ -22,14 +24,8 @@ export const BRANCHES: { id: Branch; name: string; colour: number; css: string; 
 ];
 
 // What an upgrade adds to: one of the gear effects (loot.ts), or one of the
-// shrine's own (worked into the run in 10.3).
-export type ShrineFx = Effect
-  | 'skillCd' // fraction off skill cooldowns
-  | 'dodgeTime' // milliseconds more untouchable in a dodge
-  | 'gold' // fraction more gold
-  | 'chestCard' // one more card to choose from at chests
-  | 'startGold' // gold in the purse when a run begins
-  | 'undying'; // once per run, get up from a fall with this fraction of health
+// shrine's own.
+export type ShrineFx = Effect | ShrineOnly;
 
 export interface ShrineNode {
   id: string;
@@ -140,9 +136,9 @@ export function buyRank(id: string): boolean {
   return true;
 }
 
-// Everything bought, added up by effect (for the run, 10.3).
-export function shrineBonus(): Partial<Record<ShrineFx, number>> {
-  const out: Partial<Record<ShrineFx, number>> = {};
+// Everything bought, added up by effect: what a hero brings into a run.
+export function shrineBonus(): Bonus {
+  const out: Bonus = {};
   for (const n of SHRINE) {
     const r = rankOf(n.id);
     if (r > 0) out[n.fx] = (out[n.fx] ?? 0) + n.per * r;

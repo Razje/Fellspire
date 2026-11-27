@@ -255,3 +255,35 @@ test.describe('screens', () => {
     expect(errors).toEqual([]);
   });
 });
+
+test('long card text stays inside the card', async ({ page }, info) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const errors = collectErrors(page);
+  await startRoom(page);
+  const r = await page.evaluate(async () => {
+    const L = await import('/src/loot.ts');
+    const W = await import('/src/weapons.ts');
+    const I = await import('/src/ui/items.ts');
+    const hud = (window as any).game.scene.getScene('hud');
+    const gear = L.newGear();
+    const out: { kind: string; over: number }[] = [];
+    const kinds = Object.keys(W.WEAPONS);
+    kinds.forEach((kind, i) => {
+      const it = L.makeWeapon('legendary', Math.random, kind as any);
+      it.effects = { storm: 24, lifeOnKill: 4 }; // two equip lines on top of the blurb and skill
+      const card = new I.ItemCard(hud, 110 + (i % 4) * 175, 150 + Math.floor(i / 4) * 265, it, gear, 0.75);
+      card.setDepth(30000);
+      // the lowest line of text above the foot (the last Text is the foot)
+      const texts = card.list.filter((o: any) => o.type === 'Text');
+      const foot: any = texts[texts.length - 1];
+      const lowest = Math.max(...texts.slice(0, -1).map((t: any) => t.y + t.height * (1 - t.originY)));
+      out.push({ kind, over: Math.round(lowest - (foot.y - foot.height / 2)) });
+    });
+    return out;
+  });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: info.outputPath('long-cards.png') });
+  await info.attach('long-cards', { path: info.outputPath('long-cards.png'), contentType: 'image/png' });
+  for (const c of r) expect(c.over, c.kind).toBeLessThanOrEqual(-4); // a little air above the foot
+  expect(errors).toEqual([]);
+});

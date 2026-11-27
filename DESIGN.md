@@ -319,10 +319,17 @@ studied for its card and end-screen ideas only; none of its art is used.
    bank and a card for the selected upgrade (now, next rank, cost, what stands in the
    way). Learned upgrades do nothing in a run yet: that is 10.3. Upgrades for systems
    the game lacks (potions, pets, rarer chests) are left for when those exist.
-   10.3 The upgrades take effect in runs: most add to the gear effects that already
-   exist (`shrineBonus()` sums them; fold it into `gearStats`), and five need a small
-   rule of their own: skill cooldown, dodge length, more gold, start gold, the fourth
-   chest card and Undying. Tests with it; costs balanced after Martijn plays it.
+   10.3 **built** the upgrades take effect in runs (2026-11-27): every hero's
+   numbers are `gearStats(gear, shrineBonus())`, so the twelve that add to a gear
+   effect (health, damage, armour, crit, thorns, executioner, life on kill, burn,
+   frost, storm, dodge cooldown, health orbs) simply stack with gear, under the same
+   caps. The shrine's own: Focus shortens the skill's cooldown (and the HUD's sweep);
+   Fleetfoot keeps her untouchable longer after the roll, the roll itself unchanged;
+   Greed multiplies every coin drop and the Warden's hoard, the leftover fraction
+   rounded up by chance; Packed Bags puts gold in the purse as the camp gate starts a
+   run; Keen Eye adds a card to every chest, for each player in co-op; Undying gets a
+   hero straight back up from her first fall of a run with 30% ("rises again"), once
+   per hero (`run.risen`). Costs are to be balanced after Martijn plays it.
    Later perhaps 10.4: a keeper of run records.
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away

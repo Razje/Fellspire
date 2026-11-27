@@ -52,6 +52,18 @@ export type Effect =
 
 export type Effects = Partial<Record<Effect, number>>;
 
+// Effects that only the ember shrine gives (shrine.ts), worked into a run by
+// their own small rules rather than by gear.
+export type ShrineOnly =
+  | 'skillCd' // fraction off skill cooldowns
+  | 'dodgeTime' // milliseconds more untouchable in a dodge
+  | 'gold' // fraction more gold
+  | 'chestCard' // more cards to choose from at chests
+  | 'startGold' // gold in the purse when a run begins
+  | 'undying'; // once per run, get up from a fall with this fraction of health
+
+export type Bonus = Partial<Record<Effect | ShrineOnly, number>>;
+
 // How an effect reads on a card. "Equip:" lines in green, as in the MMOs.
 export function describe(e: Effect, v: number): string {
   const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -166,10 +178,11 @@ export function makeTrinket(rarity: Rarity, rnd: () => number = Math.random, exc
 }
 
 // Three cards of one category. No two trinkets in one chest are the same.
-export function rollChest(room: number, rnd: () => number = Math.random, cat?: Category): Item[] {
+// Keen Eye at the shrine adds a card (count).
+export function rollChest(room: number, rnd: () => number = Math.random, cat?: Category, count = 3): Item[] {
   const c = cat ?? pick<Category>(['weapon', 'armor', 'trinket'], rnd);
   const out: Item[] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < count; i++) {
     const r = rollRarity(room, rnd);
     if (c === 'weapon') out.push(makeWeapon(r, rnd));
     else if (c === 'armor') out.push(makeArmor(r, rnd));
@@ -192,15 +205,21 @@ export interface GearStats {
   power: number; // weapon damage multiplier
   kind: WeaponKind;
   skill: SkillId;
-  fx: Required<Effects>;
+  fx: Required<Bonus>;
 }
 
-export function gearStats(g: Gear): GearStats {
-  const fx = { damage: 0, crit: 0, execute: 0, lifeOnHit: 0, lifeOnKill: 0, burn: 0, frost: 0, storm: 0, thorns: 0, dodgeCd: 0, maxHp: 0, armor: 0, secondWind: 0, orbs: 0 };
+// What the gear adds up to, plus what the ember shrine gives (`bonus`, from
+// shrineBonus(); the callers pass it, so this file does not reach into storage).
+export function gearStats(g: Gear, bonus: Bonus = {}): GearStats {
+  const fx: Required<Bonus> = {
+    damage: 0, crit: 0, execute: 0, lifeOnHit: 0, lifeOnKill: 0, burn: 0, frost: 0, storm: 0, thorns: 0, dodgeCd: 0, maxHp: 0, armor: 0, secondWind: 0, orbs: 0,
+    skillCd: 0, dodgeTime: 0, gold: 0, chestCard: 0, startGold: 0, undying: 0,
+  };
   for (const it of [g.weapon, g.armor, ...g.trinkets]) {
     if (!it) continue;
     for (const [k, v] of Object.entries(it.effects)) fx[k as Effect] += v as number;
   }
+  for (const [k, v] of Object.entries(bonus)) fx[k as keyof Bonus] += v ?? 0;
   if (g.armor) { fx.maxHp += g.armor.hp ?? 0; fx.armor += g.armor.armor ?? 0; }
   fx.armor = Math.min(0.6, fx.armor);
   fx.dodgeCd = Math.min(0.6, fx.dodgeCd);

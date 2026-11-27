@@ -341,8 +341,8 @@ export class HudScene extends Phaser.Scene {
       if (p.hp < u.lastHp - 0.5) hurtNow = true;
       if (p.hp > 0 && p.hp / p.maxHp < 0.3) low = true;
       u.lastHp = p.hp;
-      u.slots.dodge.cooldown(Math.max(0, p.dodgeCd) / 0.55);
-      u.slots.skill.cooldown(Math.max(0, p.skillCd) / p.skill.cooldown, Math.max(0, p.skillCd));
+      u.slots.dodge.cooldown(Math.max(0, p.dodgeCd) / p.dodgeCdMax);
+      u.slots.skill.cooldown(Math.max(0, p.skillCd) / p.skillCdMax, Math.max(0, p.skillCd));
       u.slots.block.setActive(p.state === 'block');
       // a fallen hero's corner goes dim
       const a = p.isDead() ? 0.4 : 1;
@@ -505,8 +505,8 @@ export class HudScene extends Phaser.Scene {
       // up to four cards side by side; more (or half a screen each in co-op) rest
       // smaller and overlap a little, and the focused one grows to full size
       const n = sp.items.length, many = n > 4;
-      const gap = coop ? 150 : many ? Math.min(228, 740 / (n - 1)) : 228;
-      const size = coop ? 0.62 : many ? 0.74 : 1;
+      const gap = coop ? Math.min(150, (viewW / 2 - 130) / Math.max(1, n - 1)) : many ? Math.min(228, 740 / (n - 1)) : 228;
+      const size = coop ? (n > 3 ? 0.54 : 0.62) : many ? 0.74 : 1; // Keen Eye's fourth card in co-op rests smaller
       const cards = sp.items.map((it, i) => new ItemCard(this, cx + (i - (n - 1) / 2) * gap, cy, it, sp.gear, size));
       root.add(cards);
       const arrow = this.add.triangle(0, 0, 0, 0, 14, 0, 7, 10, s === 0 ? 0xffd100 : 0x7fe3d4).setStrokeStyle(1.5, s === 0 ? 0x3a2000 : 0x0a2a26);

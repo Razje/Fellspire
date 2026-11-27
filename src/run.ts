@@ -10,6 +10,7 @@ export interface Run {
   embers: number; // earned this run (already banked: see embers.ts)
   gear: Gear; // player 1's
   gear2?: Gear; // player 2's, in co-op
+  risen?: number[]; // the heroes (who) whose Undying is spent this run
 }
 
 export function newRun(): Run {
