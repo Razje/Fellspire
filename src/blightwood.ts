@@ -9,6 +9,7 @@
 import Phaser from 'phaser';
 import { WORLD } from './config';
 import { canvas, rng, trunk, radial } from './titleArt';
+import type { Area } from './world';
 
 const TW = 960; // tile width of the repeating background layers
 const INK = '#06090d';
@@ -305,6 +306,33 @@ export function makeBlightwoodTextures(scene: Phaser.Scene) {
   propTextures(scene);
 }
 
+// ---- an area's colours -------------------------------------------------------------------------
+
+// A texture as an area sees it: the same painting, washed in the area's colour (a
+// "color" blend keeps each pixel's lightness and takes the area's hue), copied once
+// per area and kept. The Blightwood uses the original.
+export function areaKey(scene: Phaser.Scene, key: string, a?: Area): string {
+  const l = a?.look;
+  if (!a || !l || (l.amount === 0 && l.sat === 1 && l.bright === 1)) return key;
+  const k = `${key}@${a.id}`;
+  if (scene.textures.exists(k)) return k;
+  const src = scene.textures.get(key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  canvas(scene, k, src.width, src.height, (c) => {
+    c.filter = `saturate(${l.sat}) brightness(${l.bright})`;
+    c.drawImage(src, 0, 0);
+    c.filter = 'none';
+    c.globalCompositeOperation = 'color';
+    c.globalAlpha = l.amount;
+    c.fillStyle = '#' + l.grade.toString(16).padStart(6, '0');
+    c.fillRect(0, 0, src.width, src.height);
+    // the wash covered the clear parts too: keep only where the painting was
+    c.globalAlpha = 1;
+    c.globalCompositeOperation = 'destination-in';
+    c.drawImage(src, 0, 0);
+  });
+  return k;
+}
+
 // ---- the room ----------------------------------------------------------------------------------
 
 export interface Light { x: number; y: number; radius: number; strength: number }
@@ -319,14 +347,14 @@ export interface Blightwood {
   update(cam: Phaser.Cameras.Scene2D.Camera): void;
   lightAt(x: number, y: number): number;
   pushOut(p: { x: number; y: number }): void;
-  openExit(): void;
+  openExit(): void; // lights every gate
   extinguish(): void; // puts every torch out, for the Warden's second phase
-  exit: { x: number; y: number };
+  exit: { x: number; y: number }; // the first gate (the only one in most rooms)
+  exits: { x: number; y: number }[]; // the gates, top to bottom
   lights: Light[];
   obstacles: Obstacle[];
 }
 
-const MOON = Phaser.Display.Color.ValueToColor(0xaebbe0);
 const FIRE = Phaser.Display.Color.ValueToColor(0xffd6a8);
 
 interface PropKind { key: string; scale: number; rx: number; ry: number; light?: boolean; glow?: boolean }
@@ -346,7 +374,12 @@ export interface ClearSpot { x: number; y: number; r: number }
 
 // opts.camp lays out the camp between runs: no breakable barrels (nothing to loot
 // there), no graves, and the rune gate already lit as the way out.
-export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; camp?: boolean; clear?: ClearSpot[] } = {}): Blightwood {
+// gates: the light of each rune gate out of the room, top to bottom (none: no way out).
+export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; camp?: boolean; clear?: ClearSpot[]; area?: Area; gates?: number[] } = {}): Blightwood {
+  const A = (key: string) => areaKey(scene, key, opts.area);
+  const look = opts.area?.look;
+  const MOON = Phaser.Display.Color.ValueToColor(look?.moon ?? 0xaebbe0);
+  const gates = opts.gates ?? (opts.boss ? [] : [0x3fe8dc]);
   if (!scene.textures.exists('fw_floor')) makeBlightwoodTextures(scene);
   const lights: Light[] = [];
   const torches: (() => void)[] = [];
@@ -361,18 +394,18 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; cam
   if (packLayers > 0) {
     for (let i = 0; i < packLayers; i++) {
       const img = scene.textures.get(`bg_${i}`).getSourceImage() as HTMLImageElement;
-      back(`bg_${i}`, 0, viewH, 0.1 + 0.5 * (i / Math.max(1, packLayers - 1)), 0.3, -100 + i).setTileScale(viewH / img.height);
+      back(A(`bg_${i}`), 0, viewH, 0.1 + 0.5 * (i / Math.max(1, packLayers - 1)), 0.3, -100 + i).setTileScale(viewH / img.height);
     }
   } else {
-    scene.add.image(0, 0, 'tt_sky').setOrigin(0).setScrollFactor(0).setDepth(-100);
-    back('fw_far', groundTop + 30 - 352, 540, 0.2, 0.4, -99);
+    scene.add.image(0, 0, A('tt_sky')).setOrigin(0).setScrollFactor(0).setDepth(-100);
+    back(A('fw_far'), groundTop + 30 - 352, 540, 0.2, 0.4, -99);
     fog = back('tt_fog', groundTop - 150, 160, 0.3, 0.5, -98).setAlpha(0.55).setBlendMode(Phaser.BlendModes.SCREEN);
-    back('fw_mid', groundTop + 12 - 362, 540, 0.5, 0.75, -97);
+    back(A('fw_mid'), groundTop + 12 - 362, 540, 0.5, 0.75, -97);
   }
   // the tree line at the back of the floor, same plane as the floor
-  scene.add.tileSprite(0, groundTop + 6 - 352, roomW, 380, 'fw_wall').setOrigin(0).setDepth(groundTop - 60);
-  scene.add.tileSprite(0, -20, roomW, 190, 'fw_vines').setOrigin(0).setScrollFactor(1, 0.8).setDepth(-90);
-  scene.add.image(0, FLOOR_Y, 'fw_floor').setOrigin(0).setDepth(-50);
+  scene.add.tileSprite(0, groundTop + 6 - 352, roomW, 380, A('fw_wall')).setOrigin(0).setDepth(groundTop - 60);
+  scene.add.tileSprite(0, -20, roomW, 190, A('fw_vines')).setOrigin(0).setScrollFactor(1, 0.8).setDepth(-90);
+  scene.add.image(0, FLOOR_Y, A('fw_floor')).setOrigin(0).setDepth(-50);
 
   // ---- props: along the back edge, along the front edge, and a few in the open
   const rnd = new Phaser.Math.RandomDataGenerator([opts.boss ? 'blightwood-warden' : opts.camp ? 'blightwood-camp' : 'blightwood-arena']);
@@ -381,16 +414,19 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; cam
   const put = (name: string, x: number, y: number) => {
     const k = KINDS[name];
     placed.push({ x, y });
-    const img = scene.add.image(x, y, k.key).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
+    const img = scene.add.image(x, y, A(k.key)).setOrigin(0.5, 0.92).setScale(k.scale).setDepth(y).setFlipX(rnd.frac() < 0.5);
     const obstacle = k.rx ? { x, y, rx: k.rx, ry: k.ry } : undefined;
     if (obstacle) obstacles.push(obstacle);
     if (!opts.camp && (name === 'barrel' || name === 'crate')) breakables.push({ x, y, img, obstacle, hp: 2 });
-    if (k.glow) scene.add.image(x, y - 8, 'tt_light').setDepth(y - 1).setScale(0.3).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
+    if (k.glow) scene.add.image(x, y - 8, 'tt_light').setDepth(y - 1).setScale(0.3).setTint(look?.rune ?? 0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
     if (k.light) torches.push(addTorchFire(scene, x, y, k.scale, lights));
   };
-  const exit = opts.boss ? { x: -9999, y: -9999 } : { x: roomW - 130, y: Math.round((groundTop + groundBottom) / 2) + 10 };
+  // one gate in the middle of the right edge, or two: one up by the trees, one down front
+  const exits = gates.length === 1 ? [{ x: roomW - 130, y: Math.round((groundTop + groundBottom) / 2) + 10 }]
+    : gates.map((_, i) => ({ x: roomW - 230 + i * 40, y: i === 0 ? groundTop + 70 : groundBottom - 60 }));
+  const exit = exits[0] ?? { x: -9999, y: -9999 };
   const mid = (groundTop + groundBottom) / 2;
-  const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || Math.hypot(x - exit.x, (y - exit.y) * 1.6) < 150
+  const keepClear = (x: number, y: number) => (x < 230 && Math.abs(y - 470) < 90) || exits.some((e) => Math.hypot(x - e.x, (y - e.y) * 1.6) < 150)
     || (!!opts.boss && Math.hypot(x - roomW / 2, (y - mid) * 2.2) < 420)
     || (!opts.boss && !opts.camp && Math.abs(x - roomW / 2) < 130 && y < groundTop + 80)
     || (opts.clear ?? []).some((c) => Math.hypot(x - c.x, (y - c.y) * 1.6) < c.r);
@@ -408,7 +444,7 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; cam
     if (!free(x, y, 60) || keepClear(x, y)) continue;
     const name = rnd.pick(backKinds);
     if (name === 'fence') {
-      scene.add.image(x, y, 'fw_fence').setOrigin(0.5, 0.95).setScale(0.62).setDepth(y);
+      scene.add.image(x, y, A('fw_fence')).setOrigin(0.5, 0.95).setScale(0.62).setDepth(y);
       obstacles.push({ x, y, rx: 42, ry: 6 });
       placed.push({ x, y });
     } else put(name, x, y);
@@ -435,22 +471,25 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; cam
     speed: { min: 4, max: 12 }, lifespan: { min: 4000, max: 7000 },
     scale: { min: 0.1, max: 0.2 },
     alpha: { onEmit: () => 0, onUpdate: (_p: unknown, _k: string, t: number) => Math.sin(t * Math.PI) * 0.85 },
-    tint: [0xc8ff8a, 0x9cf7c8], blendMode: 'ADD', frequency: 140,
+    tint: look?.flies ?? [0xc8ff8a, 0x9cf7c8], blendMode: 'ADD', frequency: 140,
   }).setDepth(9000).fastForward(6000);
 
-  // ---- the exit: the rune ring, dark until the room is cleared (none in a boss arena)
-  const ring = scene.add.image(exit.x, exit.y, 'tt_portal').setOrigin(0.5, 0.96).setScale(0.55).setDepth(exit.y).setTint(0x4a5866).setVisible(!opts.boss);
-  const ringGlow = scene.add.image(exit.x, exit.y - 70, 'tt_light').setScale(0.9).setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(exit.y - 1);
-  const ringPool = scene.add.image(exit.x, exit.y, 'fw_pool').setTint(0x3fe8dc).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setScale(0.8).setDepth(0.5);
-  if (!opts.boss) obstacles.push({ x: exit.x - 52, y: exit.y - 4, rx: 10, ry: 6 }, { x: exit.x + 52, y: exit.y - 4, rx: 10, ry: 6 });
+  // ---- the exits: rune rings, dark until the room is cleared, each in its own light
+  const rings = exits.map((e, i) => {
+    const ring = scene.add.image(e.x, e.y, 'tt_portal').setOrigin(0.5, 0.96).setScale(0.55).setDepth(e.y).setTint(0x4a5866);
+    const glow = scene.add.image(e.x, e.y - 70, 'tt_light').setScale(0.9).setTint(gates[i]).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(e.y - 1);
+    const pool = scene.add.image(e.x, e.y, 'fw_pool').setTint(gates[i]).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setScale(0.8).setDepth(0.5);
+    obstacles.push({ x: e.x - 52, y: e.y - 4, rx: 10, ry: 6 }, { x: e.x + 52, y: e.y - 4, rx: 10, ry: 6 });
+    return { e, ring, glow, pool, tint: gates[i] };
+  });
 
   // ---- framing: black foliage along the bottom edge, and the vignette
-  scene.add.tileSprite(-60, roomH - 108, roomW * 1.12 + 120, 110, 'fw_front').setOrigin(0).setScrollFactor(1.12, 1).setDepth(15000);
+  scene.add.tileSprite(-60, roomH - 108, roomW * 1.12 + 120, 110, A('fw_front')).setOrigin(0).setScrollFactor(1.12, 1).setDepth(15000);
   scene.add.image(0, 0, 'tt_vignette').setOrigin(0).setScrollFactor(0).setDepth(16000);
 
   let drift = 0;
   return {
-    exit, lights, obstacles, breakables,
+    exit, exits, lights, obstacles, breakables,
     update() {
       drift += 0.35;
       if (fog) fog.tilePositionX = drift;
@@ -478,17 +517,18 @@ export function buildBlightwood(scene: Phaser.Scene, opts: { boss?: boolean; cam
       for (const out of torches) out();
     },
     openExit() {
-      if (opts.boss) return;
-      ring.clearTint();
-      scene.tweens.add({ targets: ringGlow, alpha: 0.6, duration: 700 });
-      scene.tweens.add({ targets: ringGlow, scale: 0.8, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 700 });
-      scene.tweens.add({ targets: ringPool, alpha: 0.55, duration: 700 });
-      scene.add.particles(exit.x, exit.y - 70, 'tt_dot', {
-        x: { min: -36, max: 36 }, y: { min: -34, max: 40 },
-        speedY: { min: -20, max: -8 }, lifespan: { min: 1600, max: 2800 },
-        scale: { start: 0.22, end: 0 }, alpha: { start: 0.9, end: 0 },
-        tint: [0x7ffcf0, 0x9b7bff], blendMode: 'ADD', frequency: 70,
-      }).setDepth(exit.y + 1);
+      for (const { e, ring, glow, pool, tint } of rings) {
+        ring.clearTint();
+        scene.tweens.add({ targets: glow, alpha: 0.6, duration: 700 });
+        scene.tweens.add({ targets: glow, scale: 0.8, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 700 });
+        scene.tweens.add({ targets: pool, alpha: 0.55, duration: 700 });
+        scene.add.particles(e.x, e.y - 70, 'tt_dot', {
+          x: { min: -36, max: 36 }, y: { min: -34, max: 40 },
+          speedY: { min: -20, max: -8 }, lifespan: { min: 1600, max: 2800 },
+          scale: { start: 0.22, end: 0 }, alpha: { start: 0.9, end: 0 },
+          tint: [tint, 0xffffff], blendMode: 'ADD', frequency: 70,
+        }).setDepth(e.y + 1);
+      }
     },
   };
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { CHARACTERS, LOOPING, ZONE, type CharKey } from '../config';
+import { CHARACTERS, LOOPING, type CharKey } from '../config';
+import { LEVELS_PER_AREA } from '../world';
 import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
 import { screenCamera } from '../ui/view';
@@ -60,10 +61,14 @@ export class BootScene extends Phaser.Scene {
     console.info('[fellspire] art found\n' + report.join('\n') + `\nbackground layers: ${this.registry.get('bgCount')}`);
 
     makePlaceholderTextures(this);
-    // ?boss in the address goes straight to the boss fight, for playtesting it
+    // ?boss in the address goes straight to the boss fight, for playtesting it;
+    // ?area=frostmere (or ?area=2, a tier) to an area, with &level=3 for a level in it
     const q = new URLSearchParams(location.search);
+    const where = q.get('area') ?? undefined;
+    const level = Number(q.get('level')) || 1;
     if (q.has('rig')) this.scene.start('riglab'); // the rig lab, a test page for characters from parts
-    else if (q.has('boss')) this.scene.start('room', { room: ZONE.bossRoom });
+    else if (q.has('boss')) this.scene.start('room', { room: LEVELS_PER_AREA, area: where });
+    else if (where) this.scene.start('room', { room: Math.min(LEVELS_PER_AREA, Math.max(1, level)), area: where });
     else if (q.has('camp')) this.scene.start('room', { room: 0 });
     else if (q.has('coop')) this.scene.start('lobby'); // the co-op lobby
     else this.scene.start('menu');

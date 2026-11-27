@@ -2,7 +2,8 @@ import { expect, test, type Page } from './fixtures';
 
 // The Lantern Warden: each attack lands on a player who stands there and misses
 // one who dodges, the rest window takes extra damage, the lantern breaks at half
-// health, the dark hurts, and beating him brings up the victory screen.
+// health, the dark hurts, and beating him opens the gates to the next two areas
+// (the victory screen is for the last area's boss: see world.spec.ts).
 
 async function waitForScene(page: Page, key: string) {
   await page.waitForFunction((k) => {
@@ -34,7 +35,7 @@ test('the Lantern Warden fight works', async ({ page }) => {
   const atStart = await page.evaluate(() => {
     const g = (window as any).game, s = g.scene.getScene('room');
     g.loop.sleep();
-    s.scene.restart({ room: 4, intro: false });
+    s.scene.restart({ room: 5, intro: false });
     let t = performance.now();
     for (let i = 0; i < 60 && !(s.boss && g.scene.isActive('hud')); i++) { t += 16.7; g.step(t, 16.7); }
     return s.enemies.length;
@@ -114,7 +115,9 @@ test('the Lantern Warden fight works', async ({ page }) => {
   expect(d.inDark).toBeGreaterThanOrEqual(9);
   expect(d.dead).toBe(true);
 
-  await expect.poll(() => page.evaluate(() => (window as any).game.scene.getScene('hud').endKind), { timeout: 10_000 }).toBe('victory');
+  await expect.poll(() => page.evaluate(() => (window as any).game.scene.getScene('room').gateOpen), { timeout: 10_000 }).toBe(true);
+  expect(await page.evaluate(() => (window as any).game.scene.getScene('room').gates.map((g: any) => g.to.id))).toEqual(['gloomvine', 'mire']);
+  expect(await page.evaluate(() => (window as any).game.scene.getScene('hud').endKind)).toBe(null);
   expect(errors).toEqual([]);
 });
 
@@ -154,9 +157,10 @@ test.describe('screens', () => {
     await shot('4-circle-of-light');
 
     await page.evaluate(() => { const b = (window as any).game.scene.getScene('room').boss; b.takeHit(9999, b.x - 1, 0, false); });
-    await page.waitForFunction(() => (window as any).game.scene.getScene('hud').endKind === 'victory', null, { timeout: 10_000 });
-    await page.waitForTimeout(3500);
-    await shot('5-victory');
+    await page.waitForFunction(() => (window as any).game.scene.getScene('room').gateOpen, null, { timeout: 10_000 });
+    await page.evaluate(() => { const s = (window as any).game.scene.getScene('room'); s.player.x = s.gates[0].x - 160; s.player.y = 470; });
+    await page.waitForTimeout(2500);
+    await shot('5-two-roads');
     expect(errors).toEqual([]);
   });
 });

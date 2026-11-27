@@ -1,56 +1,21 @@
-// Waves and the exit: when the next wave comes, the gate opens and takes the party through.
-// Mixed into RoomScene (see the end of scenes/RoomScene.ts), so `this` is the room
-// and every method here is called as scene.<method>().
+// Waves: when the next one comes, and when the room is won and its gates open (the
+// gates themselves are in gates.ts). Mixed into RoomScene (see the end of
+// scenes/RoomScene.ts), so `this` is the room and every method here is called as
+// scene.<method>().
 import Phaser from 'phaser';
 import { WORLD } from '../config';
-import { Player } from '../entities/Player';
 import { BoneThrower, Ghoul } from '../entities/Enemies';
-import { gearOf, newRun } from '../run';
 import { EMBERS } from '../embers';
-import { newGear } from '../loot';
-import { heroLook } from '../hero';
-import { shrineBonus } from '../shrine';
-import { FONT, RES } from '../ui/theme';
 import type { RoomScene, Wave } from '../scenes/RoomScene';
-import { REJOIN } from '../scenes/RoomScene';
 
 export const wavesMethods = {
   updateWaves(this: RoomScene, dt: number): void {
     if (!this.livingHeroes.length) return;
     if (this.gateOpen) {
-      const ex = this.world.exit;
-      // every living hero has to stand in the gate before it takes them through (a
-      // fallen one comes along and gets up in the next room); until then it says who
-      // it is waiting for
-      const live = this.livingHeroes;
-      const inGate = (h: Player) => Math.hypot(h.x - ex.x, (h.y - ex.y) * 1.6) < 46;
-      const missing = live.filter((h) => !inGate(h));
-      this.showGateWait(missing.length < live.length && missing.length ? missing[0] : null);
-      if (!this.leaving && !missing.length) {
-        this.leaving = true;
-        const cam = this.cameras.main;
-        if (this.isCamp) {
-          // through the gate: the run begins, carrying only the chosen weapon
-          cam.flash(250, 127, 252, 240);
-          this.time.delayedCall(120, () => cam.fade(600, 0, 0, 0, true));
-          cam.once('camerafadeoutcomplete', () => {
-            // Packed Bags at the shrine: the purse is not empty at the start
-            const run = { ...newRun(), gold: shrineBonus().startGold ?? 0, gear: { ...newGear(), weapon: this.run.gear.weapon } };
-            if (this.heroes.length > 1) run.gear2 = { ...newGear(), weapon: gearOf(this.run, 1).weapon };
-            this.scene.restart({ room: 1, run });
-          });
-          return;
-        }
-        cam.fadeOut(400);
-        this.run.rooms++;
-        cam.once('camerafadeoutcomplete', () => {
-          // the living heal a little between rooms; the fallen get back up
-          const hps = this.heroes.map((h) => (h.isDead() ? Math.round(h.maxHp * REJOIN) : Math.min(h.maxHp, h.hp + 20)));
-          this.scene.restart({ room: this.room + 1, hps, run: this.run });
-        });
-      }
+      this.updateGates();
       return;
     }
+    if (this.isBossRoom) return; // the boss's fall opens his glade's gates (bossFight.ts)
     const alive = this.enemies.some((e) => !e.isDead());
     if (alive) return;
     this.waveDelay -= dt;
@@ -61,31 +26,17 @@ export const wavesMethods = {
       this.waveDelay = 1.0;
       if (this.wave > 1) this.hud?.banner('warn', `Wave ${this.wave} of ${this.waves.length}`);
     } else {
-      this.gateOpen = true;
-      this.world.openExit();
-      this.hud?.banner('good', 'Room Cleared', 'The chest is unsealed');
+      this.openGates();
+      this.hud?.banner('good', 'Room Cleared', this.gates.length > 1 ? 'The chest is unsealed. Choose a gate' : 'The chest is unsealed');
       this.unlockChest();
       this.earn(EMBERS.room);
     }
   },
 
-  // Over the gate while one hero stands in it and the other is still on the way.
-  showGateWait(this: RoomScene, waitingFor: Player | null): void {
-    const ex = this.world.exit;
-    if (waitingFor && !this.gateWait) {
-      this.gateWait = this.add.text(ex.x, ex.y - 78, '', { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 })
-        .setOrigin(0.5).setDepth(19500).setAlpha(0);
-    }
-    const t = this.gateWait;
-    if (!t) return;
-    if (waitingFor) t.setText(`Waiting for ${heroLook(waitingFor.who).name}`);
-    t.setAlpha(Phaser.Math.Linear(t.alpha, waitingFor && !this.leaving ? 1 : 0, 0.2)).setY(ex.y - 78 + Math.sin(this.time.now / 250) * 2);
-  },
-
   spawnWave(this: RoomScene, w: Wave): void {
     const { viewW, roomW, groundTop, groundBottom } = WORLD;
     const left = this.cameras.main.worldView.x;
-    const tier = 1 + 0.15 * (this.room - 1);
+    const tier = 1 + 0.15 * (this.depth - 1);
     const types: ('g' | 't')[] = [...Array(w.ghouls).fill('g'), ...Array(w.throwers).fill('t')];
     types.forEach((type, i) => {
       let x: number, y: number;

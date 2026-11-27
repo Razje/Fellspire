@@ -162,7 +162,13 @@ Build order for the world, each a step Martijn plays before the next:
   each get their own file; the "Room Cleared" banner no longer covers the chest's cards.
 - 11.2 The run's structure: areas and levels as data, the two gates with level types,
   the choice of next area, a map of the run on the HUD. New areas start as recoloured
-  Blightwood.
+  Blightwood. **Built 2026-11-27**: two gates out of levels 1 to 3, each with a sign
+  (swords for a fight, an hourglass for a challenge, a crown for an elite; never the
+  same twice), one gate out of level 4 to the boss, a gate per next area out of a
+  boss's glade, victory only in the Fellspire. Challenge and elite levels play as
+  normal fights until 11.3. Every boss is the Warden for now, 50% tougher per tier.
+  Waves, foes and chests grow with the depth into the run, not the level in the area.
+  The colours of the seven new areas are first guesses, to tune by eye.
 - 11.3 Chest tiers, challenge rules and elite foes.
 - 11.4 The merchant's stop.
 - 11.5 New enemies from the free packs (needs Martijn's downloads).

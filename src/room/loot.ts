@@ -235,7 +235,7 @@ export const lootMethods = {
 
   // A chest's cards: three, and one more for each rank of Keen Eye at the shrine.
   rollCards(this: RoomScene): Item[] {
-    return rollChest(this.room, Math.random, undefined, 3 + (shrineBonus().chestCard ?? 0));
+    return rollChest(this.depth, Math.random, undefined, 3 + (shrineBonus().chestCard ?? 0));
   },
 
   // The room is won: light falls on the chest, the runes wake, the seal is gone.

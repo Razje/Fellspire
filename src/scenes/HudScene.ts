@@ -29,6 +29,8 @@ import type { Player } from '../entities/Player';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
 import { screenCamera } from '../ui/view';
 import type { RoomScene } from './RoomScene';
+import { levelStrip, roadPanel } from '../ui/runmap';
+import { LEVEL_LABEL } from '../world';
 
 const EMBER = '#ffa040'; // the colour of ember counts
 
@@ -191,7 +193,10 @@ export class HudScene extends Phaser.Scene {
     });
     this.ready = true;
     if (this.room.isCamp) this.banner('zone', 'The Camp', 'Ready yourself for the Blightwood');
-    else if (!this.room.boss) this.banner('zone', 'The Blightwood', `Room ${this.roomNo}`);
+    else if (!this.room.boss) {
+      const type = this.room.levelType;
+      this.banner('zone', this.room.area.name, type === 'normal' ? `Level ${this.roomNo}` : `Level ${this.roomNo}: ${LEVEL_LABEL[type]}`);
+    }
     else this.buildBossBar();
   }
 
@@ -262,8 +267,8 @@ export class HudScene extends Phaser.Scene {
     // laid out for a 960 wide screen; R moves it to the right edge of a wider one
     const R = viewW - 960;
     const f = new Frame(this, R + 820, 38, 172, 58, 'dark');
-    f.add(txt(this, 0, -15, 'BLIGHTWOOD', 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
-    const where = room.isCamp ? 'Camp' : room.boss ? "Warden's Glade" : `Room ${this.roomNo}`;
+    f.add(txt(this, 0, -15, room.isCamp ? 'BLIGHTWOOD' : room.area.short, 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
+    const where = room.isCamp ? 'Camp' : room.boss ? room.area.boss.glade : `Level ${this.roomNo}`;
     f.add(txt(this, 0, room.boss || room.isCamp ? 5 : 2, where, 'head', { fontSize: room.boss ? '15px' : '17px', color: C.ivory }).setOrigin(0.5));
     const n = room.waveCount;
     for (let i = 0; i < n; i++) {
@@ -281,13 +286,18 @@ export class HudScene extends Phaser.Scene {
     mb.on('pointerup', () => this.openPause());
     txt(this, R + 930, 60, 'Esc', 'small', { fontSize: '10px', color: C.body }).setOrigin(0.5);
 
-    // an objective tracker under the plaque
+    // the area's five levels under the plaque: where you are, what you chose, the boss
+    const dy = room.isCamp ? 0 : 40;
+    if (!room.isCamp) levelStrip(this, R + 820, 98, room.run, this.roomNo);
+
+    // an objective tracker under that
     const ox = R + 740;
-    const heading = room.isCamp ? 'Before the Run' : room.boss ? 'The Drowned Light' : 'The Restless Dead';
-    const first = room.isCamp ? '- Choose a weapon at the rack' : room.boss ? '- Defeat the Lantern Warden' : `- Dead laid to rest: 0/${total}`;
-    txt(this, ox, 80, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
-    this.objective = txt(this, ox + 8, 98, first, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
-    this.objectiveDone = txt(this, ox + 8, 114, this.coop ? '- Both through the rune gate' : '- Step through the rune gate', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
+    const heading = room.isCamp ? 'Before the Run' : room.boss ? 'The Drowned Light' : room.area.enemies;
+    const first = room.isCamp ? '- Choose a weapon at the rack' : room.boss ? `- Defeat ${room.area.boss.name}` : `- Dead laid to rest: 0/${total}`;
+    const gate = room.gates.length > 1 ? 'a rune gate' : 'the rune gate';
+    txt(this, ox, 80 + dy, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
+    this.objective = txt(this, ox + 8, 98 + dy, first, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
+    this.objectiveDone = txt(this, ox + 8, 114 + dy, this.coop ? `- Both through ${room.gates.length > 1 ? 'one rune gate' : gate}` : `- Step through ${gate}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
     if (room.isCamp) {
       this.gateShown = true; // the gate is open from the start: both lines show
       this.objectiveDone.setAlpha(1);
@@ -295,7 +305,7 @@ export class HudScene extends Phaser.Scene {
 
     // gold and kills over the whole run, bottom right; in co-op that corner is
     // player 2's, so they sit under the objective instead
-    const [gx, gy, kx, ky] = this.coop ? [R + 796, 146, R + 894, 146] : [R + 902, 468, R + 902, 506];
+    const [gx, gy, kx, ky] = this.coop ? [R + 796, 146 + dy, R + 894, 146 + dy] : [R + 902, 468, R + 902, 506];
     const gf = new Frame(this, gx, gy, 92, 32, 'dark');
     gf.add(pic(this, -26, 0, itemIcon(this, 'coin', 20)));
     this.goldText = txt(this, 6, 0, '0', 'head', { fontSize: '16px', color: C.gold }).setOrigin(0, 0.5);
@@ -306,7 +316,7 @@ export class HudScene extends Phaser.Scene {
     k.add(this.killText);
 
     // embers: everything banked, kept between runs; above gold, or left of it in co-op
-    const [ex, ey] = this.coop ? [R + 698, 146] : [R + 902, 430];
+    const [ex, ey] = this.coop ? [R + 698, 146 + dy] : [R + 902, 430];
     const ef = new Frame(this, ex, ey, 92, 32, 'dark');
     ef.add(pic(this, -26, 0, itemIcon(this, 'ember', 22)));
     this.emberText = txt(this, 6, 0, String(embers()), 'head', { fontSize: '16px', color: EMBER }).setOrigin(0, 0.5);
@@ -760,6 +770,16 @@ export class HudScene extends Phaser.Scene {
     const hint = keyHint(this, 0, 102, ['Esc'], 'Resume');
     hint.x = -hint.width / 2;
     f.add(hint);
+    // the road through the run so far, and what lies ahead (not in the camp)
+    if (!this.room.isCamp) {
+      // at the top, clear of the room plaque on the right and the heroes' bars below
+      const road = new Frame(this, viewW / 2 - 60, 58, 560, 74, 'dark');
+      road.add(txt(this, 0, -26, 'THE ROAD', 'small', { fontSize: '10px', color: C.goldSoft, letterSpacing: 3 }).setOrigin(0.5));
+      road.add(roadPanel(this, 0, -8, this.room.run));
+      root.add(road);
+      road.setAlpha(0);
+      this.tweens.add({ targets: road, alpha: 1, duration: 200 });
+    }
     shade.setAlpha(0); f.setAlpha(0).setScale(0.92);
     this.tweens.add({ targets: shade, alpha: 1, duration: 160 });
     this.tweens.add({ targets: f, alpha: 1, scale: 1, duration: 200, ease: 'Back.easeOut' });
@@ -820,13 +840,14 @@ export class HudScene extends Phaser.Scene {
     const l2 = pic(this, cx, cy + 142, 'ui_line').setTint(won ? 0xf0c060 : 0xd8402a).setScale(0.6, 0.5);
     root.add([shade, dark, red, l1, l2]);
 
+    const area = this.room.area;
     const title = won
-      ? txt(this, cx, cy - 96, 'THE BLIGHTWOOD IS CLEANSED', 'title', { fontFamily: FONT.head, fontSize: '38px', fontStyle: '700', letterSpacing: 2, strokeThickness: 7, stroke: '#1a0e02', padding: { x: 16, y: 10 } }).setOrigin(0.5)
+      ? txt(this, cx, cy - 96, area.won?.title ?? 'THE RUN IS WON', 'title', { fontFamily: FONT.head, fontSize: '38px', fontStyle: '700', letterSpacing: 2, strokeThickness: 7, stroke: '#1a0e02', padding: { x: 16, y: 10 } }).setOrigin(0.5)
       : txt(this, cx, cy - 96, 'YOU HAVE FALLEN', 'title', { fontFamily: FONT.logo, fontSize: '46px', fontStyle: '900', strokeThickness: 7, stroke: '#1a0202', padding: { x: 16, y: 10 } }).setOrigin(0.5);
     gild(title, won ? GOLD_STOPS : RED_STOPS);
     if (title.preFX) { title.preFX.padding = 20; title.preFX.addGlow(won ? 0xffa030 : 0xff2a10, 2, 0, false, 0.1, 10); }
     const names = this.room.heroes.map((h) => heroLook(h.who).name).join(' and ');
-    const sub = txt(this, cx, cy - 56, won ? `The Lantern Warden falls to ${names}, and the dead lie still at last.` : `The Blightwood claims ${names}.`, 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
+    const sub = txt(this, cx, cy - 56, won ? `${area.boss.name} falls to ${names}, and the dead lie still at last.` : `${area.name} claims ${names}.`, 'body', { fontSize: '15px', color: C.body }).setOrigin(0.5);
     const orn = pic(this, cx, cy - 36, 'ui_ornament');
     root.add([title, sub, orn]);
 

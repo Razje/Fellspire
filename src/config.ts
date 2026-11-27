@@ -30,8 +30,6 @@ export const WORLD = {
 // has this much more health, so a room is not over twice as fast. DESIGN.md 9.5.
 export const COOP = { foeHp: 1.5 };
 
-// A zone is a few combat rooms, then the boss. (DESIGN.md plans 6 to 8 rooms later.)
-export const ZONE = { bossRoom: 4 };
 
 // The circle of light in the Warden's second phase, in room pixels.
 export const DARK = {

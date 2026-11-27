@@ -154,7 +154,7 @@ test('the gate waits until both living heroes stand in it', async ({ page }, inf
 test('foes have 1.5x health with two players, the Warden too', async ({ page }) => {
   const errors = collectErrors(page);
   await coopCamp(page);
-  await room(page, `s.scene.restart({ room: 4, intro: false });`);
+  await room(page, `s.scene.restart({ room: 5, intro: false });`);
   await page.waitForFunction(() => !!(window as any).game.scene.getScene('room').boss, null, { timeout: 10_000 });
   await page.waitForTimeout(500);
   const r = await page.evaluate(async () => {

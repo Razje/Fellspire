@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COOP, DARK, WORLD, ZONE } from '../config';
+import { COOP, DARK, WORLD } from '../config';
 import { Player } from '../entities/Player';
 import { BoneThrower, Enemy, Ghoul } from '../entities/Enemies';
 import { Warden } from '../entities/Warden';
@@ -29,6 +29,8 @@ import { lootMethods } from '../room/loot';
 import { campMethods } from '../room/camp';
 import { bossFightMethods } from '../room/bossFight';
 import { feedbackMethods } from '../room/feedback';
+import { gatesMethods, type Gate } from '../room/gates';
+import { LEVELS_PER_AREA, area, depth, findArea, type Area, type LevelType } from '../world';
 
 export interface AttackSpec {
   dmg: number;
@@ -112,13 +114,16 @@ export class RoomScene extends Phaser.Scene {
   slow = { k: 1, left: 0 };
   emberFx?: Phaser.GameObjects.Particles.ParticleEmitter;
   gateWait?: Phaser.GameObjects.Text; // "Waiting for ..." over the gate, in co-op
+  gates: Gate[] = []; // the ways out, and where each leads (room/gates.ts)
 
   constructor() {
     super('room');
   }
 
   // Phaser reuses the scene object on restart, so all state is reset here.
-  init(data: { room?: number; hp?: number; hps?: (number | undefined)[]; run?: Run; intro?: boolean }) {
+  // room is the level in the area (1 to 5, the boss last), 0 the camp; area jumps
+  // straight to an area (an id or a tier, for ?area= and tests) with a fresh run.
+  init(data: { room?: number; hp?: number; hps?: (number | undefined)[]; run?: Run; intro?: boolean; area?: string }) {
     this.room = data.room ?? 1;
     this.intro = data.intro ?? true;
     this.boss = null;
@@ -135,6 +140,14 @@ export class RoomScene extends Phaser.Scene {
     this.souls = [];
     this.striker = null;
     this.run = data.run ? { ...data.run } : newRun();
+    if (!this.run.route?.length) this.run.route = ['blightwood'];
+    if (data.area) this.run.route = [findArea(data.area).id];
+    // the level types up to this one (a jump straight to a level fills in plain fights)
+    const levels: LevelType[] = (this.run.levels ?? []).slice(0, Math.max(1, this.room));
+    while (levels.length < this.room) levels.push('normal');
+    if (this.room === LEVELS_PER_AREA) levels[this.room - 1] = 'boss';
+    this.run.levels = levels;
+    this.gates = [];
     // the camp hands out the weapon each player chose at its rack last time
     if (this.isCamp && !data.run) {
       this.run.gear = { ...this.run.gear, weapon: savedWeapon(0) };
@@ -154,7 +167,7 @@ export class RoomScene extends Phaser.Scene {
     this.leaving = false;
     this.freeze = 0;
     this.slain = 0;
-    this.waves = this.makeWaves(this.room);
+    this.waves = this.makeWaves();
   }
 
   // Player 1's hero (the only one in solo).
@@ -184,15 +197,31 @@ export class RoomScene extends Phaser.Scene {
   }
 
   get isBossRoom() {
-    return this.room === ZONE.bossRoom;
+    return this.room === LEVELS_PER_AREA;
+  }
+
+  // The area the party is in (the camp counts as the Blightwood's).
+  get area(): Area {
+    return area(this.run.route[this.run.route.length - 1]);
+  }
+
+  // This level's type, chosen at the last room's gate.
+  get levelType(): LevelType {
+    return this.run.levels[this.room - 1] ?? 'normal';
+  }
+
+  // How far into the run this level is (world.ts): waves, foes and chests grow with it.
+  get depth(): number {
+    return this.isCamp ? 0 : depth(this.area.tier, this.room);
   }
 
   get isCamp() {
     return this.room === 0;
   }
 
-  makeWaves(r: number): Wave[] {
-    if (r === ZONE.bossRoom || r === 0) return [];
+  makeWaves(): Wave[] {
+    if (this.isBossRoom || this.isCamp) return [];
+    const r = this.depth;
     const count = Math.min(2 + r, 4);
     return Array.from({ length: count }, (_, w) => ({
       ghouls: Math.min(2 + Math.floor(r / 2) + w, 6),
@@ -220,7 +249,12 @@ export class RoomScene extends Phaser.Scene {
     cam.setZoom(ZOOM);
     cam.setBounds(0, 0, roomW, WORLD.roomH);
     if (!this.textures.exists('tt_sky')) makeTitleTextures(this);
-    this.world = buildBlightwood(this, { boss: this.isBossRoom, camp: this.isCamp, clear: this.isCamp ? CAMP_CLEAR : undefined });
+    const gates = this.planGates();
+    this.world = buildBlightwood(this, {
+      boss: this.isBossRoom, camp: this.isCamp, clear: this.isCamp ? CAMP_CLEAR : undefined,
+      area: this.isCamp ? undefined : this.area, gates: gates.map((g) => g.tint),
+    });
+    this.placeGates(gates);
     shiftParallax(this);
     this.shots = new Shots(this);
 
@@ -241,11 +275,13 @@ export class RoomScene extends Phaser.Scene {
       this.camp = new Camp(this, this.world.lights, this.world.obstacles);
       this.dummy = new Dummy(this, CAMP.dummy.x, CAMP.dummy.y);
       this.enemies.push(this.dummy);
-      this.gateOpen = true; // the rune gate is the way into the run
-      this.world.openExit();
+      this.openGates(); // the rune gate is the way into the run
     } else if (!this.isBossRoom) this.placeChest();
     if (this.isBossRoom) {
       const b = this.toughen(new Warden(this, roomW / 2 + 260, (WORLD.groundTop + WORLD.groundBottom) / 2));
+      // until each area has its own boss, the Warden stands in, tougher further in
+      b.maxHp = Math.round(b.maxHp * (1 + 0.5 * this.area.tier));
+      b.hp = b.maxHp;
       this.boss = b;
       this.enemies.push(b);
       this.world.lights.push(b.light);
@@ -262,7 +298,7 @@ export class RoomScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.stopFollow();
     this.time.delayedCall(500, () => cam.pan(b.x, b.y - 60, 1100, 'Sine.easeInOut'));
-    this.time.delayedCall(1700, () => { b.flare(); this.hud?.bossIntro('The Lantern Warden', 'Keeper of the Drowned Light'); });
+    this.time.delayedCall(1700, () => { b.flare(); this.hud?.bossIntro(this.area.boss.name, this.area.boss.title); });
     this.time.delayedCall(4500, () => cam.pan(this.focus.x, this.focus.y - 30, 800, 'Sine.easeInOut'));
     this.time.delayedCall(5350, () => {
       cam.startFollow(this.focus, true, 0.1, 0.1, 0, 30);
@@ -423,7 +459,7 @@ export class RoomScene extends Phaser.Scene {
     this.updatePickups(dt);
     this.updateCoins(dt);
     this.updateFires(dt);
-    if (!this.isBossRoom) this.updateWaves(dt);
+    this.updateWaves(dt);
     this.updateDark(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
     this.world.update(this.cameras.main);
@@ -619,8 +655,8 @@ export class RoomScene extends Phaser.Scene {
   }
 }
 
-// The room's methods live in several files under src/room/ (waves, gear effects, loot,
-// the camp, the boss fight, feedback); they are mixed in here, so callers still
+// The room's methods live in several files under src/room/ (waves, gates, gear effects,
+// loot, the camp, the boss fight, feedback); they are mixed in here, so callers still
 // write scene.openChest() and so on, and each file reaches the room as `this`.
 type WavesMethods = typeof wavesMethods;
 type GearFxMethods = typeof gearFxMethods;
@@ -628,5 +664,6 @@ type LootMethods = typeof lootMethods;
 type CampMethods = typeof campMethods;
 type BossFightMethods = typeof bossFightMethods;
 type FeedbackMethods = typeof feedbackMethods;
-export interface RoomScene extends WavesMethods, GearFxMethods, LootMethods, CampMethods, BossFightMethods, FeedbackMethods {}
-Object.assign(RoomScene.prototype, wavesMethods, gearFxMethods, lootMethods, campMethods, bossFightMethods, feedbackMethods);
+type GatesMethods = typeof gatesMethods;
+export interface RoomScene extends WavesMethods, GatesMethods, GearFxMethods, LootMethods, CampMethods, BossFightMethods, FeedbackMethods {}
+Object.assign(RoomScene.prototype, wavesMethods, gatesMethods, gearFxMethods, lootMethods, campMethods, bossFightMethods, feedbackMethods);

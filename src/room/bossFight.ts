@@ -162,6 +162,12 @@ export const bossFightMethods = {
     this.shake(300, 0.01);
     for (const e of this.enemies) if (e !== b && !e.isDead()) e.takeHit(999, e.x - 1, 0, false);
     if (this.dark) this.tweens.add({ targets: this.dark.img, alpha: 0, duration: 2200, delay: 400 });
-    this.time.delayedCall(3000, () => { if (this.livingHeroes.length) this.hud?.showVictory(this.run); });
+    // the last area's boss wins the run; any other opens his glade's gates to the next areas
+    this.time.delayedCall(3000, () => {
+      if (!this.livingHeroes.length) return;
+      if (!this.gates.length) { this.hud?.showVictory(this.run); return; }
+      this.openGates();
+      this.hud?.banner('good', `${this.area.boss.name} falls`, this.gates.length > 1 ? 'Two roads lead on. Choose a gate' : 'The road leads on');
+    });
   },
 };
