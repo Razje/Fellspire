@@ -468,6 +468,7 @@ export class HudScene extends Phaser.Scene {
   // the screen closes once both have taken one. With one side it is the solo chest.
   openChoice(specs: ChoiceSpec[]) {
     this.hideTip();
+    this.clearBanner(); // "Room Cleared" would otherwise sit on top of the cards
     this.blurRoom(true);
     const coop = specs.length > 1;
     const root = this.add.container(0, 0).setDepth(90);
@@ -676,9 +677,14 @@ export class HudScene extends Phaser.Scene {
     this.units[who]?.slots[a].flash();
   }
 
-  banner(kind: BannerKind, text: string, sub?: string) {
+  // Takes down whatever banner is showing (a screen opening over it, like the chest's cards).
+  clearBanner() {
     for (const o of this.bannerObjs) { this.tweens.killTweensOf(o); o.destroy(); }
     this.bannerObjs = [];
+  }
+
+  banner(kind: BannerKind, text: string, sub?: string) {
+    this.clearBanner();
     const keep = <T extends Phaser.GameObjects.GameObject>(o: T) => { this.bannerObjs.push(o); return o; };
     const hold = kind === 'zone' ? 2400 : 1500;
     const out = (targets: Phaser.GameObjects.GameObject[], delay: number) =>

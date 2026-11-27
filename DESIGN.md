@@ -19,13 +19,10 @@ feel. Original world, original names (see the hard rules in `CLAUDE.md`).
 1. **Hub camp.** Make your character once (customisation), then before each run
    choose a starting weapon, spend embers carried back from earlier runs, and step
    through the portal.
-2. **Zone.** 6 to 8 rooms in random order, then a boss.
-   - Combat room: clear the waves to open the exit.
-   - Elite room: one tough enemy, better loot.
-   - Treasure room: a chest, sometimes trapped.
-   - Merchant: weapons, potions and trinkets for gold.
-   - Shrine: one of three weapon upgrades, or a curse for a strong reward.
-3. **Three zones per run**, each harder. Gold and gear are lost on death; embers are kept.
+2. **Area.** Five levels, the fifth a boss, with a merchant's stop between two of
+   them (decided by Martijn, 2026-11-27; see "The world" below).
+3. **Five areas per run**, each harder, with a choice of two after Blightwood, after the
+   second and after the third. Gold and gear are lost on death; embers are kept.
 
 ## Combat
 
@@ -127,9 +124,49 @@ for the player character until then.
 Boss, **the Lantern Warden**: lantern slams and summoned ghouls; at half health the
 lantern breaks and the fight continues in a shrinking circle of light.
 
-**2. Scorchreach.** A raider war camp in red badlands: brutes, wolf riders, fire shamans.
+## The world (decided by Martijn, 2026-11-27)
 
-**3. The Fellspire.** A frozen tower. Final boss: a lich who steals one of your skills.
+A run goes through five areas. After Blightwood, and after each area that follows,
+the party picks one of two:
+
+| Order | Choice | Feel |
+|---|---|---|
+| 1 | **Blightwood** | Rotting forest village, the undead (as built) |
+| 2 | **Gloomvine** (dark jungle) or **the Sunken Mire** (marshland) | Green-black canopy, glowing fungi / fog, still water, reeds, rot |
+| 3 | **Scorchreach** (fire and lava) or **Frostmere** (water and ice) | Red badlands, lava cracks, ash / frozen lake, ice spires, snow |
+| 4 | **the Diamond Hollow** or **the Emerald Deep** (crystal caves) | White-blue or green crystal light in the dark |
+| 5 | **The Fellspire** | A frozen tower; the final boss, a lich (the free Necromancer pack's Frozen Lich) |
+
+Area names other than Blightwood, Scorchreach and the Fellspire are proposals.
+
+**Every area has 5 levels**: four fights, then the area's boss as level 5 (Blightwood's
+is the Lantern Warden). **Each area has a merchant's stop**, its own short, safe clearing
+between two levels: weapons, armor kits and trinkets for gold. **Leaving a level shows
+two rune gates** marked with the next level's type, so the risk is chosen (Lost Castle
+2's branching map). The level types:
+
+- **Normal**: clear the waves; the chest is **wood, bronze or silver**, the higher the
+  better its cards' rarities.
+- **Challenge**: a rule shown on entering (for example clear it within a time, or be
+  hit no more than 3 times). Meet it and the chest is **gold**; fail and it stays shut
+  (or falls back to wood: to decide when built).
+- **Elite**: stronger foes (more health, harder hits, a crown); clearing it gives a
+  **gold** chest.
+
+Art: the free CraftPix chibi packs (14 exist, 3 in use) plus any other free art online
+that fits the style; scenery, props and effects painted in code as Blightwood is.
+
+Build order for the world, each a step Martijn plays before the next:
+
+- 11.1 Clean-up: split `RoomScene.ts` (1,385 lines) so areas, level types and chests
+  each get their own file; the "Room Cleared" banner no longer covers the chest's cards.
+- 11.2 The run's structure: areas and levels as data, the two gates with level types,
+  the choice of next area, a map of the run on the HUD. New areas start as recoloured
+  Blightwood.
+- 11.3 Chest tiers, challenge rules and elite foes.
+- 11.4 The merchant's stop.
+- 11.5 New enemies from the free packs (needs Martijn's downloads).
+- 11.6 to 11.11 One area each: scenery, props, enemies, boss. The Fellspire last.
 
 ## Look
 
@@ -331,6 +368,8 @@ studied for its card and end-screen ideas only; none of its art is used.
    hero straight back up from her first fall of a run with 30% ("rises again"), once
    per hero (`run.risen`). Costs are to be balanced after Martijn plays it.
    Later perhaps 10.4: a keeper of run records.
+11. **next** The world: five areas of five levels, level types, chest tiers, a merchant
+   per area, a boss per area (planned 2026-11-27, see "The world" above for the parts).
 
 After 6, zone 1 is a complete, playable slice. Playtest the boss straight away
 with `?boss` on the address (http://127.0.0.1:5180/?boss).

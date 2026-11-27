@@ -117,6 +117,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/shrine.ts` | The shrine's panel (`ShrinePanel`): the three branches as trees of discs joined by lines, the bank, a card for the selected upgrade; its glyphs are drawn here. Opened by `HudScene.openShrine` |
 | `src/ui/armory.ts` | The rack's store (`WeaponShop`): tabs per weapon type, a grid, the equipped and selected weapons compared as cards; opened by `HudScene.openRack` |
 | `src/scenes/RoomScene.ts` | A room: `heroes` (one per device in the party; `player` is player 1, `stats` player 1's), the camera on the middle of the living heroes and the `LEASH` between them, `nearestHero` for enemies, a fallen hero in co-op (`checkFallen`, her `Soul`, `raise`), waves, exit, hit resolution (`strike(attacker, by, ...)`, the one path for swings, shots and skill areas; `by` is the hero whose gear bonuses apply) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. Room `ZONE.bossRoom` is the Warden's glade: his introduction, the darkness and circle of light, victory |
+| `src/room/` | `RoomScene`'s methods by subject, split out on 2026-11-27 so the class stays readable: `waves.ts` (waves, the gate, "Waiting for"), `gearFx.ts` (healing, chain lightning, burning ground), `loot.ts` (coins, barrels and crates, the chest, `equip`), `camp.ts` (rack and shrine), `bossFight.ts` (the Warden's glade and its darkness), `feedback.ts` (dust, shake, combat text, sparks). Each exports a `<part>Methods` object whose methods take `this: RoomScene`; the end of `RoomScene.ts` mixes them in, so callers still write `scene.openChest()`. **Give every method here an explicit return type and no default that reads `this`** (`by: Player = this.player`): either makes TypeScript's type of the part depend on itself and the whole room stops type-checking. RoomScene's fields are public for the same reason (the parts read them) |
 | `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash), set its own hit-stop (`stop`), kick the hero back (`recoil`), make her untouchable until it lands (`evade`) and spend a round (`ammo`, with the weapon's `mag`). A new weapon type starts here |
 | `src/revive.ts` | Co-op revives: a fallen hero's `Soul` (the glow over her body, the ring with its gold sweet-spot arc, the key prompt), who is holding interact by it, and when she gets up; tuning in `REVIVE` |
 | `src/skills.ts` | How each skill plays out (`SKILL_TUNING` holds its numbers): it returns how long the hero is busy and puts an effect on the room that runs each frame |
@@ -148,6 +149,18 @@ picks animations by folder name (`Idle`, `Walking`, `Slashing`, ...). CraftPix
 downloads need Martijn's sign-in; downloads from the browser pane reach him as a save
 dialog. macOS zips carry `__MACOSX/._*.png` files that are not images; the tools skip
 them.
+
+**14 free chibi packs are in `assets/packs/` since 2026-11-27** and their parts are
+unpacked in `assets/parts/`: Valkyrie, Skeleton Warrior, Zombie Villager, Skeleton
+Crusader, Dark Oracle, Necromancer of the Shadow (one variant is a Frozen Lich), Forest
+Ranger, Bloody Alchemist, Seer, Minotaur, Reaper Man, Fallen Angel, Golem, and Orc /
+Ogre / Goblin. **All share one rig** (bones `bone_000`-`007`, the same part names, the same
+18 animations), checked by parsing each `Animations.scml`. Exceptions: Skeleton Crusader
+adds a shield bone like the Valkyrie; Bloody Alchemist lacks Idle Blinking and Face 02;
+Forest Ranger has Shooting, Run Shooting and Shooting in The Air with a Bow and an Arrow
+part instead of the three slashes, a real draw-and-shoot for the player's bow. CraftPix
+downloads from the browser pane wait on a save dialog in the desktop app, so the pane
+must be showing; the files host refuses a direct fetch (403).
 
 `lost-castle-2-reference.md` is Martijn's write-up of Lost Castle 2 (look, HUD,
 combat, rooms, bosses); read the relevant section before designing a step. The look follows Lost Castle 2 (dark teal night forests, warm light pools, glowing
@@ -229,6 +242,14 @@ Decorative, bundled from npm.
   Key clears its JustDown, so a tap that goes down and up between two frames (every
   `page.keyboard.press` in a test) was lost. And it ignores an event it has seen: a
   duplicate key-down arriving after the key-up left the key held. Found 2026-11-24.
+- **Measure frame rate in headless Edge with the real GPU**, not in the browser pane
+  or a visible window: Windows throttles a hidden pane or a covered window to a few
+  frames a second, which looks exactly like the game slowing down. `chromium.launch({
+  channel: 'msedge', headless: true, args: ['--use-angle=d3d11', '--ignore-gpu-blocklist',
+  '--enable-gpu'] })` reports the AMD GPU and gives a steady 80-85 fps. A bot that plays
+  the game must read `hud.choice` while the room is paused: the chest pauses the room
+  until a card is taken, so a bot waiting for the room waits forever. Both cost a false
+  "freeze" report on 2026-11-27.
 - Phaser tweens time themselves by the real clock, so stepping the game by hand
   in a tight loop moves sprites but not tweens. Tests that need tweens wait.
 
