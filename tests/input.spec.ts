@@ -15,7 +15,7 @@ test('each keyboard layout drives its own actions', async ({ page }) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
 
   const r = await page.evaluate(() => {
@@ -65,7 +65,7 @@ test('the numpad works with Num Lock off, and a quick tap is not lost', async ({
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
   await page.evaluate(() => {
     const s = (window as any).game.scene.getScene('room');

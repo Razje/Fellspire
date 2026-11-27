@@ -9,7 +9,8 @@ import { defineConfig } from '@playwright/test';
 // worker at its server. Four is the measured best on this laptop (Ryzen 7 5700U, 8
 // cores): booting the game is CPU work in each browser, so start-up takes 10 s alone,
 // 17 s with three at once and 35 s with six, and more workers stopped paying. The full
-// suite went from 11.8 to 6 to 8 minutes (2026-11-27). PW_WORKERS=1 runs one at a time.
+// suite went from 11.8 to 6 to 8 minutes, and to about 4 with the frames packed into
+// sheets (2026-11-27). PW_WORKERS=1 runs one at a time.
 export const WORKERS = Number(process.env.PW_WORKERS) || 4;
 export const PORT = 5181;
 

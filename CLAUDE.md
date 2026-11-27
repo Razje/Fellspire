@@ -105,7 +105,7 @@ before a change is called done.
 
 **How the suite runs (since 2026-11-27).** Four tests at a time (`PW_WORKERS` changes
 it), each worker with its own dev server on ports 5181 and up, Edge on the real GPU:
-6 to 8 minutes instead of 11.8. Every spec imports `test` from `tests/fixtures.ts`, not
+about 4 minutes instead of 11.8 (with the frame sheets, below). Every spec imports `test` from `tests/fixtures.ts`, not
 from `@playwright/test`: that sets each worker's server and records, from the browser's
 own code coverage, which functions of `src/` each test ran (`.covermap/`, ignored by
 git, rebuilt by every run). `tools/test-changed.mjs` maps each changed line to the
@@ -116,10 +116,14 @@ test that used the file; a changed spec runs whole; config, `index.html`, packag
 or no record yet run everything. `--dry` says what it would run, a commit id compares
 against that commit instead of the last one.
 
-- **Booting the game is the cost of a test**, about 10 s of the 5 to 30: 411 separate
-  frame images decoded and uploaded to the GPU. More workers stop helping past four on
-  this laptop because that work is CPU in every browser. Packing the frames into a few
-  sheets would cut it for every test.
+- **Booting the game is the cost of a test.** It took about 8 s while 369 frames loaded as
+  separate images; packed into 3 sheets (`tools/pack-sheets.mjs`, see Art) the title is
+  up in about 3 s. More workers stop helping past four on this laptop because that work
+  is CPU in every browser.
+- **Never return a scene from `page.evaluate`.** `scene.start()` and `scene.restart()`
+  return Phaser's scene plugin, and an arrow like `() => game.scene....start('room')`
+  hands it back, so Playwright copied the whole game object graph to the test: about
+  3 s each time, in 14 places. Use a block body, `() => { ...start('room'); }`.
 - **Never rely on a check from outside catching a moment in the game.** Under load
   Playwright's polling lagged 7 s of game time behind: the boss test saw the Warden
   only after he had summoned minions. Stop the clock (`game.loop.sleep()`) and step it
@@ -138,7 +142,8 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 |---|---|
 | `src/world.ts` | The run's shape as data: the eight areas (`AREAS`: name, tier 0 to 4, the objective's heading, `look` = the colour wash, moonlight, fireflies and rune light, the boss's name), five levels per area with the boss last (`LEVELS_PER_AREA`), the level types (`normal`, `challenge`, `elite`, `boss`), `depth(tier, level)` that waves, foes and chests scale with, `rollGateTypes` for a pair of gates, `findArea` for `?area=` |
 | `src/config.ts` | Tuning knobs: foes' extra health in co-op (`COOP`), room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
-| `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded |
+| `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded, from the packed sheets when they hold them all (`artFrames` gives each frame as a `FrameRef`: texture key, and the cell in a sheet), else one file each |
+| `src/artPick.ts` | Which frames each character uses (`pickFrames`), shared by the game and `tools/pack-sheets.mjs`; imports only types, so Node can load it |
 | `src/scenes/BootScene.ts` | Loads frames, builds animations, makes the drawn stand-ins |
 | `src/scenes/MenuScene.ts` | Title screen and its menu (New Run, Character, Options, Credits); Options and Credits come from `ui/panels.ts`. Shows your hero at the campfire once one is made |
 | `src/scenes/CreateScene.ts` | Character creation: the hero large on the left, the choices in a gilded panel. `then: 'run'` starts the camp after, `'menu'` returns to the open menu, `'lobby'` to the co-op lobby; `who` is the player (0 or 1) |
@@ -172,7 +177,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
 | `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show; `menuKey()` / `menuPad()` / `menuLabels()` which keys and controller work a menu for a device. Tests press `p.keys[...]`, the Phaser names of that device's keys |
 | `src/settings.ts` | Options remembered in the browser |
-| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs`, `test-changed.mjs` (runs the tests a change affects; see Testing), `package.mjs` |
+| `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs`, `test-changed.mjs` (runs the tests a change affects; see Testing), `pack-sheets.mjs` (character frames into sheets; see Art), `package.mjs` |
 
 Keep it that way as it grows: new enemies, weapons and rooms should become data
 (definitions in a list), not more branches in `Player` or `RoomScene`. Large single
@@ -188,6 +193,21 @@ picks animations by folder name (`Idle`, `Walking`, `Slashing`, ...). CraftPix
 downloads need Martijn's sign-in; downloads from the browser pane reach him as a save
 dialog. macOS zips carry `__MACOSX/._*.png` files that are not images; the tools skip
 them.
+
+**After unpacking character art, or changing a character's variant or animation folders
+(`CHARACTERS`, `ANIM_SOURCES` in `config.ts`), pack the frames again:**
+
+```powershell
+node C:\IXON\fellspire\tools\pack-sheets.mjs
+```
+
+It packs the frames each character uses into grid sheets of 16 x 8 cells
+(`assets/sheets/<character>-<n>.png`, plus `sheets.json` saying where each frame went;
+ignored by git like all art), about 4 s. The choice of frames is `src/artPick.ts`, the
+same code the game runs, so they cannot disagree. A character whose frames are not all
+in the sheets loads its files one by one instead and says so in the console: slower,
+never broken. `tools/package.mjs` packs fresh sheets itself and ships them instead of
+the separate frames (the copy went from about 26 to 17 MB).
 
 **14 free chibi packs are in `assets/packs/` since 2026-11-27** and their parts are
 unpacked in `assets/parts/`: Valkyrie, Skeleton Warrior, Zombie Villager, Skeleton

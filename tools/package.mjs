@@ -5,9 +5,9 @@
 //   node tools/package.mjs
 //
 // Output: release/Fellspire.html and release/Fellspire-<date>.zip (both ignored
-// by git). Only the art the game uses goes in: the first colour variant of each
-// character pack and the hero's parts (all three Valkyrie sets, which character
-// creation mixes), not every variant on disk.
+// by git). Only the art the game uses goes in: the characters' frames as freshly packed
+// sheets (tools/pack-sheets.mjs runs first) and the hero's parts (all three Valkyrie
+// sets, which character creation mixes), not every variant on disk.
 import { build } from 'vite';
 import { readFile, writeFile, mkdir, rm, stat } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -18,9 +18,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'release');
 const dist = path.join(out, 'build');
 
-// The art the game shows; anything else under assets/ is left out of the package.
-const KEEP = [/\/assets\/characters\/hero\/Valkyrie_1\//, /\/assets\/characters\/ghoul\/Zombie_Villager_1\//,
-  /\/assets\/characters\/archer\/Skeleton_Warrior_1\//, /\/assets\/parts\/Valkyrie_[123]\//, /\/assets\/backgrounds\//];
+// fresh sheets, so the copy never falls back to frames it does not carry
+execFileSync(process.execPath, [path.join(root, 'tools/pack-sheets.mjs')], { stdio: 'inherit' });
+
+// The art the game shows; anything else under assets/ is left out of the package. The
+// characters' frames travel as sheets, so the separate frame files stay out.
+const KEEP = [/\/assets\/sheets\//, /\/assets\/parts\/Valkyrie_[123]\//, /\/assets\/backgrounds\//];
 
 const leaveOut = {
   name: 'leave-out-unused-art',
@@ -88,12 +91,11 @@ Controls
   Esc                pause menu
 A game controller works too.
 
-New Run asks Solo or Co-op. Co-op is still being built: two players can join
-the lobby (J for the keyboard's left side, Numpad 1 for its right side, A on a
-controller), but for now only player 1 goes into the fight.
+New Run asks Solo or Co-op. In co-op two players share one keyboard (J joins
+the left side, Numpad 1 the right side) or use controllers (A joins).
 
-Clear the waves in each room, open the chest and pick a reward, step through
-the rune gate. Room 4 holds the Lantern Warden. Good luck.
+Clear the waves in each room, open the chest and pick a reward, then choose one
+of two rune gates. Each area has five levels; the fifth holds its boss. Good luck.
 
 A personal prototype. Character art: CraftPix.net. Fonts: Cinzel, Marcellus.
 `;

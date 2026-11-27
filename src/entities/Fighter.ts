@@ -39,7 +39,7 @@ export abstract class Fighter {
     this.hp = maxHp;
     this.animated = loadedAnims[key] ?? new Set();
     const art = this.animated.has('idle');
-    this.sprite = scene.add.sprite(x, y, art ? firstFrame[key]! : `ph_${key}`);
+    this.sprite = scene.add.sprite(x, y, art ? firstFrame[key]!.key : `ph_${key}`, art ? firstFrame[key]!.frame : undefined);
     this.sprite.setOrigin(0.5, art ? this.cfg.footY : 0.98);
     this.baseScale = (art ? this.cfg.height / this.sprite.height : (this.cfg.height * 0.62) / PH_H) * scaleMul;
     this.sprite.setScale(this.baseScale);

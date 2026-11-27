@@ -63,7 +63,7 @@ test('HUD, pause menu and end screen', async ({ page }, info) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
   await waitForScene(page, 'hud');
   await page.waitForTimeout(1200);

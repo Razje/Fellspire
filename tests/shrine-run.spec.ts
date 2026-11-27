@@ -33,7 +33,7 @@ async function learned(page: Page, ranks: Record<string, number>) {
 async function startRoom(page: Page) {
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
   await waitForScene(page, 'hud');
 }
@@ -182,7 +182,7 @@ test.describe('co-op', () => {
     await waitForScene(page, 'room');
     await waitForScene(page, 'hud');
     await page.waitForTimeout(600);
-    await page.evaluate(() => (window as any).game.scene.getScene('room').scene.restart({ room: 1 }));
+    await page.evaluate(() => { (window as any).game.scene.getScene('room').scene.restart({ room: 1 }); });
     await page.waitForFunction(() => { const s = (window as any).game.scene.getScene('room'); return s.room === 1 && s.enemies.length > 0; }, null, { timeout: 10_000 });
     await page.waitForTimeout(800);
     expect(await page.evaluate(() => { const c = (window as any).game.scene.getScene('room').chest; return [c.items.length, c.items2.length]; })).toEqual([4, 4]);

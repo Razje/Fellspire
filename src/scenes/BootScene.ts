@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { CHARACTERS, LOOPING, type CharKey } from '../config';
 import { LEVELS_PER_AREA } from '../world';
-import { artFrames, bgUrls, firstFrame, loadedAnims } from '../assets';
+import { artFrames, bgUrls, firstFrame, frameUrls, loadedAnims, sheetLoads, type FrameRef } from '../assets';
 import { makePlaceholderTextures } from '../placeholders';
 import { screenCamera } from '../ui/view';
 import { loadParts, partVariants } from '../rig/parts';
 import { HERO_SETS } from '../hero';
 
 export class BootScene extends Phaser.Scene {
-  private found: Partial<Record<CharKey, Record<string, string[]>>> = {};
+  private found: Partial<Record<CharKey, Record<string, FrameRef[]>>> = {};
 
   constructor() {
     super('boot');
@@ -19,18 +19,11 @@ export class BootScene extends Phaser.Scene {
     const label = this.add.text(480, 270, 'Loading...', { fontFamily: '"Cinzel", Georgia, serif', fontSize: '22px', color: '#d8c79a', resolution: 2 }).setOrigin(0.5);
     this.load.on('progress', (p: number) => label.setText(`Loading... ${Math.round(p * 100)}%`));
 
-    const queued = new Set<string>();
-    for (const key of Object.keys(CHARACTERS) as CharKey[]) {
-      const frames = artFrames[key] ?? {};
-      this.found[key] = frames;
-      for (const urls of Object.values(frames)) {
-        for (const url of urls) {
-          if (queued.has(url)) continue;
-          queued.add(url);
-          this.load.image(url, url);
-        }
-      }
-    }
+    // characters' frames: packed sheets where tools/pack-sheets.mjs made them (a grid
+    // of equal cells), separate images otherwise (see assets.ts)
+    for (const key of Object.keys(CHARACTERS) as CharKey[]) this.found[key] = artFrames[key] ?? {};
+    for (const s of sheetLoads) this.load.spritesheet(s.key, s.url, { frameWidth: s.frameWidth, frameHeight: s.frameHeight });
+    for (const url of frameUrls) this.load.image(url, url);
     bgUrls.forEach((url, i) => this.load.image(`bg_${i}`, url));
     this.registry.set('bgCount', bgUrls.length);
   }
@@ -44,10 +37,10 @@ export class BootScene extends Phaser.Scene {
     for (const key of Object.keys(CHARACTERS) as CharKey[]) {
       const frames = this.found[key] ?? {};
       const names = new Set<string>();
-      for (const [anim, urls] of Object.entries(frames)) {
+      for (const [anim, refs] of Object.entries(frames)) {
         this.anims.create({
           key: `${key}_${anim}`,
-          frames: urls.map((u) => ({ key: u })),
+          frames: refs.map((r) => ({ key: r.key, frame: r.frame })),
           frameRate: 18,
           repeat: LOOPING.has(anim) ? -1 : 0,
         });

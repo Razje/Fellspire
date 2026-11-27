@@ -47,13 +47,13 @@ export class RigLabScene extends Phaser.Scene {
 
     // 1: the frames used now
     const art = loadedAnims.hero?.has('idle');
-    const fr = this.add.sprite(col(0), y, firstFrame.hero ?? 'ph_hero').setOrigin(0.5, CHARACTERS.hero.footY);
+    const fr = this.add.sprite(col(0), y, firstFrame.hero?.key ?? 'ph_hero', firstFrame.hero?.frame).setOrigin(0.5, CHARACTERS.hero.footY);
     if (art) fr.setScale(HEIGHT / fr.height);
     this.frames.push(fr);
     // 2: the same character from parts
     this.rigs.push(new Rig(this, col(1), y, scmls.get('Valkyrie_1')!, 'Valkyrie_1', size));
     // 3: both, overlaid: red where only the frames are, the rig on top half see-through
-    const under = this.add.sprite(col(2), y, firstFrame.hero ?? 'ph_hero').setOrigin(0.5, CHARACTERS.hero.footY).setTintFill(0xff3030).setAlpha(0.8);
+    const under = this.add.sprite(col(2), y, firstFrame.hero?.key ?? 'ph_hero', firstFrame.hero?.frame).setOrigin(0.5, CHARACTERS.hero.footY).setTintFill(0xff3030).setAlpha(0.8);
     if (art) under.setScale(HEIGHT / under.height);
     this.frames.push(under);
     const over = new Rig(this, col(2), y, scmls.get('Valkyrie_1')!, 'Valkyrie_1', size);

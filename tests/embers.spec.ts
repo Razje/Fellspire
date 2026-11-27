@@ -22,7 +22,7 @@ function collectErrors(page: Page) {
 
 async function startRoom(page: Page, room: number) {
   await waitForScene(page, 'menu');
-  await page.evaluate((n) => (window as any).game.scene.getScene('menu').scene.start('room', { room: n }), room);
+  await page.evaluate((n) => { (window as any).game.scene.getScene('menu').scene.start('room', { room: n }); }, room);
   await waitForScene(page, 'room');
   await waitForScene(page, 'hud');
 }

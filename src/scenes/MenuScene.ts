@@ -168,7 +168,7 @@ export class MenuScene extends Phaser.Scene {
 
   private character(key: CharKey, x: number, y: number, height: number, flip: boolean) {
     const art = loadedAnims[key]?.has('idle');
-    const spr = this.add.sprite(x, y, art ? firstFrame[key]! : `ph_${key}`).setOrigin(0.5, art ? CHARACTERS[key].footY : 0.98).setDepth(50);
+    const spr = this.add.sprite(x, y, art ? firstFrame[key]!.key : `ph_${key}`, art ? firstFrame[key]!.frame : undefined).setOrigin(0.5, art ? CHARACTERS[key].footY : 0.98).setDepth(50);
     spr.setScale(art ? height / spr.height : (height * 0.62) / 84);
     spr.setFlipX(flip);
     if (art) spr.play({ key: `${key}_idle`, repeat: -1, frameRate: 12 + Math.random() * 4 });

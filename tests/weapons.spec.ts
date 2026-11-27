@@ -207,7 +207,7 @@ test('on real foes: the charge stuns, the blizzard slows, an arrow pierces, the 
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
   await waitForScene(page, 'hud');
   const r = await page.evaluate(async () => {

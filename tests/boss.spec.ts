@@ -25,7 +25,7 @@ test('the Lantern Warden fight works', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 3 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 3 }); });
   await waitForScene(page, 'room');
   expect(await page.evaluate(() => !!(window as any).game.scene.getScene('room').boss)).toBe(false);
 

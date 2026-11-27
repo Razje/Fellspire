@@ -234,7 +234,7 @@ export class HudScene extends Phaser.Scene {
       face = portrait = rig;
       if (who === 1) rig.setFacing(-1); // player 2 looks in from the right
     } else {
-      const img = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero! : 'ph_hero');
+      const img = this.add.image(cx + 4, cy + 2, art ? firstFrame.hero!.key : 'ph_hero', art ? firstFrame.hero!.frame : undefined);
       face = img.setScale(art ? 150 / img.height : 1.1).setOrigin(0.5, art ? 0.56 : 0.5).setFlipX(who === 1);
     }
     keep(face);

@@ -29,7 +29,7 @@ test('the hero in a fight is drawn from parts', async ({ page }, info) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
   await page.waitForFunction(() => (window as any).game?.scene.isActive('menu'), null, { timeout: 60_000 });
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await page.waitForFunction(() => (window as any).game?.scene.getScene('hud')?.ready, null, { timeout: 60_000 });
   const r = await page.evaluate(() => {
     const game = (window as any).game;
@@ -63,7 +63,7 @@ test.describe('fight screenshot', () => {
   test('hero from parts in a room', async ({ page }, info) => {
     await page.goto('/');
     await page.waitForFunction(() => (window as any).game?.scene.isActive('menu'), null, { timeout: 60_000 });
-    await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+    await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
     await page.waitForFunction(() => (window as any).game?.scene.getScene('hud')?.ready, null, { timeout: 60_000 });
     await page.waitForTimeout(3500);
     await page.keyboard.press('j');

@@ -78,7 +78,7 @@ test('fight scene draws the Blightwood', async ({ page }, info) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
   await page.waitForTimeout(2600); // fade-in, banner, first wave walking in
 
@@ -106,7 +106,7 @@ test('combat rules hold', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await waitForScene(page, 'menu');
-  await page.evaluate(() => (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }));
+  await page.evaluate(() => { (window as any).game.scene.getScene('menu').scene.start('room', { room: 1 }); });
   await waitForScene(page, 'room');
 
   const r = await page.evaluate(() => {

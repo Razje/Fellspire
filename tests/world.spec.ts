@@ -27,7 +27,7 @@ function room(page: Page, body: string) {
 }
 
 async function startRoom(page: Page, data: Record<string, unknown>) {
-  await page.evaluate((d) => (window as any).game.scene.getScene('menu').scene.start('room', d), data);
+  await page.evaluate((d) => { (window as any).game.scene.getScene('menu').scene.start('room', d); }, data);
   await page.waitForFunction(() => {
     const g = (window as any).game, s = g?.scene.getScene('room');
     return !!s && g.scene.isActive('room') && !!s.player && !!g.scene.getScene('hud')?.ready;
