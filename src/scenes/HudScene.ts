@@ -12,7 +12,7 @@
 import Phaser from 'phaser';
 import { WORLD } from '../config';
 import { firstFrame, loadedAnims } from '../assets';
-import { Bar, Button, FocusList, Frame, SLOT, Slot, bandTextures, hi, icon, keyHint, pic, CURSOR, CURSOR_HOVER } from '../ui/kit';
+import { Bar, Button, FocusList, Frame, SLOT, Slot, bandTextures, hi, icon, keycap, keyHint, pic, CURSOR, CURSOR_HOVER } from '../ui/kit';
 import { WEAPONS } from '../weapons';
 import { openOptions, type Panel } from '../ui/panels';
 import { ItemCard, itemIcon, itemTooltip } from '../ui/items';
@@ -23,7 +23,7 @@ import { embers } from '../embers';
 import { ShrinePanel } from '../ui/shrine';
 import { Rig } from '../rig/Rig';
 import { heroLook, heroRig, type Who } from '../hero';
-import { getParty, keyLabels, menuKey, menuLabels, menuPad, type Device } from '../input';
+import { getParty, keyLabels, menuKey, menuLabels, menuPad, onInputMode, showsPad, type Device } from '../input';
 import { gearOf } from '../run';
 import type { Player } from '../entities/Player';
 import { C, FONT, GOLD_STOPS, RED_STOPS, gild, txt } from '../ui/theme';
@@ -42,15 +42,18 @@ const { viewW, viewH } = WORLD;
 
 // One player's cards on the chest screen: what they are offered and what taking
 // one does; device and name only in co-op, where each player has a side.
-export interface ChoiceSpec { items: Item[]; gear: Gear; onPick: (it: Item) => void; heading?: string; device?: Device; name?: string }
+// onPick gets null when the player left the chest without taking anything.
+export interface ChoiceSpec { items: Item[]; gear: Gear; onPick: (it: Item | null) => void; heading?: string; device?: Device; name?: string }
 interface ChoiceSide {
   cards: ItemCard[];
   index: number;
   taken: Item | null;
+  done: boolean; // taken a card, or left
   device?: Device;
   waitText?: Phaser.GameObjects.Text;
   focus: (i: number) => void;
   pick: (i: number) => void;
+  leave: () => void;
 }
 
 // One hero's corner of the screen: player 1 bottom left, player 2 (co-op) bottom
@@ -131,6 +134,7 @@ export class HudScene extends Phaser.Scene {
   private pips: Phaser.GameObjects.Image[] = [];
   private objective!: Phaser.GameObjects.Text;
   private objectiveDone!: Phaser.GameObjects.Text;
+  private levelLine?: Phaser.GameObjects.Text; // a challenge's rule, or an elite level's note
   private killText!: Phaser.GameObjects.Text;
   private hurt!: Phaser.GameObjects.Image;
   private bannerObjs: Phaser.GameObjects.GameObject[] = [];
@@ -180,6 +184,7 @@ export class HudScene extends Phaser.Scene {
     ringTexture(this);
     bandTextures(this);
     this.room.heroes.forEach((h) => this.buildUnitFrame(h));
+    onInputMode(this, () => { this.refreshKeys(); if (!this.coop) this.buildHints(true); });
     this.buildPlaque();
     if (!this.coop) this.buildHints();
     this.refreshGear();
@@ -196,6 +201,11 @@ export class HudScene extends Phaser.Scene {
     else if (!this.room.boss) {
       const type = this.room.levelType;
       this.banner('zone', this.room.area.name, type === 'normal' ? `Level ${this.roomNo}` : `Level ${this.roomNo}: ${LEVEL_LABEL[type]}`);
+      // then what the level asks: a challenge's rule, or a warning of the crowned
+      const ch = this.room.challenge;
+      const then = ch ? () => this.banner('good', `Challenge: ${ch.def.name}`, `${ch.def.rule(ch.limit)} for a gold chest`)
+        : type === 'elite' ? () => this.banner('warn', 'Elite foes', 'Crowned, tougher and harder hitting. A gold chest awaits') : null;
+      if (then) this.time.delayedCall(2900, () => { if (!ch?.failed && !this.room.gateOpen) then(); });
     }
     else this.buildBossBar();
   }
@@ -259,6 +269,17 @@ export class HudScene extends Phaser.Scene {
     this.units[who] = { who, hp, slots: s, portrait, lastHp: h.hp, objs };
   }
 
+  // The keys in the action bar's slots, again: the solo player switched between
+  // keyboard and controller (input.ts, onInputMode).
+  private refreshKeys() {
+    for (const u of this.units) {
+      if (!u) continue;
+      const kl = keyLabels(getParty()[u.who] ?? { kind: 'solo' });
+      const by: Record<string, string> = { light: kl.light, heavy: kl.heavy, skill: kl.skill, dodge: kl.dodge, block: kl.block };
+      for (const [a, slot] of Object.entries(u.slots)) slot.setKey(short(by[a]));
+    }
+  }
+
   // ---- where you are and what to do, top right ---------------------------------------
 
   private buildPlaque() {
@@ -284,7 +305,15 @@ export class HudScene extends Phaser.Scene {
     mb.on('pointerover', () => this.tweens.add({ targets: mb, scale: 1.08, duration: 100 }));
     mb.on('pointerout', () => this.tweens.add({ targets: mb, scale: 1, duration: 100 }));
     mb.on('pointerup', () => this.openPause());
-    txt(this, R + 930, 60, 'Esc', 'small', { fontSize: '10px', color: C.body }).setOrigin(0.5);
+    // under the menu button: Esc, or the controller's Menu button
+    const menuKey = this.add.container(R + 930, 61);
+    const drawMenuKey = () => {
+      menuKey.removeAll(true);
+      if (showsPad(getParty()[0] ?? { kind: 'solo' })) menuKey.add(keycap(this, 0, 0, 'pad:Menu').setScale(0.7));
+      else menuKey.add(txt(this, 0, -1, 'Esc', 'small', { fontSize: '10px', color: C.body }).setOrigin(0.5));
+    };
+    drawMenuKey();
+    onInputMode(this, drawMenuKey);
 
     // the area's five levels under the plaque: where you are, what you chose, the boss
     const dy = room.isCamp ? 0 : 40;
@@ -297,7 +326,11 @@ export class HudScene extends Phaser.Scene {
     const gate = room.gates.length > 1 ? 'a rune gate' : 'the rune gate';
     txt(this, ox, 80 + dy, heading, 'label', { fontSize: '13px', color: C.gold }).setOrigin(0, 0.5);
     this.objective = txt(this, ox + 8, 98 + dy, first, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5);
-    this.objectiveDone = txt(this, ox + 8, 114 + dy, this.coop ? `- Both through ${room.gates.length > 1 ? 'one rune gate' : gate}` : `- Step through ${gate}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
+    // a challenge's rule (kept up to date every frame) or an elite level's prize
+    this.levelLine = undefined;
+    const special = room.challenge ? room.challenge.def.track(room.challenge) : room.levelType === 'elite' && !room.boss ? '- Crowned foes: a gold chest' : '';
+    if (special) this.levelLine = txt(this, ox + 8, 114 + dy, special, 'small', { fontSize: '12px', color: room.challenge ? C.ivory : C.goldSoft }).setOrigin(0, 0.5);
+    this.objectiveDone = txt(this, ox + 8, (special ? 130 : 114) + dy, this.coop ? `- Both through ${room.gates.length > 1 ? 'one rune gate' : gate}` : `- Step through ${gate}`, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0, 0.5).setAlpha(0);
     if (room.isCamp) {
       this.gateShown = true; // the gate is open from the start: both lines show
       this.objectiveDone.setAlpha(1);
@@ -323,17 +356,36 @@ export class HudScene extends Phaser.Scene {
     ef.add(this.emberText);
   }
 
-  private buildHints() {
+  private hintRow?: Phaser.GameObjects.Container;
+  private hintsGone = false; // the row has shown and faded out for good
+
+  // The controls along the bottom when a room starts (solo), as keys or as Xbox
+  // buttons; switching device while it shows draws it again, already faded in.
+  private buildHints(again = false) {
+    const old = this.hintRow;
+    if (again && (!old || !old.active || this.hintsGone)) return;
+    if (!again) this.hintsGone = false;
+    old?.destroy();
+    const kl = keyLabels(getParty()[0] ?? { kind: 'solo' });
+    const pad = kl.light.startsWith('pad:');
     const row = this.add.container(0, 522);
+    this.hintRow = row;
     let x = 0;
-    for (const [keys, what] of [[['W', 'A', 'S', 'D'], 'Move'], [['J'], 'Light'], [['K'], 'Heavy'], [['I'], 'Skill'], [['L'], 'Dodge'], [['Shift'], 'Block'], [['Esc'], 'Menu']] as const) {
+    for (const [keys, what] of [[kl.move, 'Move'], [[kl.light], 'Light'], [[kl.heavy], 'Heavy'], [[kl.skill], 'Skill'], [[kl.dodge], 'Dodge'], [[kl.block], 'Block'], [[pad ? 'pad:Menu' : 'Esc'], 'Menu']] as const) {
       const h = keyHint(this, x, 0, [...keys], what);
       row.add(h);
       x += h.width + 16;
     }
     row.x = viewW / 2 - (x - 16) / 2;
+    const gone = () => { if (this.hintRow === row) this.hintsGone = true; };
+    if (again) {
+      // switched device while it shows (or is about to): the new row, shown now
+      row.setAlpha(Math.max(old!.alpha, 0.01));
+      this.tweens.chain({ targets: row, tweens: [{ alpha: 0.95, duration: 300 }, { alpha: 0, duration: 1500, delay: 7000 }], onComplete: gone });
+      return;
+    }
     row.setAlpha(0);
-    this.tweens.chain({ targets: row, tweens: [{ alpha: 0.95, duration: 600, delay: 900 }, { alpha: 0, duration: 1500, delay: 9000 }] });
+    this.tweens.chain({ targets: row, tweens: [{ alpha: 0.95, duration: 600, delay: 900 }, { alpha: 0, duration: 1500, delay: 9000 }], onComplete: gone });
   }
 
   // ---- every frame ------------------------------------------------------------------------
@@ -373,6 +425,12 @@ export class HudScene extends Phaser.Scene {
     const total = r.totalFoes;
     if (r.isCamp) this.objective.setColor(r.camp?.chosen ? C.grey : C.ivory);
     else if (!r.boss) this.objective.setText(`- Dead laid to rest: ${Math.min(r.slain, total)}/${total}`);
+    const ch = r.challenge;
+    if (ch && this.levelLine) {
+      if (ch.failed) this.levelLine.setText(`- ${ch.def.name}: failed`).setColor(C.warn);
+      else if (ch.met) this.levelLine.setText(`- ${ch.def.name}: met`).setColor(C.gold);
+      else this.levelLine.setText(ch.def.track(ch));
+    }
     this.updateBossBar(dt);
     if (r.gateOpen && !this.gateShown) {
       this.gateShown = true;
@@ -469,7 +527,7 @@ export class HudScene extends Phaser.Scene {
 
   // The chest's three cards, after Lost Castle 2's "Choose a treasure". The room
   // is paused underneath; choose with keys, stick or mouse.
-  openChest(items: Item[], gear: Gear, onPick: (it: Item) => void, heading?: string) {
+  openChest(items: Item[], gear: Gear, onPick: (it: Item | null) => void, heading?: string) {
     this.openChoice([{ items, gear, onPick, heading }]);
   }
 
@@ -479,6 +537,8 @@ export class HudScene extends Phaser.Scene {
   openChoice(specs: ChoiceSpec[]) {
     this.hideTip();
     this.clearBanner(); // "Room Cleared" would otherwise sit on top of the cards
+    // the controls row from the start of the room would sit under the chest's own hints
+    if (this.hintRow?.active) { this.hintsGone = true; this.tweens.killTweensOf(this.hintRow); this.hintRow.setAlpha(0); }
     this.blurRoom(true);
     const coop = specs.length > 1;
     const root = this.add.container(0, 0).setDepth(90);
@@ -495,15 +555,17 @@ export class HudScene extends Phaser.Scene {
     let closing = false;
 
     const finish = () => {
-      if (closing || sides.some((sd) => sd.taken === null)) return;
+      if (closing || sides.some((sd) => !sd.done)) return;
       closing = true;
-      this.time.delayedCall(560, () => {
+      const got = sides.map((sd) => sd.taken).filter((it): it is Item => !!it);
+      // leaving closes at once; a card taken gets a moment to show
+      this.time.delayedCall(got.length ? 560 : 120, () => {
         this.tweens.add({ targets: root, alpha: 0, duration: 220, onComplete: () => root.destroy() });
         this.blurRoom(false);
         this.choice = undefined;
-        sides.forEach((sd, i) => specs[i].onPick(sd.taken!));
+        sides.forEach((sd, i) => specs[i].onPick(sd.taken));
         this.refreshGear();
-        const got = sides.map((sd) => sd.taken!);
+        if (!got.length) return;
         if (coop) this.banner('good', 'Treasure taken', got.map((it) => it.name).join('  ·  '));
         else this.banner('good', got[0].cat === 'trinket' ? 'Trinket gained' : 'Equipped', got[0].name);
       });
@@ -526,8 +588,11 @@ export class HudScene extends Phaser.Scene {
       const hint = this.add.container(0, 504);
       const h1 = keyHint(this, 0, 0, keys.move, 'Choose');
       const h2 = keyHint(this, h1.width + 18, 0, [keys.ok], 'Take');
-      hint.add([h1, h2]);
-      hint.x = cx - (h1.width + 18 + h2.width) / 2;
+      const h3 = keyHint(this, h1.width + h2.width + 36, 0, [keys.back], 'Leave');
+      // Leave is also a click, for the mouse
+      h3.setInteractive({ useHandCursor: true }).on('pointerup', () => sd.leave());
+      hint.add([h1, h2, h3]);
+      hint.x = cx - (h1.width + h2.width + h3.width + 36) / 2;
       root.add(hint);
       later.push(hint, arrow);
       if (coop) {
@@ -536,28 +601,41 @@ export class HudScene extends Phaser.Scene {
         fadeIn.push(label);
       }
 
+      // a side is done once its player has taken a card or left; in co-op the other
+      // side then reads who is still choosing
+      const settle = (what: string) => {
+        if (!coop) return;
+        hint.setVisible(false);
+        const other = sides.find((o) => o !== sd && !o.done);
+        const wait = txt(this, cx, 504, other ? `${what}  ·  waiting for ${specs[sides.indexOf(other)].name ?? 'the other player'}` : what, 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0.5).setAlpha(0);
+        root.add(wait);
+        this.tweens.add({ targets: wait, alpha: 1, duration: 200 });
+        sides.forEach((o) => { if (o !== sd) o.waitText?.setText(o.taken ? 'Taken' : 'Left'); });
+        sd.waitText = wait;
+      };
       const sd: ChoiceSide = {
-        cards, index: 1, taken: null, device: sp.device,
+        cards, index: 1, taken: null, done: false, device: sp.device,
         focus: (i: number) => {
           sd.index = (i + cards.length) % cards.length;
           cards.forEach((c, k) => c.setFocus(k === sd.index));
         },
         pick: (i: number) => {
-          if (sd.taken || closing) return;
+          if (sd.done || closing) return;
           sd.taken = sp.items[i];
+          sd.done = true;
           cards[i].chosen();
           arrow.setVisible(false);
           cards.forEach((c, k) => { if (k !== i) this.tweens.add({ targets: c, alpha: 0, y: c.y + 30, duration: 260 }); });
-          if (coop) {
-            // the hint gives way to who is still choosing
-            hint.setVisible(false);
-            const other = sides.find((o) => o !== sd && o.taken === null);
-            const wait = txt(this, cx, 504, other ? `Taken  ·  waiting for ${specs[sides.indexOf(other)].name ?? 'the other player'}` : 'Taken', 'small', { fontSize: '12px', color: C.ivory }).setOrigin(0.5).setAlpha(0);
-            root.add(wait);
-            this.tweens.add({ targets: wait, alpha: 1, duration: 200 });
-            sides.forEach((o) => o.waitText?.setText('Taken'));
-            sd.waitText = wait;
-          }
+          settle('Taken');
+          finish();
+        },
+        // takes nothing: the cards stay in the chest, to be opened again later
+        leave: () => {
+          if (sd.done || closing) return;
+          sd.done = true;
+          arrow.setVisible(false);
+          cards.forEach((c) => this.tweens.add({ targets: c, alpha: 0, y: c.y + 30, duration: 200 }));
+          settle('Left');
           finish();
         },
       };
@@ -589,11 +667,12 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: later, alpha: 1, duration: 300, delay: 700 });
   }
 
-  private chooseNav(sd: ChoiceSide, left?: boolean, right?: boolean, ok?: boolean) {
-    if (sd.taken) return;
+  private chooseNav(sd: ChoiceSide, left?: boolean, right?: boolean, ok?: boolean, back?: boolean) {
+    if (sd.done) return;
     if (left) sd.focus(sd.index - 1);
     else if (right) sd.focus(sd.index + 1);
     else if (ok) sd.pick(sd.index);
+    else if (back) sd.leave();
   }
 
   get choosing() {
@@ -767,7 +846,7 @@ export class HudScene extends Phaser.Scene {
       new Button(this, 0, 60, 196, 32, 'Main Menu', () => this.toMenu()),
     ];
     f.add(items);
-    const hint = keyHint(this, 0, 102, ['Esc'], 'Resume');
+    const hint = keyHint(this, 0, 102, [showsPad(getParty()[0] ?? { kind: 'solo' }) ? 'pad:B' : 'Esc'], 'Resume');
     hint.x = -hint.width / 2;
     f.add(hint);
     // the road through the run so far, and what lies ahead (not in the camp)
@@ -913,7 +992,7 @@ export class HudScene extends Phaser.Scene {
     if (this.choice) {
       for (const sd of this.choice.sides) {
         const st = menuKey(sd.device ?? { kind: 'solo' }, code);
-        if (st) this.chooseNav(sd, st.left, st.right, st.ok);
+        if (st) this.chooseNav(sd, st.left, st.right, st.ok, st.back);
       }
       return;
     }
@@ -952,7 +1031,7 @@ export class HudScene extends Phaser.Scene {
     const left = hit(14) || (sx < -0.5 && !this.padPrev[97]);
     const right = hit(15) || (sx > 0.5 && !this.padPrev[96]);
     if (this.shop) { if (menuPad(this.shopDevice, pad.index)) this.shop.nav({ left, right, up, down, tabL: hit(4), tabR: hit(5), ok: hit(0), back: hit(1) }); }
-    else if (this.choice) { for (const sd of this.choice.sides) if (menuPad(sd.device ?? { kind: 'solo' }, pad.index)) this.chooseNav(sd, left, right, hit(0)); }
+    else if (this.choice) { for (const sd of this.choice.sides) if (menuPad(sd.device ?? { kind: 'solo' }, pad.index)) this.chooseNav(sd, left, right, hit(0), hit(1)); }
     else if (this.end) this.end.list.nav(up, down, left, right, hit(0));
     else if (this.pause || this.options) this.nav(up, down, left, right, hit(0), hit(1) || hit(9), false);
     else if (hit(9)) this.openPause();

@@ -14,7 +14,7 @@ import { gearOf, newRun, type Run } from '../run';
 import { EMBERS, earnEmbers } from '../embers';
 import { newGear } from '../loot';
 import { heroLook } from '../hero';
-import { getParty, keyLabels } from '../input';
+import { getParty, keyLabels, padName } from '../input';
 import { REVIVE, Soul } from '../revive';
 import { gearStats, rollChest, type GearStats, type Item } from '../loot';
 import { shrineBonus } from '../shrine';
@@ -30,6 +30,9 @@ import { campMethods } from '../room/camp';
 import { bossFightMethods } from '../room/bossFight';
 import { feedbackMethods } from '../room/feedback';
 import { gatesMethods, type Gate } from '../room/gates';
+import { challengeMethods } from '../room/challenge';
+import type { ChallengeState } from '../challenges';
+import type { ChestTier } from '../chests';
 import { LEVELS_PER_AREA, area, depth, findArea, type Area, type LevelType } from '../world';
 
 export interface AttackSpec {
@@ -59,6 +62,10 @@ export interface Fire { x: number; y: number; left: number; tick: number; dmg: n
 export interface Chest {
   img: Phaser.GameObjects.Image; runes: Phaser.GameObjects.Image; x: number; y: number;
   prompt: Phaser.GameObjects.Container; locked: boolean; opened: boolean;
+  tier: ChestTier; // wood, bronze, silver or gold (chests.ts)
+  promptKey: string; // the key its prompt shows now (room/loot.ts updateChest)
+  took: Set<number>; // the heroes (who) that took a card; one that left it can come back
+  shutT: number; // seconds before it can be opened again, after someone left it
   items: Item[]; // player 1's cards
   items2?: Item[]; // player 2's, rolled apart, in co-op
 }
@@ -115,6 +122,7 @@ export class RoomScene extends Phaser.Scene {
   emberFx?: Phaser.GameObjects.Particles.ParticleEmitter;
   gateWait?: Phaser.GameObjects.Text; // "Waiting for ..." over the gate, in co-op
   gates: Gate[] = []; // the ways out, and where each leads (room/gates.ts)
+  challenge: ChallengeState | null = null; // a challenge level's rule (room/challenge.ts)
 
   constructor() {
     super('room');
@@ -123,7 +131,9 @@ export class RoomScene extends Phaser.Scene {
   // Phaser reuses the scene object on restart, so all state is reset here.
   // room is the level in the area (1 to 5, the boss last), 0 the camp; area jumps
   // straight to an area (an id or a tier, for ?area= and tests) with a fresh run.
-  init(data: { room?: number; hp?: number; hps?: (number | undefined)[]; run?: Run; intro?: boolean; area?: string }) {
+  // type makes this level an elite or challenge one (tests, ?type= in the address), and
+  // challenge picks the rule (?challenge=swift).
+  init(data: { room?: number; hp?: number; hps?: (number | undefined)[]; run?: Run; intro?: boolean; area?: string; type?: LevelType; challenge?: string }) {
     this.room = data.room ?? 1;
     this.intro = data.intro ?? true;
     this.boss = null;
@@ -145,6 +155,7 @@ export class RoomScene extends Phaser.Scene {
     // the level types up to this one (a jump straight to a level fills in plain fights)
     const levels: LevelType[] = (this.run.levels ?? []).slice(0, Math.max(1, this.room));
     while (levels.length < this.room) levels.push('normal');
+    if (data.type && data.type !== 'boss' && this.room >= 1 && this.room < LEVELS_PER_AREA) levels[this.room - 1] = data.type;
     if (this.room === LEVELS_PER_AREA) levels[this.room - 1] = 'boss';
     this.run.levels = levels;
     this.gates = [];
@@ -168,6 +179,7 @@ export class RoomScene extends Phaser.Scene {
     this.freeze = 0;
     this.slain = 0;
     this.waves = this.makeWaves();
+    this.setupChallenge(data.challenge);
   }
 
   // Player 1's hero (the only one in solo).
@@ -331,6 +343,7 @@ export class RoomScene extends Phaser.Scene {
 
   onPlayerAction(p: Player, a: Action) {
     this.hud?.used(p.who, a);
+    if (a === 'dodge') this.noteDodge(p);
   }
 
   // The camera's point: the middle of the living heroes (of all of them once none
@@ -387,7 +400,7 @@ export class RoomScene extends Phaser.Scene {
       // she leaves a soul; the other holds interact by it to bring her back
       this.souls.push(new Soul(this, h, (share, by) => this.raise(h, share, by)));
       const other = this.livingHeroes[0];
-      const key = keyLabels(getParty()[other.who] ?? { kind: 'solo' }).interact;
+      const key = padName(keyLabels(getParty()[other.who] ?? { kind: 'solo' }).interact);
       this.hud?.banner('warn', `${heroLook(h.who).name} has fallen`, `${heroLook(other.who).name}: hold ${key} by her soul to revive her`);
     }
   }
@@ -449,7 +462,7 @@ export class RoomScene extends Phaser.Scene {
     this.leash(before);
     this.updateFocus();
     this.effects = this.effects.filter((f) => f(dt));
-    this.updateChest();
+    this.updateChest(dt);
     this.updateCamp();
     this.updateSouls(dt);
     for (const e of this.enemies) e.update(dt);
@@ -460,6 +473,7 @@ export class RoomScene extends Phaser.Scene {
     this.updateCoins(dt);
     this.updateFires(dt);
     this.updateWaves(dt);
+    this.updateChallenge(dt);
     this.updateDark(dt);
     this.enemies = this.enemies.filter((e) => !e.removed);
     this.world.update(this.cameras.main);
@@ -608,7 +622,7 @@ export class RoomScene extends Phaser.Scene {
   onEnemyDied(e: Enemy) {
     this.slain++;
     this.run.kills++;
-    this.earn(EMBERS.kill);
+    this.earn(e.elite ? EMBERS.eliteKill : EMBERS.kill);
     this.spawnCoins(e.x, e.y, e.key === 'ghoul' ? Phaser.Math.Between(2, 4) : Phaser.Math.Between(3, 5));
     // life on kill heals whoever dealt the blow (the nearest hero, if no one's blow did it)
     const by = this.striker ?? (this.livingHeroes.length ? this.nearestHero(e.x, e.y) : null);
@@ -665,5 +679,6 @@ type CampMethods = typeof campMethods;
 type BossFightMethods = typeof bossFightMethods;
 type FeedbackMethods = typeof feedbackMethods;
 type GatesMethods = typeof gatesMethods;
-export interface RoomScene extends WavesMethods, GatesMethods, GearFxMethods, LootMethods, CampMethods, BossFightMethods, FeedbackMethods {}
-Object.assign(RoomScene.prototype, wavesMethods, gatesMethods, gearFxMethods, lootMethods, campMethods, bossFightMethods, feedbackMethods);
+type ChallengeMethods = typeof challengeMethods;
+export interface RoomScene extends WavesMethods, GatesMethods, ChallengeMethods, GearFxMethods, LootMethods, CampMethods, BossFightMethods, FeedbackMethods {}
+Object.assign(RoomScene.prototype, wavesMethods, gatesMethods, challengeMethods, gearFxMethods, lootMethods, campMethods, bossFightMethods, feedbackMethods);

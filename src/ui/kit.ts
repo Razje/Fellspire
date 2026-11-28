@@ -7,7 +7,8 @@
 // gilded bevel with corner ornaments (menus), red buttons with gold trim and gold
 // lettering, square action slots with a key in the corner.
 import Phaser from 'phaser';
-import { C, RES, txt } from './theme';
+import { C, FONT, RES, txt } from './theme';
+import { padIcon, padIconWidth } from './padIcons';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -277,13 +278,34 @@ function keycapTex(scene: Phaser.Scene, w: number) {
   });
 }
 
+// A key on the keyboard, or a controller button when the label is 'pad:<button>'
+// (input.ts), drawn as the Xbox button (padIcons.ts).
 export function keycap(scene: Phaser.Scene, x: number, y: number, label: string) {
+  if (label.startsWith('pad:')) {
+    const b = label.slice(4);
+    const w = padIconWidth(scene, b);
+    const c = scene.add.container(x, y, [pic(scene, 0, 0, padIcon(scene, b))]);
+    c.setSize(w, 20);
+    return c;
+  }
   const t = txt(scene, 0, 0, label, 'num', { fontFamily: '"Marcellus", serif', fontStyle: '400', fontSize: '11px', color: C.ivory, strokeThickness: 0 });
   t.setShadow(0, 1, '#000', 0, false, true);
   const w = Math.max(19, Math.round(t.width + 10));
   const c = scene.add.container(x, y, [pic(scene, 0, 1, keycapTex(scene, w)), t.setOrigin(0.5)]);
   c.setSize(w, 20);
   return c;
+}
+
+// Fills a floating prompt over something in the room ("[E] Open Gold Chest"): the
+// key, or controller button, and the words beside it, centred on the container.
+export function fillPrompt(scene: Phaser.Scene, box: Phaser.GameObjects.Container, key: string, text: string, colour = '#f0e6d2') {
+  box.removeAll(true);
+  const cap = keycap(scene, 0, 0, key);
+  const label = scene.add.text(0, 0, text, { fontFamily: FONT.label, fontSize: '13px', color: colour, stroke: '#000', strokeThickness: 3, resolution: RES * 2 }).setOrigin(0, 0.5);
+  const w = cap.width + 4 + label.width;
+  cap.x = -w / 2 + cap.width / 2;
+  label.x = -w / 2 + cap.width + 4;
+  box.add([cap, label]);
 }
 
 // A row of keycaps followed by what they do: [J] Light attack
@@ -535,10 +557,26 @@ export class Slot extends Phaser.GameObjects.Container {
     this.add([this.glow, this.flashImg]);
     this.cdText = txt(scene, 0, 1, '', 'num', { fontSize: '13px' }).setOrigin(0.5);
     this.add(this.cdText);
-    const k = txt(scene, s / 2 - 4, -s / 2 + 2, key, 'num', { fontFamily: '"Marcellus", serif', fontStyle: '400', fontSize: '10px', color: '#e8e8e8', strokeThickness: 3 }).setOrigin(1, 0);
-    this.add(k);
+    this.setKey(key);
     this.setSize(s, s);
     scene.add.existing(this);
+  }
+
+  private keyObj?: Phaser.GameObjects.GameObject;
+
+  // The key in the slot's top right corner: text, or a small controller button for a
+  // 'pad:' label. Changed when the player switches between keyboard and controller.
+  setKey(key: string) {
+    this.keyObj?.destroy();
+    const s = SLOT;
+    if (key.startsWith('pad:')) {
+      const b = key.slice(4);
+      const k = 0.9; // a little smaller than in a key hint
+      this.keyObj = pic(this.scene, s / 2 - 2 - (padIconWidth(this.scene, b) * k) / 2, -s / 2 + 2 + 10 * k, padIcon(this.scene, b)).setScale(k / RES);
+    } else {
+      this.keyObj = txt(this.scene, s / 2 - 4, -s / 2 + 2, key, 'num', { fontFamily: '"Marcellus", serif', fontStyle: '400', fontSize: '10px', color: '#e8e8e8', strokeThickness: 3 }).setOrigin(1, 0);
+    }
+    this.add(this.keyObj);
   }
 
   // frac: 1 = just used, 0 = ready.

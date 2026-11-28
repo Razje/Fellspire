@@ -28,11 +28,54 @@ const SOLO: Record<Action, string[]> = {
   light: ['J'], heavy: ['K'], skill: ['I'], dodge: ['L'], block: ['SHIFT'], interact: ['E'],
 };
 
+// ---- keyboard or controller: which one is being played ----------------------------------
+//
+// The solo player plays on the keyboard and the first controller at once, so the keys
+// shown on screen follow whichever was touched last: a key press shows keys, a
+// controller button or stick shows Xbox buttons. A controller player in co-op always
+// sees Xbox buttons. A screen that shows keys listens with onInputMode to redraw them.
+export type InputMode = 'keys' | 'pad';
+let mode: InputMode = 'keys';
+const modeEvents = new Phaser.Events.EventEmitter();
+
+export const inputMode = () => mode;
+
+export function setInputMode(m: InputMode) {
+  if (m === mode) return;
+  mode = m;
+  modeEvents.emit('change', m);
+}
+
+// Calls fn whenever the mode changes, until the scene shuts down.
+export function onInputMode(scene: Phaser.Scene, fn: (m: InputMode) => void) {
+  modeEvents.on('change', fn);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => modeEvents.off('change', fn));
+}
+
+// Watches the keyboard and every controller for the whole game (main.ts).
+export function watchInputMode(game: Phaser.Game) {
+  window.addEventListener('keydown', () => setInputMode('keys'), true);
+  game.events.on(Phaser.Core.Events.PRE_STEP, () => {
+    if (mode === 'pad' || !navigator.getGamepads) return;
+    for (const p of navigator.getGamepads()) {
+      if (p && (p.buttons.some((b) => b.pressed || b.value > 0.5) || p.axes.some((a) => Math.abs(a) > 0.5))) { setInputMode('pad'); return; }
+    }
+  });
+}
+
+// Whether a device's keys are shown as controller buttons right now.
+export const showsPad = (d: Device) => d.kind === 'pad' || (d.kind === 'solo' && mode === 'pad');
+
+// A label for a controller button: 'pad:A', 'pad:RT', 'pad:LS' (the left stick) and so
+// on. keycap() draws these as Xbox buttons; padName() is the plain name for a sentence.
+export const isPadLabel = (k: string) => k.startsWith('pad:');
+export const padName = (k: string) => (isPadLabel(k) ? k.slice(4).replace('LS', 'Stick') : k);
+
 // The keys shown on screen for a device, by action.
 export type KeyLabels = Record<'light' | 'heavy' | 'skill' | 'dodge' | 'block' | 'interact', string> & { move: string[] };
 export function keyLabels(d: Device): KeyLabels {
   if (d.kind === 'right') return { light: 'Num 1', heavy: 'Num 2', dodge: 'Num 3', skill: 'Num 4', block: 'Num 5', interact: 'Num 0', move: ['↑', '←', '↓', '→'] };
-  if (d.kind === 'pad') return { light: 'X', heavy: 'Y', skill: 'LB', dodge: 'A', block: 'RB', interact: 'B', move: ['Stick'] };
+  if (showsPad(d)) return { light: 'pad:X', heavy: 'pad:Y', skill: 'pad:RT', dodge: 'pad:A', block: 'pad:RB', interact: 'pad:B', move: ['pad:LS'] };
   return { light: 'J', heavy: 'K', skill: 'I', dodge: 'L', block: 'Shift', interact: 'E', move: ['W', 'A', 'S', 'D'] };
 }
 
@@ -88,7 +131,7 @@ export function menuPad(d: Device, padIndex: number) {
 // The keys to show for a device's menus.
 export function menuLabels(d: Device) {
   if (d.kind === 'right') return { move: ['←', '→'], move4: ['↑', '←', '↓', '→'], ok: 'Num 1', back: 'Num 2', tabs: ['Num 7', 'Num 9'] };
-  if (d.kind === 'pad') return { move: ['Stick'], move4: ['Stick'], ok: 'A', back: 'B', tabs: ['LB', 'RB'] };
+  if (showsPad(d)) return { move: ['pad:LS'], move4: ['pad:LS'], ok: 'pad:A', back: 'pad:B', tabs: ['pad:LB', 'pad:RB'] };
   if (d.kind === 'left') return { move: ['A', 'D'], move4: ['A', 'D', 'W', 'S'], ok: 'E', back: 'K', tabs: ['Q', 'R'] };
   return { move: ['A', 'D'], move4: ['A', 'D', 'W', 'S'], ok: 'E', back: 'Esc', tabs: ['Q', 'R'] };
 }
@@ -111,8 +154,11 @@ const CODES: Record<string, string[]> = {
   NUMPAD_ZERO: ['Numpad0'], NUMPAD_ONE: ['Numpad1'], NUMPAD_TWO: ['Numpad2'], NUMPAD_THREE: ['Numpad3'], NUMPAD_FOUR: ['Numpad4'], NUMPAD_FIVE: ['Numpad5'],
 };
 
-// Controller buttons (standard mapping): A 0, B 1, X 2, Y 3, LB 4, RB 5, d-pad 12-15.
-const PAD = { light: 2, heavy: 3, skill: 4, dodge: 0, block: 5, interact: 1, up: 12, down: 13, left: 14, right: 15 };
+// Controller buttons (standard mapping): A 0, B 1, X 2, Y 3, LB 4, RB 5, LT 6, RT 7,
+// d-pad 12-15. The skill is on the right trigger (Martijn, 2026-11-28), as in most
+// brawlers; a trigger counts as pressed once it is pulled halfway.
+const PAD = { light: 2, heavy: 3, skill: 7, dodge: 0, block: 5, interact: 1, up: 12, down: 13, left: 14, right: 15 };
+const TRIGGERS = [6, 7];
 
 // Reads one device into an Input, once a frame.
 export class Controls {
@@ -188,7 +234,10 @@ export class Controls {
     }
     const pad = this.pad;
     if (pad) {
-      const b = (i: number) => !!pad.buttons[i]?.pressed;
+      const b = (i: number) => {
+        const btn = pad.buttons[i];
+        return !!btn && (TRIGGERS.includes(i) ? btn.value > 0.5 : btn.pressed);
+      };
       const pressed = (i: number) => b(i) && !this.padPrev[i];
       const sx = Math.abs(pad.leftStick.x) > 0.25 ? pad.leftStick.x : 0;
       const sy = Math.abs(pad.leftStick.y) > 0.25 ? pad.leftStick.y : 0;
@@ -203,7 +252,7 @@ export class Controls {
       inp.block ||= b(PAD.block);
       inp.interact ||= pressed(PAD.interact);
       inp.interactHeld ||= b(PAD.interact);
-      this.padPrev = pad.buttons.map((x) => x.pressed);
+      this.padPrev = pad.buttons.map((_, i) => b(i));
     }
     return inp;
   }

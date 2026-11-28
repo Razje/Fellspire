@@ -10,8 +10,8 @@ import { WORLD } from './config';
 import { canvas } from './titleArt';
 import { starterWeapon, type Item } from './loot';
 import { KINDS, asKind, type WeaponKind } from './weapons';
-import { keycap } from './ui/kit';
-import { FONT, RES } from './ui/theme';
+import { fillPrompt } from './ui/kit';
+import { getParty, keyLabels } from './input';
 import type { ClearSpot, Light, Obstacle } from './blightwood';
 
 const INK = '#06090d';
@@ -154,6 +154,7 @@ export class Camp {
   private shrinePrompt: Phaser.GameObjects.Container;
   private shrineGlow: Phaser.GameObjects.Image;
   chosen = false; // a weapon was taken from the rack this visit
+  private key = ''; // the interact key the prompts show (an Xbox button on a controller)
 
   constructor(private scene: Phaser.Scene, lights: Light[], obstacles: Obstacle[]) {
     this.buildFire(lights, obstacles);
@@ -171,12 +172,8 @@ export class Camp {
   }
 
   private makePrompt(x: number, y: number, text: string) {
-    const scene = this.scene;
-    const p = scene.add.container(x, y).setDepth(19500).setAlpha(0);
-    const cap = keycap(scene, 0, 0, 'E');
-    const label = scene.add.text(16, 0, text, { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 }).setOrigin(0, 0.5);
-    cap.x = -label.width / 2 - 4; label.x = cap.x + 14;
-    p.add([cap, label]);
+    const p = this.scene.add.container(x, y).setDepth(19500).setAlpha(0);
+    p.setData('text', text);
     return p;
   }
 
@@ -237,6 +234,12 @@ export class Camp {
 
   // near: a hero stands by the rack and can choose; nearShrine: by the shrine
   update(near: boolean, nearShrine = false) {
+    // player 1's interact key, drawn again when they switch keyboard and controller
+    const key = keyLabels(getParty()[0] ?? { kind: 'solo' }).interact;
+    if (key !== this.key) {
+      this.key = key;
+      for (const p of [this.prompt, this.shrinePrompt]) fillPrompt(this.scene, p, key, p.getData('text'));
+    }
     const bob = Math.sin(this.scene.time.now / 250) * 2;
     this.prompt.setAlpha(Phaser.Math.Linear(this.prompt.alpha, near ? 1 : 0, 0.2)).setY(CAMP.rack.y - 98 + bob);
     this.glow.setAlpha(Phaser.Math.Linear(this.glow.alpha, near ? 0.55 : 0, 0.15));

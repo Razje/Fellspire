@@ -148,8 +148,8 @@ two rune gates** marked with the next level's type, so the risk is chosen (Lost 
 - **Normal**: clear the waves; the chest is **wood, bronze or silver**, the higher the
   better its cards' rarities.
 - **Challenge**: a rule shown on entering (for example clear it within a time, or be
-  hit no more than 3 times). Meet it and the chest is **gold**; fail and it stays shut
-  (or falls back to wood: to decide when built).
+  hit no more than 3 times). Meet it and the chest is **gold**; fail and it falls back to
+  **wood** (decided 2026-11-28: it still rewards the fight).
 - **Elite**: stronger foes (more health, harder hits, a crown); clearing it gives a
   **gold** chest.
 
@@ -169,7 +169,20 @@ Build order for the world, each a step Martijn plays before the next:
   normal fights until 11.3. Every boss is the Warden for now, 50% tougher per tier.
   Waves, foes and chests grow with the depth into the run, not the level in the area.
   The colours of the seven new areas are first guesses, to tune by eye.
-- 11.3 Chest tiers, challenge rules and elite foes.
+- 11.3 Chest tiers, challenge rules and elite foes. **Built 2026-11-28**, to play:
+  every chest shows its tier from the start, in its bands and its "Open ... Chest"
+  prompt. Wood rolls today's odds; bronze has no Common; silver is Uncommon or
+  better and rolls as if 4 levels deeper; gold is Rare or better, 8 deeper
+  (`CHEST_TIERS` in `src/chests.ts`). A normal fight is about two thirds wood at
+  first, silver about one in four by the third area. A challenge level shows its gold
+  chest and one of three rules (`CHALLENGES` in `src/challenges.ts`): **Swift**, clear
+  within 15 s plus 4 s per foe; **Unscathed**, no more than 3 hits (5 for the party in
+  co-op; a blocked hit does not count); **Steadfast**, no dodging. The rule shows in a
+  banner after the level's name and live in the objective tracker; breaking it says so
+  and turns the chest to wood. An elite level's foes wear a gold crown and have 60%
+  more health, hit 25% harder and stand 12% larger (`ELITE` in `Enemies.ts`), give 2
+  embers each instead of 1, and leave a gold chest. Numbers to tune after Martijn
+  plays it.
 - 11.4 The merchant's stop.
 - 11.5 New enemies from the free packs (needs Martijn's downloads).
 - 11.6 to 11.11 One area each: scenery, props, enemies, boss. The Fellspire last.

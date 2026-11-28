@@ -7,6 +7,7 @@ import type { Run } from './run';
 // How many embers each deed gives. Tune here.
 export const EMBERS = {
   kill: 1, // any foe laid to rest, the Warden's summoned ghouls included
+  eliteKill: 2, // a crowned foe on an elite level
   room: 5, // a room cleared (its last wave dead)
   boss: 40, // the Lantern Warden
 };

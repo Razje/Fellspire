@@ -3,6 +3,33 @@ import { Fighter } from './Fighter';
 import type { CharKey } from '../config';
 import type { RoomScene } from '../scenes/RoomScene';
 import type { Player } from './Player';
+import { hi } from '../ui/kit';
+
+// An elite foe (elite levels, step 11.3) against a plain one. Tune here.
+export const ELITE = {
+  hp: 1.6, // times the health
+  power: 1.25, // times the damage of its blows
+  size: 1.12, // times as large
+};
+
+// The gold crown over an elite's head, painted once at twice its size.
+export function crownTexture(scene: Phaser.Scene): string {
+  return hi(scene, 'elite_crown', 28, 20, (c) => {
+    const shape = () => {
+      c.beginPath();
+      c.moveTo(4, 17); c.lineTo(2, 5); c.lineTo(9, 10); c.lineTo(14, 2); c.lineTo(19, 10); c.lineTo(26, 5); c.lineTo(24, 17);
+      c.closePath();
+    };
+    c.lineWidth = 3; c.lineJoin = 'round'; c.strokeStyle = '#140a04'; shape(); c.stroke();
+    const g = c.createLinearGradient(0, 2, 0, 17);
+    g.addColorStop(0, '#fff1b8'); g.addColorStop(0.45, '#e0b04a'); g.addColorStop(0.75, '#8a5f1a'); g.addColorStop(1, '#f0cf78');
+    c.fillStyle = g; shape(); c.fill();
+    c.fillStyle = '#ff4a3a';
+    c.beginPath(); c.arc(14, 12, 2, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.8)';
+    for (const [x, y] of [[2, 5], [14, 2], [26, 5]]) { c.beginPath(); c.arc(x, y, 1.3, 0, Math.PI * 2); c.fill(); }
+  });
+}
 
 export abstract class Enemy extends Fighter {
   protected attackCd: number;
@@ -16,6 +43,9 @@ export abstract class Enemy extends Fighter {
   private lagFrac = 1;
   private plateAlpha = 0;
   protected speed: number;
+  power = 1; // what its blows are multiplied by (an elite's hit harder)
+  elite = false;
+  private crownImg?: Phaser.GameObjects.Image;
 
   constructor(scene: RoomScene, key: CharKey, x: number, y: number, hp: number, speed: number, scaleMul = 1) {
     super(scene, key, x, y, hp, scaleMul);
@@ -41,6 +71,20 @@ export abstract class Enemy extends Fighter {
     return this.applyDamage(dmg, fromX, knock, heavy ? 0.5 : 0.3);
   }
 
+  // Makes this foe an elite (an elite level's): tougher, harder hitting, a little
+  // larger, with a gold crown over its head. Numbers in ELITE.
+  crown() {
+    if (this.elite) return;
+    this.elite = true;
+    this.maxHp = Math.round(this.maxHp * ELITE.hp);
+    this.hp = this.maxHp;
+    this.power = ELITE.power;
+    this.sprite.setScale(this.sprite.scaleX * ELITE.size, this.sprite.scaleY * ELITE.size);
+    this.shadow.setScale(ELITE.size);
+    const key = crownTexture(this.scene);
+    this.crownImg = this.scene.add.image(this.x, this.y, key).setScale(0.5).setDepth(9001).setAlpha(0);
+  }
+
   // Dazed for a while (a shield charge): it stands reeling and does nothing.
   stun(seconds: number) {
     if (this.isDead() || this.state === 'hurt' && this.stateT < -seconds) return;
@@ -60,6 +104,7 @@ export abstract class Enemy extends Fighter {
     super.die();
     this.telegraph.clear();
     this.hpBar.clear();
+    if (this.crownImg) this.scene.tweens.add({ targets: this.crownImg, alpha: 0, y: this.crownImg.y - 12, duration: 500 });
     this.scene.onEnemyDied(this);
     this.fadeAndRemove(900);
   }
@@ -67,6 +112,7 @@ export abstract class Enemy extends Fighter {
   destroy() {
     this.telegraph.destroy();
     this.hpBar.destroy();
+    this.crownImg?.destroy();
     super.destroy();
   }
 
@@ -93,6 +139,11 @@ export abstract class Enemy extends Fighter {
     }
     this.sync(dt, moving);
     this.drawHpBar();
+    // the crown floats over the head, above the health plate
+    if (this.crownImg && !this.isDead()) {
+      this.crownImg.setPosition(this.x, this.y - this.visualHeight - 22 + Math.sin(this.bobT + this.scene.time.now / 300) * 1.5)
+        .setAlpha(this.appear);
+    }
   }
 
   // Returns whether the enemy walked this frame.
@@ -186,7 +237,7 @@ export class Ghoul extends Enemy {
           g.clear();
           this.state = 'attack';
           this.stateT = 0;
-          this.scene.resolveMelee(this, { dmg: 10, range: 56, depth: 18, knock: 160 }, this.scene.livingHeroes);
+          this.scene.resolveMelee(this, { dmg: 10 * this.power, range: 56, depth: 18, knock: 160 }, this.scene.livingHeroes);
         }
         return false;
       }
@@ -247,7 +298,7 @@ export class BoneThrower extends Enemy {
           g.clear();
           this.state = 'attack';
           this.stateT = 0;
-          this.scene.spawnBone(this.x + this.facing * 16, this.y, this.facing * 330, 8, BoneThrower.REACH);
+          this.scene.spawnBone(this.x + this.facing * 16, this.y, this.facing * 330, 8 * this.power, BoneThrower.REACH);
         }
         return false;
       }

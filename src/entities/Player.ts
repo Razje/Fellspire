@@ -307,6 +307,7 @@ export class Player extends Fighter {
     }
     const d = this.applyDamage(Math.max(1, Math.round(dmg * (1 - armor))), fromX, knock, heavy ? 0.4 : 0.22);
     this.scene.afterPlayerHurt(this);
+    this.scene.noteHit(this); // a challenge may count it
     this.invuln = 0.5;
     this.move = null;
     this.combo = 0;

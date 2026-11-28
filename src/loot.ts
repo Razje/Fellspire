@@ -12,6 +12,7 @@ export type Rarity = 'poor' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legenda
 export type Category = 'weapon' | 'armor' | 'trinket';
 export type { WeaponKind } from './weapons';
 import { SKILLS, WEAPONS, type SkillId, type WeaponKind } from './weapons';
+import { CHEST_TIERS, type ChestTier } from './chests';
 
 export const RARITY: Record<Rarity, { label: string; color: string; tint: number; tier: number }> = {
   poor: { label: 'Poor', color: '#9d9d9d', tint: 0x9d9d9d, tier: 0 },
@@ -22,14 +23,17 @@ export const RARITY: Record<Rarity, { label: string; color: string; tint: number
   legendary: { label: 'Legendary', color: '#ff8000', tint: 0xff8000, tier: 5 },
 };
 
-// Chance of each rarity in a chest; later rooms lean towards the better ones.
-function rollRarity(room: number, rnd: () => number): Rarity {
-  const w: [Rarity, number][] = [
-    ['common', Math.max(10, 44 - room * 4)], ['uncommon', 32], ['rare', 16 + room * 2], ['epic', 6 + room * 1.5], ['legendary', 1.5 + room * 0.5],
-  ];
+// Chance of each rarity in a chest; later rooms lean towards the better ones. A
+// better chest (chests.ts) rolls as if deeper in and never goes below its least rarity.
+export function rollRarity(room: number, rnd: () => number, tier: ChestTier = 'wood'): Rarity {
+  const t = CHEST_TIERS[tier];
+  const d = room + t.boost;
+  const w = ([
+    ['common', Math.max(10, 44 - d * 4)], ['uncommon', 32], ['rare', 16 + d * 2], ['epic', 6 + d * 1.5], ['legendary', 1.5 + d * 0.5],
+  ] as [Rarity, number][]).filter(([k]) => RARITY[k].tier >= t.min);
   let r = rnd() * w.reduce((n, [, x]) => n + x, 0);
   for (const [k, x] of w) if ((r -= x) <= 0) return k;
-  return 'common';
+  return w[0][0];
 }
 
 // ---- effects ----------------------------------------------------------------------
@@ -179,11 +183,11 @@ export function makeTrinket(rarity: Rarity, rnd: () => number = Math.random, exc
 
 // Three cards of one category. No two trinkets in one chest are the same.
 // Keen Eye at the shrine adds a card (count).
-export function rollChest(room: number, rnd: () => number = Math.random, cat?: Category, count = 3): Item[] {
+export function rollChest(room: number, rnd: () => number = Math.random, cat?: Category, count = 3, tier: ChestTier = 'wood'): Item[] {
   const c = cat ?? pick<Category>(['weapon', 'armor', 'trinket'], rnd);
   const out: Item[] = [];
   for (let i = 0; i < count; i++) {
-    const r = rollRarity(room, rnd);
+    const r = rollRarity(room, rnd, tier);
     if (c === 'weapon') out.push(makeWeapon(r, rnd));
     else if (c === 'armor') out.push(makeArmor(r, rnd));
     else out.push(makeTrinket(r, rnd, out.map((o) => o.name)));
@@ -245,7 +249,7 @@ export function itemLines(it: Item, g: Gear | null): Line[] {
     lines.push({ label: 'Speed', value: WEAPON_KINDS[it.kind!].speed });
     lines.push({ label: WEAPONS[it.kind!].blurb, color: '#cfc5ae' });
     const sk = SKILLS[it.skill ?? WEAPONS[it.kind!].skills[0]];
-    lines.push({ label: 'Skill (I)', value: sk.name, color: '#ffd100' });
+    lines.push({ label: 'Skill', value: sk.name, color: '#ffd100' });
     lines.push({ label: `${sk.blurb} Every ${sk.cooldown} s.`, color: '#cfc5ae' });
   } else if (it.cat === 'armor') {
     const now = g?.armor ?? undefined;

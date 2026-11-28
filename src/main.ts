@@ -15,6 +15,7 @@ import { CreateScene } from './scenes/CreateScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { ZOOM } from './ui/view';
 import { installCursor } from './ui/kit';
+import { watchInputMode } from './input';
 
 // Canvas text only uses a font that is already loaded, so wait for them.
 async function start() {
@@ -43,6 +44,7 @@ async function start() {
     scene: [BootScene, MenuScene, CreateScene, LobbyScene, RoomScene, HudScene, RigLabScene],
   });
   game.events.once(Phaser.Core.Events.READY, () => installCursor(game));
+  watchInputMode(game); // keys or Xbox buttons on screen, by what was touched last
 
   // Handle for poking at the running game from the browser console while developing.
   if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;

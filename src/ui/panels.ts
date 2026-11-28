@@ -71,7 +71,7 @@ export function openOptions(scene: Phaser.Scene, depth: number, onClose: () => v
 }
 
 export function openCredits(scene: Phaser.Scene, depth: number, onClose: () => void, dim?: number): Panel {
-  return openPanel(scene, 480, 344, 'Credits', depth, (f, close) => {
+  return openPanel(scene, 480, 376, 'Credits', depth, (f, close) => {
     const line = (y: number, head: string, body: string) => {
       f.add(txt(scene, 0, y, head.toUpperCase(), 'small', { fontSize: '11px', color: C.goldSoft, letterSpacing: 2 }).setOrigin(0.5));
       f.add(txt(scene, 0, y + 18, body, 'body', { fontSize: '14px', color: C.ivory, align: 'center' }).setOrigin(0.5, 0));
@@ -80,8 +80,8 @@ export function openCredits(scene: Phaser.Scene, depth: number, onClose: () => v
     f.add(pic(scene, 0, -102, 'ui_ornament'));
     line(-88, 'Character art', 'CraftPix.net chibi packs\nValkyrie, Zombie Villager, Skeleton Warrior');
     line(-8, 'Fonts', 'Cinzel and Cinzel Decorative by Natanael Gama\nMarcellus by Brian J. Bonislawsky');
-    line(72, 'Engine', 'Phaser 3');
-    const done = new Button(scene, 0, 136, 160, 34, 'Done', close);
+    line(72, 'Engine and controller buttons', 'Phaser 3\nXbox buttons by Kenney (kenney.nl), CC0');
+    const done = new Button(scene, 0, 152, 160, 34, 'Done', close);
     f.add(done);
     return [done];
   }, onClose, dim);

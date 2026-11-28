@@ -6,13 +6,16 @@ import { WORLD } from '../config';
 import { Player } from '../entities/Player';
 import { gearOf } from '../run';
 import { heroLook } from '../hero';
-import { getParty } from '../input';
+import { getParty, keyLabels } from '../input';
 import { gearStats, rollChest, type Item } from '../loot';
 import { shrineBonus } from '../shrine';
-import { hi, keycap } from '../ui/kit';
+import { fillPrompt, hi } from '../ui/kit';
 import type { Breakable } from '../blightwood';
-import { FONT, RES } from '../ui/theme';
 import type { RoomScene, AttackSpec, HitSource } from '../scenes/RoomScene';
+import { CHEST_TIERS, TIER_ORDER, rollChestTier, type ChestTier } from '../chests';
+
+// A sealed chest is drawn dimmed, still light enough to tell its metal.
+const SEALED = 0xa8b0bc;
 
 export const lootMethods = {
   coinTexture(this: RoomScene): void {
@@ -115,7 +118,14 @@ export const lootMethods = {
     this.time.delayedCall(900, () => p.destroy());
   },
 
+  // One closed and one open chest per tier (chests.ts): the same wooden box, its bands
+  // and lock in the tier's metal. Keys `chest_<tier>` and `chest_<tier>_open`.
   chestTextures(this: RoomScene): void {
+    for (const tier of TIER_ORDER) this.chestTexture(tier);
+  },
+
+  chestTexture(this: RoomScene, tier: ChestTier): void {
+    const m = CHEST_TIERS[tier].metal;
     const wood = (c: CanvasRenderingContext2D, y0: number, y1: number) => {
       const g = c.createLinearGradient(0, y0, 0, y1);
       g.addColorStop(0, '#8a5228'); g.addColorStop(1, '#4a2810');
@@ -123,7 +133,7 @@ export const lootMethods = {
     };
     const gold = (c: CanvasRenderingContext2D, y0: number, y1: number) => {
       const g = c.createLinearGradient(0, y0, 0, y1);
-      g.addColorStop(0, '#fff1b8'); g.addColorStop(0.4, '#e0b04a'); g.addColorStop(0.7, '#8a5f1a'); g.addColorStop(1, '#f0cf78');
+      g.addColorStop(0, m[0]); g.addColorStop(0.4, m[1]); g.addColorStop(0.7, m[2]); g.addColorStop(1, m[3]);
       return g;
     };
     const body = (c: CanvasRenderingContext2D) => {
@@ -135,7 +145,7 @@ export const lootMethods = {
       for (const x of [12, 64]) c.fillRect(x, 36, 5, 36);
       c.fillRect(6, 68, 68, 4);
     };
-    hi(this, 'chest', 80, 76, (c) => {
+    hi(this, `chest_${tier}`, 80, 76, (c) => {
       body(c);
       // the lid, closed
       c.fillStyle = '#140a04'; c.beginPath(); c.moveTo(4, 38); c.lineTo(4, 22); c.quadraticCurveTo(40, 2, 76, 22); c.lineTo(76, 38); c.closePath(); c.fill();
@@ -148,7 +158,7 @@ export const lootMethods = {
       c.fillStyle = gold(c, 30, 46); c.beginPath(); c.roundRect(34.5, 31.5, 11, 13, 2); c.fill();
       c.fillStyle = '#2a1404'; c.beginPath(); c.arc(40, 37, 2, 0, Math.PI * 2); c.fill(); c.fillRect(39.2, 37, 1.6, 4);
     });
-    hi(this, 'chest_open', 80, 76, (c) => {
+    hi(this, `chest_${tier}_open`, 80, 76, (c) => {
       // the lid thrown back, light pouring out
       c.fillStyle = '#140a04'; c.beginPath(); c.moveTo(6, 30); c.lineTo(10, 4); c.lineTo(70, 4); c.lineTo(74, 30); c.closePath(); c.fill();
       c.fillStyle = wood(c, 4, 30); c.beginPath(); c.moveTo(9, 28); c.lineTo(12, 7); c.lineTo(68, 7); c.lineTo(71, 28); c.closePath(); c.fill();
@@ -222,20 +232,38 @@ export const lootMethods = {
     this.add.image(x, y + 2, 'shrine').setOrigin(0.5, 1).setScale(0.5).setDepth(y - 2);
     const runes = this.add.image(x, y + 2, 'shrine_runes').setOrigin(0.5, 1).setScale(0.5).setDepth(y - 1)
       .setTint(0x7ffcf0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12);
-    const img = this.add.image(x, y + 4, 'chest').setOrigin(0.5, 0.94).setScale(0.5).setDepth(y).setTint(0x7a8494);
+    // its tier shows from the start: the prize a challenge or an elite level plays for
+    const tier = this.levelTier();
+    const img = this.add.image(x, y + 4, `chest_${tier}`).setOrigin(0.5, 0.94).setScale(0.5).setDepth(y).setTint(SEALED);
     this.world.obstacles.push({ x, y, rx: 48, ry: 12 });
     const prompt = this.add.container(x, y - 52).setDepth(19500).setAlpha(0);
-    const cap = keycap(this, 0, 0, 'E');
-    const label = this.add.text(16, 0, 'Open', { fontFamily: FONT.label, fontSize: '13px', color: '#f0e6d2', stroke: '#000', strokeThickness: 3, resolution: RES * 2 }).setOrigin(0, 0.5);
-    cap.x = -label.width / 2 - 4; label.x = cap.x + 14;
-    prompt.add([cap, label]);
+    this.chest = { img, runes, x, y, prompt, promptKey: '', tier, locked: true, opened: false, took: new Set(), shutT: 0, items: [] };
+    this.setChestTier(tier);
+  },
+
+  // The tier a level's chest starts at: gold for an elite level and for a challenge
+  // (until the rule is broken), else rolled by how deep into the run the level is.
+  levelTier(this: RoomScene): ChestTier {
+    const t = this.levelType;
+    return t === 'elite' || t === 'challenge' ? 'gold' : rollChestTier(this.depth);
+  },
+
+  // Makes the chest this tier: its look, the "Open" prompt and the cards it holds
+  // (rolled again, so a challenge broken takes the gold cards away).
+  setChestTier(this: RoomScene, tier: ChestTier): void {
+    const c = this.chest;
+    if (!c || c.opened) return;
+    c.tier = tier;
+    c.img.setTexture(`chest_${tier}`);
+    c.promptKey = ''; // drawn again, in the new tier's words, by updateChest
     // in co-op each player gets their own random cards
-    this.chest = { img, runes, x, y, prompt, locked: true, opened: false, items: this.rollCards(), items2: getParty().length > 1 ? this.rollCards() : undefined };
+    c.items = this.rollCards(tier);
+    c.items2 = getParty().length > 1 ? this.rollCards(tier) : undefined;
   },
 
   // A chest's cards: three, and one more for each rank of Keen Eye at the shrine.
-  rollCards(this: RoomScene): Item[] {
-    return rollChest(this.depth, Math.random, undefined, 3 + (shrineBonus().chestCard ?? 0));
+  rollCards(this: RoomScene, tier: ChestTier): Item[] {
+    return rollChest(this.depth, Math.random, undefined, 3 + (shrineBonus().chestCard ?? 0), tier);
   },
 
   // The room is won: light falls on the chest, the runes wake, the seal is gone.
@@ -243,7 +271,7 @@ export const lootMethods = {
     const c = this.chest;
     if (!c || !c.locked) return;
     c.locked = false;
-    const beam = this.add.image(c.x, c.y - 150, 'tt_light').setTint(0xffe6a0).setBlendMode(Phaser.BlendModes.ADD)
+    const beam = this.add.image(c.x, c.y - 150, 'tt_light').setTint(CHEST_TIERS[c.tier].glow).setBlendMode(Phaser.BlendModes.ADD)
       .setScale(0.55, 4.2).setAlpha(0).setDepth(c.y + 2);
     const pool = this.add.image(c.x, c.y + 6, 'fw_pool').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setScale(1.8, 1.4).setAlpha(0).setDepth(0.5);
     this.tweens.add({ targets: beam, alpha: 0.85, duration: 350, ease: 'Quad.easeOut' });
@@ -253,7 +281,7 @@ export const lootMethods = {
     this.tweens.add({ targets: c.runes, alpha: 0.9, duration: 700, delay: 200 });
     this.tweens.add({ targets: c.runes, alpha: 0.55, duration: 1300, delay: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.tweens.addCounter({ from: 0, to: 1, duration: 600, onUpdate: (t) => {
-      const v = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(0x7a8494), Phaser.Display.Color.ValueToColor(0xffffff), 1, t.getValue() ?? 0);
+      const v = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(SEALED), Phaser.Display.Color.ValueToColor(0xffffff), 1, t.getValue() ?? 0);
       if (!c.opened) c.img.setTint(Phaser.Display.Color.GetColor(v.r, v.g, v.b));
     } });
     // motes drifting up through the light
@@ -267,14 +295,23 @@ export const lootMethods = {
 
   chestNear(this: RoomScene, p: Player): boolean {
     const c = this.chest;
-    return !!c && !c.locked && !c.opened && !p.isDead() && Math.hypot(p.x - c.x, (p.y - c.y) * 1.6) < 72;
+    return !!c && !c.locked && !c.opened && c.shutT <= 0 && !p.isDead() && Math.hypot(p.x - c.x, (p.y - c.y) * 1.6) < 72;
   },
 
   // Whoever presses interact by the chest opens it; in co-op both then choose.
-  updateChest(this: RoomScene): void {
+  // The prompt shows the interact key of whoever stands by it (an Xbox button on a
+  // controller), drawn again only when that changes.
+  updateChest(this: RoomScene, dt = 0): void {
     const c = this.chest;
     if (!c) return;
+    c.shutT = Math.max(0, c.shutT - dt);
     const near = this.heroes.filter((h) => this.chestNear(h));
+    const who = near[0] ?? this.player;
+    const key = keyLabels(getParty()[who?.who ?? 0] ?? { kind: 'solo' }).interact;
+    if (key !== c.promptKey) {
+      c.promptKey = key;
+      fillPrompt(this, c.prompt, key, `Open ${CHEST_TIERS[c.tier].label}`, CHEST_TIERS[c.tier].css);
+    }
     c.prompt.setAlpha(Phaser.Math.Linear(c.prompt.alpha, near.length ? 1 : 0, 0.2)).setY(c.y - 52 + Math.sin(this.time.now / 250) * 2);
     const by = near.find((h) => h.interact);
     if (by) this.openChest(by);
@@ -286,7 +323,7 @@ export const lootMethods = {
     const c = this.chest;
     if (!c || c.opened) return;
     c.opened = true;
-    c.img.setTexture('chest_open');
+    c.img.setTexture(`chest_${c.tier}_open`);
     const burst = this.add.particles(c.x, c.y - 24, 'tt_dot', {
       speed: { min: 40, max: 140 }, angle: { min: 220, max: 320 }, lifespan: { min: 500, max: 1000 },
       scale: { start: 0.3, end: 0 }, tint: [0xffe08a, 0xffffff, 0xffb040], blendMode: 'ADD', emitting: false,
@@ -298,28 +335,36 @@ export const lootMethods = {
       const hud = this.hud;
       if (!hud || !this.livingHeroes.length) return;
       this.scene.pause();
-      if (this.heroes.length < 2) {
-        hud.openChest(c.items, gearOf(this.run, by.who), (it) => {
-          this.equip(it, by);
-          this.scene.resume();
-        });
-        return;
-      }
-      // one screen, a side for each player (a fallen hero chooses too); the room
-      // resumes once both have taken a card
+      // a side for each player still to take a card (a fallen hero chooses too); in
+      // solo that is the one screen. Leave takes nothing: the room resumes once
+      // everyone has chosen or left
       const party = getParty();
-      let left = this.heroes.length;
-      hud.openChoice(this.heroes.map((h) => ({
-        items: (h.who === 0 ? c.items : c.items2) ?? (c.items2 = this.rollCards()),
+      const choosing = this.heroes.filter((h) => !c.took.has(h.who));
+      let left = choosing.length;
+      hud.openChoice(choosing.map((h) => ({
+        items: (h.who === 0 ? c.items : c.items2) ?? (c.items2 = this.rollCards(c.tier)),
         gear: gearOf(this.run, h.who),
-        device: party[h.who],
+        device: this.heroes.length > 1 ? party[h.who] : undefined,
         name: heroLook(h.who).name,
-        onPick: (it: Item) => {
-          this.equip(it, h);
-          if (--left === 0) this.scene.resume();
+        onPick: (it: Item | null) => {
+          if (it) { this.equip(it, h); c.took.add(h.who); }
+          if (--left > 0) return;
+          if (this.heroes.some((x) => !c.took.has(x.who))) this.shutChest();
+          this.scene.resume();
         },
       })));
     });
+  },
+
+  // Someone left the chest without taking a card: the lid comes down again and the
+  // same cards wait for them. A short pause first, so the key that left does not
+  // open it again at once (on a controller, B both leaves and opens).
+  shutChest(this: RoomScene): void {
+    const c = this.chest;
+    if (!c) return;
+    c.opened = false;
+    c.shutT = 0.6;
+    c.img.setTexture(`chest_${c.tier}`).setTint(0xffffff);
   },
 
   // Puts an item on a hero (player 1 unless said otherwise).

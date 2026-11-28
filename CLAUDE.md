@@ -41,7 +41,10 @@ git -C C:\IXON\fellspire config --local user.name "Martijn Terol"
   fine (orcs, liches, paladins); Blizzard's specific characters, places and designs
   are not. Asked and settled on 2026-11-23.
 - **Art packs never go into git.** The CraftPix licence forbids passing on the source
-  files, and `.gitignore` keeps all of `assets/` out except its README.
+  files, and `.gitignore` keeps all of `assets/` out except its README. The one
+  exception is CC0 art, which may be passed on freely: Kenney's Xbox buttons in
+  `src/ui/prompts/xbox/` (ten PNGs and the pack's `License.txt`, from "Input Prompts"
+  1.5A, kenney.nl, fetched 2026-11-28) live in git so both machines have them.
 - **Commands for Martijn are PowerShell 5.1**: one command per block, absolute
   paths, no `&&`.
 
@@ -54,7 +57,8 @@ node C:\IXON\fellspire\node_modules\vite\bin\vite.js C:\IXON\fellspire
 Then http://127.0.0.1:5180, http://127.0.0.1:5180/?boss to go straight to the
 boss fight (`?boss&area=fellspire` for the last one, which wins the run),
 http://127.0.0.1:5180/?area=frostmere&level=3 for a level of an area (`?area=2` takes
-the first area of tier 2), http://127.0.0.1:5180/?camp for the camp, or
+the first area of tier 2; add `&type=elite`, or `&type=challenge&challenge=swift`
+(or `unscathed`, `steadfast`) for a level type), http://127.0.0.1:5180/?camp for the camp, or
 http://127.0.0.1:5180/?coop for the co-op lobby. In Claude's browser pane, `preview_start` with the name
 `fellspire` (from `C:\IXON\.claude\launch.json`). The pane pauses the game when it is
 hidden (0 frames a second), so a screenshot of a hidden pane shows a frozen frame.
@@ -136,11 +140,19 @@ against that commit instead of the last one.
 
 Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing it.
 
+**On a machine without the art** (a fresh clone, before `assets/` is copied or
+unpacked), exactly 4 tests fail, all checking the art itself: the title screen's
+"frames loaded", character creation's skin tone, and both rig tests. Everything else
+runs on the drawn stand-ins and passes (55 of 59 on 2026-11-28), so rules can be built
+and tested there; the look cannot be judged.
+
 ## How the code is laid out
 
 | Path | What |
 |---|---|
 | `src/world.ts` | The run's shape as data: the eight areas (`AREAS`: name, tier 0 to 4, the objective's heading, `look` = the colour wash, moonlight, fireflies and rune light, the boss's name), five levels per area with the boss last (`LEVELS_PER_AREA`), the level types (`normal`, `challenge`, `elite`, `boss`), `depth(tier, level)` that waves, foes and chests scale with, `rollGateTypes` for a pair of gates, `findArea` for `?area=` |
+| `src/chests.ts` | Chest tiers as data (`CHEST_TIERS`: wood, bronze, silver, gold; how much deeper each rolls its rarities, its least rarity, its metal and light) and `rollChestTier(depth)` for a normal fight's chest. Imports nothing, so `loot.ts` can use it |
+| `src/challenges.ts` | Challenge levels' rules as data (`CHALLENGES`: Swift, Unscathed, Steadfast, each with its banner line and tracker line), their tuning (`SWIFT`, `UNSCATHED`) and `newChallenge` for a room's `ChallengeState`; the room's side is `room/challenge.ts` |
 | `src/config.ts` | Tuning knobs: foes' extra health in co-op (`COOP`), room size (an arena of 1500 x 660, floor from `groundTop` to `groundBottom`), per-character size and `footY`, which pack folders feed which animation |
 | `src/assets.ts` | Finds art packs under `assets/` by folder name; only the frames used are loaded, from the packed sheets when they hold them all (`artFrames` gives each frame as a `FrameRef`: texture key, and the cell in a sheet), else one file each |
 | `src/artPick.ts` | Which frames each character uses (`pickFrames`), shared by the game and `tools/pack-sheets.mjs`; imports only types, so Node can load it |
@@ -152,6 +164,7 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/scenes/HudScene.ts` | Runs on top of a room: a unit frame and action bar per hero (player 1 bottom left, player 2 bottom right, mirrored), room plaque, objective, banners, pause menu, end screen, the chest's cards (`openChoice`: one side per player in co-op, each answering only its own device's keys), the rack (`openRack`, the opener's turn) and the ember shrine (`openShrine`); `shop` is whichever of the two is open. Owns Esc |
 | `src/ui/theme.ts` | Fonts, colours, `txt()` for sharp text, `gild()` for gradient lettering |
 | `src/ui/kit.ts` | Every UI part, painted at 2x: `Frame`, `Button`, `keycap`/`keyHint`, `Bar`, `Slot` and icons, `CheckRow`, `SliderRow`, `ChoiceRow` (◀ value ▶), `TextRow` (a typed name), `FocusList` (keys, stick and mouse), banner bands, the cursor |
+| `src/ui/padIcons.ts` | Xbox buttons: Kenney's art from `prompts/xbox/` (`PAD_ART`, loaded by `BootScene` as `kpad_<button>`, drawn 22 high with a soft shadow as `ui_kpad_<button>`), else drawn here like the controller's (A green, B red, X blue, Y yellow, bumpers, triggers, left stick, Menu); a new button needs its PNG copied from the pack's `Xbox Series/Default/` under our name; `keycap()` and the action bar's `Slot.setKey()` draw a `'pad:'` label with them, `fillPrompt()` puts one in a floating "[B] Open ..." prompt |
 | `src/ui/panels.ts` | Modal panels shared by the title screen and the pause menu: Options, Credits |
 | `src/ui/view.ts` | The 2x camera zoom and the parallax correction that goes with it |
 | `src/titleArt.ts` | The title screen's painted scenery, drawn on canvases at start-up; its helpers (`canvas`, `rng`, `trunk`) are shared with `blightwood.ts` |
@@ -160,22 +173,22 @@ Tests cannot judge feel. "The dodge is sluggish" only comes from Martijn playing
 | `src/ui/shrine.ts` | The shrine's panel (`ShrinePanel`): the three branches as trees of discs joined by lines, the bank, a card for the selected upgrade; its glyphs are drawn here. Opened by `HudScene.openShrine` |
 | `src/ui/armory.ts` | The rack's store (`WeaponShop`): tabs per weapon type, a grid, the equipped and selected weapons compared as cards; opened by `HudScene.openRack` |
 | `src/scenes/RoomScene.ts` | A room: `heroes` (one per device in the party; `player` is player 1, `stats` player 1's), the camera on the middle of the living heroes and the `LEASH` between them, `nearestHero` for enemies, a fallen hero in co-op (`checkFallen`, her `Soul`, `raise`), waves, exit, hit resolution (`strike(attacker, by, ...)`, the one path for swings, shots and skill areas; `by` is the hero whose gear bonuses apply) with gear bonuses and effects, projectiles, pickups, coins, breakable props, the room chest, combat text, run stats; launches the HUD. `room` is the level in the area (1 to 5; 0 is the camp), `area`, `levelType` and `depth` say where the run is. Level 5 is the boss's glade: his introduction, the darkness and circle of light, then the gates to the next areas (or victory in the last). Until each area has its own boss the Warden stands in everywhere, with 50% more health per tier |
-| `src/room/` | `RoomScene`'s methods by subject, split out on 2026-11-27 so the class stays readable: `waves.ts` (waves, and opening the gates when they are done), `gates.ts` (where each gate leads, `planGates` before the room is built and `placeGates` after, the signs over them, all living heroes in one gate takes them through, "Waiting for"), `gearFx.ts` (healing, chain lightning, burning ground), `loot.ts` (coins, barrels and crates, the chest, `equip`), `camp.ts` (rack and shrine), `bossFight.ts` (the Warden's glade and its darkness), `feedback.ts` (dust, shake, combat text, sparks). Each exports a `<part>Methods` object whose methods take `this: RoomScene`; the end of `RoomScene.ts` mixes them in, so callers still write `scene.openChest()`. **Give every method here an explicit return type and no default that reads `this`** (`by: Player = this.player`): either makes TypeScript's type of the part depend on itself and the whole room stops type-checking. RoomScene's fields are public for the same reason (the parts read them) |
+| `src/room/` | `RoomScene`'s methods by subject (the chest can be left without a card: `HudScene.openChoice`'s Leave, then `shutChest` lets whoever did not take one open it again), split out on 2026-11-27 so the class stays readable: `waves.ts` (waves, and opening the gates when they are done), `gates.ts` (where each gate leads, `planGates` before the room is built and `placeGates` after, the signs over them, all living heroes in one gate takes them through, "Waiting for"), `gearFx.ts` (healing, chain lightning, burning ground), `loot.ts` (coins, barrels and crates, the chest and its tier: `levelTier`, `setChestTier`, `equip`), `challenge.ts` (a challenge level's rule as it plays: `noteHit` from `Player.takeHit`, `noteDodge` from `onPlayerAction`, the clock, `failChallenge` turning the chest to wood, `meetChallenge` when the last wave falls), `camp.ts` (rack and shrine), `bossFight.ts` (the Warden's glade and its darkness), `feedback.ts` (dust, shake, combat text, sparks). Each exports a `<part>Methods` object whose methods take `this: RoomScene`; the end of `RoomScene.ts` mixes them in, so callers still write `scene.openChest()`. **Give every method here an explicit return type and no default that reads `this`** (`by: Player = this.player`): either makes TypeScript's type of the part depend on itself and the whole room stops type-checking. RoomScene's fields are public for the same reason (the parts read them) |
 | `src/weapons.ts` | The weapon types as data (`WEAPONS`: label, block or not, light combo, heavy, the skills a weapon can carry, names) and the skills' names and cooldowns (`SKILLS`). A move can shoot (`shot`), cut along its lunge (`sweep`, the blades' dash), set its own hit-stop (`stop`), kick the hero back (`recoil`), make her untouchable until it lands (`evade`) and spend a round (`ammo`, with the weapon's `mag`). A new weapon type starts here |
 | `src/revive.ts` | Co-op revives: a fallen hero's `Soul` (the glow over her body, the ring with its gold sweet-spot arc, the key prompt), who is holding interact by it, and when she gets up; tuning in `REVIVE` |
 | `src/skills.ts` | How each skill plays out (`SKILL_TUNING` holds its numbers): it returns how long the hero is busy and puts an effect on the room that runs each frame |
 | `src/shots.ts` | The player's arrows, bolts, orbs, sparks, pellets and bullets in flight (guns leave a `muzzle()` flash and smoke): first foe or barrel hit, piercing, bursting, a spread fanned up and down the floor, seeking (`homing`); `launch()` sends one with any velocity, for skills |
-| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (`who` is 0 or 1, `stats` its own gear's; reads its moves and skill from `weapons.ts`, its keys through `input.ts`: L dodge, Shift block, I skill; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower; each goes for `scene.nearestHero`, kept in `hunted`), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
+| `src/entities/` | `Fighter` (shared body, damage, animation, `lift` for a leap), `Player` (`who` is 0 or 1, `stats` its own gear's; reads its moves and skill from `weapons.ts`, its keys through `input.ts`: L dodge, Shift block, I skill; a press of J/K queues one attack and turns her to the side held, holding repeats and keeps her facing; walks at `ATTACK_MOVE` speed while attacking; attacks never aim up or down), `Enemies` (Ghoul, BoneThrower; each goes for `scene.nearestHero`, kept in `hunted`; `crown()` makes one an elite: `ELITE` numbers, `power` on its blows, the gold crown over its head), `Warden` (the boss: moves, phases, his tuning numbers in `WARDEN`), `Dummy` (the camp's training dummy: an enemy that only rocks when hit, never loses health, and counts damage per second) |
 | `src/blightwood.ts` | The fight room, for every area: background layers, the tree line, one painted floor, props with footprints (`obstacles`, `pushOut`), torches and their light (`lightAt` tints characters), one or two rune-ring gates (`exits`, top to bottom, each in its own light), foreground framing. Another area gets the same textures washed in its colour by `areaKey` (a canvas `color` blend, copied once per area as `<key>@<area>`) |
 | `src/placeholders.ts` | Drawn stand-in characters for missing art |
-| `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest`, `gearStats` (what everything carried adds up to), card lines |
+| `src/loot.ts` | Rarities, weapons, armor kits, trinkets and their effects, as lists; `rollChest` (and `rollRarity`, both taking a chest tier), `gearStats` (what everything carried adds up to), card lines |
 | `src/run.ts` | One run's state carried between rooms: stats, gold (one shared purse), embers earned this run, player 1's `gear` and player 2's `gear2`, whose Undying is spent (`risen`), the areas taken (`route`, the current one last) and the types of this area's levels so far (`levels`); `gearOf(run, who)` |
 | `src/embers.ts` | Embers, kept between runs: what each deed gives (`EMBERS`), the bank in the browser (`fellspire.embers`, one for the party), `earnEmbers` (banks at once; `RoomScene.earn` also pulses the HUD) and `spendEmbers` for the shrine |
 | `src/ui/items.ts` | Item icons, the chest's choice cards, hover tooltips |
 | `src/ui/runmap.ts` | Where the run is, drawn: a glyph and colour per level type (`levelGlyph`, `TYPE_COLOUR`: swords, hourglass, crown, skull), the area's five levels under the room plaque (`levelStrip`), the road of five tiers on the pause menu (`roadPanel`) |
 | `src/rig/` | Characters from parts: `scml.ts` reads the packs' Spriter files and works out each part's pose, `Rig.ts` draws them with part swaps (another pack's head, a drawn weapon by its grip), `parts.ts` loads `assets/parts/`, `weapons.ts` the drawn greatsword, bow, staff, dagger, wand, blunderbuss and revolver and `armRig()` that puts the carried weapon in the hand (dual blades and revolvers put the second one on the shield's slot), `skin.ts` the skin tones and the recolour that finds a part's skin by colour |
 | `src/scenes/RigLabScene.ts` | The rig lab, `?rig`: frames and parts side by side, overlaid, and mixed characters |
-| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show; `menuKey()` / `menuPad()` / `menuLabels()` which keys and controller work a menu for a device. Tests press `p.keys[...]`, the Phaser names of that device's keys |
+| `src/input.ts` | Which device drives a hero (`Device`: solo, the keyboard's left or right side, a controller) and its keys and buttons; `Controls.read()` turns it into one frame's `Input`; `getParty()` is who plays on what (set by the menu and the lobby, kept across restarts); `keyLabels()` the keys to show, as `'pad:<button>'` labels when the device shows a controller (`showsPad`: a controller player, or the solo player once they touched the controller last, `inputMode()`, watched by `watchInputMode` from `main.ts`; screens redraw on `onInputMode`); `padName()` for a label in a sentence; the controller's skill is the right trigger (button 7, pressed past half); `menuKey()` / `menuPad()` / `menuLabels()` which keys and controller work a menu for a device. Tests press `p.keys[...]`, the Phaser names of that device's keys |
 | `src/settings.ts` | Options remembered in the browser |
 | `tools/` | `unpack.py` (pack zip into a role folder, shrunk), `unpack-parts.py` (a pack's separate parts and Spriter file into `assets/parts/`), `shrink.mjs`, `measure-feet.mjs`, `test-changed.mjs` (runs the tests a change affects; see Testing), `pack-sheets.mjs` (character frames into sheets; see Art), `package.mjs` |
 
@@ -293,6 +306,11 @@ Decorative, bundled from npm.
   being pushed. A knock meant to be felt needs 350 or more.
 - A screen over the room (the rack) needs a shade of about 0.9: at 0.66 the HUD's
   bars and key hints show through and clash with its own.
+- **Phaser ignores a controller state older than the pad object.** `Gamepad.update`
+  skips any state whose `timestamp` is before the pad was created, so a fake controller
+  in a test (`tests/controller.spec.ts` stubs `navigator.getGamepads`) must stamp its
+  presses with `performance.now()`, as a real one does; a counter from 0 is ignored
+  without a word. Found 2026-11-28.
 - **Fight keys go by position (`KeyboardEvent.code`), not keyCode.** With Num Lock off,
   Numpad 2 arrives as Arrow Down (keyCode 40), and Playwright's Edge always sends the
   numpad that way, so Phaser's own keys (keyCode-based) cannot tell player 2's heavy

@@ -27,7 +27,9 @@ export const wavesMethods = {
       if (this.wave > 1) this.hud?.banner('warn', `Wave ${this.wave} of ${this.waves.length}`);
     } else {
       this.openGates();
-      this.hud?.banner('good', 'Room Cleared', this.gates.length > 1 ? 'The chest is unsealed. Choose a gate' : 'The chest is unsealed');
+      const then = this.gates.length > 1 ? '. Choose a gate' : '';
+      if (this.meetChallenge()) this.hud?.banner('good', `${this.challenge!.def.name}: met`, `The gold chest is unsealed${then}`);
+      else this.hud?.banner('good', 'Room Cleared', `The chest is unsealed${then}`);
       this.unlockChest();
       this.earn(EMBERS.room);
     }
@@ -52,6 +54,7 @@ export const wavesMethods = {
         y = Phaser.Math.Between(groundTop + 30, groundBottom - 20);
       }
       const e = this.toughen(type === 'g' ? new Ghoul(this, x, y, tier) : new BoneThrower(this, x, y, tier));
+      if (this.levelType === 'elite') e.crown();
       e.appear = 0; // fades in
       this.enemies.push(e);
     });
